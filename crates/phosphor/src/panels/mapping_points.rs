@@ -142,24 +142,67 @@ pub(crate) fn point_fields(ui: &mut egui::Ui, s: &mut Surface, size: (u32, u32))
     help(ui, "Tab / Shift-Tab: next / previous point · arrows nudge it (Shift = 10 px) · Esc: the whole slice again");
 }
 
-/// With Snap on: the selected point of slice `sid` jumps onto another slice's point within `radius` (output units,
-/// per axis). Returns true if it snapped.
-pub(crate) fn snap_to_others(mapping: &mut Mapping, sid: u64, index: usize, radius: [f32; 2]) -> bool {
-    let others: Vec<[f32; 2]> = mapping.surfaces.iter_mut().filter(|s| s.id != sid).flat_map(|s| points_mut(s).into_iter().map(|p| *p).collect::<Vec<_>>()).collect();
-    let Some(s) = mapping.surfaces.iter_mut().find(|s| s.id == sid) else { return false };
-    let Some(p) = points_mut(s).into_iter().nth(index) else { return false };
-    let near = others.iter().filter(|q| (q[0] - p[0]).abs() <= radius[0] && (q[1] - p[1]).abs() <= radius[1]).min_by(|a, b| {
-        let d = |q: &[f32; 2]| (q[0] - p[0]).hypot(q[1] - p[1]);
-        d(a).total_cmp(&d(b))
-    });
-    match near {
-        Some(q) => {
-            *p = *q;
-            true
-        }
-        None => false,
-    }
+/// A drag with Snap on, as it goes: where each point of the thing dragged would be without snapping (`raw`, which
+/// follows the mouse exactly) and where it was put last frame (`shown`).
+#[derive(Clone, Default)]
+pub(crate) struct SnapDrag {
+    id: u64,
+    raw: Vec<[f32; 2]>,
+    shown: Vec<[f32; 2]>,
 }
+
+/// One frame of a drag with Snap on. `cur` = the points of the slice or mask after this frame's drag was applied
+/// (to where they were shown last frame); returns where they should be shown now.
+///
+/// The mouse's whole travel is kept in `raw`, and only what's shown is snapped. (Snapping the stored point every
+/// frame threw away each small move: the point stuck until the mouse had gone half a grid cell in one frame, then
+/// jumped, which felt like lag and like it snapped where it wanted. Owner, 2026-11-16.)
+/// - One point dragged: it lands on another slice's point within `radius`, else on the grid.
+/// - The whole thing dragged: it moves as one, its first point on the grid (its shape is never bent).
+/// - Anything else (a scale, a rotate), or `free` (Alt held): no snapping.
+pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]], others: &[[f32; 2]], radius: [f32; 2], grid: f32, free: bool) -> Vec<[f32; 2]> {
+    let on_grid = |p: [f32; 2]| [(p[0] * grid).round() / grid, (p[1] * grid).round() / grid];
+    let st = match state {
+        Some(st) if st.id == id && st.shown.len() == cur.len() => st,
+        _ => {
+            *state = Some(SnapDrag { id, raw: cur.to_vec(), shown: cur.to_vec() });
+            return cur.to_vec();
+        }
+    };
+    let moved: Vec<usize> = (0..cur.len()).filter(|&k| (cur[k][0] - st.shown[k][0]).abs() > 1e-7 || (cur[k][1] - st.shown[k][1]).abs() > 1e-7).collect();
+    for &k in &moved {
+        st.raw[k][0] += cur[k][0] - st.shown[k][0];
+        st.raw[k][1] += cur[k][1] - st.shown[k][1];
+    }
+    let mut out = st.raw.clone();
+    if !free {
+        if let [k] = moved[..] {
+            let p = st.raw[k];
+            let near = others.iter().filter(|q| (q[0] - p[0]).abs() <= radius[0] && (q[1] - p[1]).abs() <= radius[1]).min_by(|a, b| (a[0] - p[0]).hypot(a[1] - p[1]).total_cmp(&(b[0] - p[0]).hypot(b[1] - p[1])));
+            out[k] = near.copied().unwrap_or_else(|| on_grid(p));
+        } else if moved.len() == cur.len() && cur.len() > 1 {
+            let to = on_grid(st.raw[0]);
+            let shift = [to[0] - st.raw[0][0], to[1] - st.raw[0][1]];
+            for p in &mut out {
+                *p = [p[0] + shift[0], p[1] + shift[1]];
+            }
+        } else if moved.is_empty() {
+            // Nothing moved this frame: what's shown stays as it is.
+            out.clone_from(&st.shown);
+        }
+    }
+    st.shown.clone_from(&out);
+    out
+}
+
+/// The points of slice or mask `id` (a slice's corners / mesh / line points; a mask's outline).
+pub(crate) fn shape_points(mapping: &mut Mapping, id: u64) -> Vec<&mut [f32; 2]> {
+    if let Some(i) = mapping.surfaces.iter().position(|s| s.id == id) {
+        return points_mut(&mut mapping.surfaces[i]);
+    }
+    mapping.masks.iter_mut().find(|m| m.id == id).map_or_else(Vec::new, |m| m.points.iter_mut().collect())
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -189,17 +232,51 @@ mod tests {
         assert_eq!(selected_slices(&ctx, primary), vec![2], "a plain click selects only that one");
     }
 
+    /// A slow drag with Snap on follows the mouse: after 60 small moves the point is within half a grid cell of
+    /// where the mouse took it (it used to stay where it began), a whole slice keeps its shape, and Alt is free.
     #[test]
-    fn a_point_snaps_onto_a_neighbour_corner() {
-        let mut m = Mapping::default();
-        let a = m.add_surface(1).id;
-        m.add_surface(2);
-        m.surfaces[0].corners[1] = [0.501, 0.2];
-        m.surfaces[1].corners[0] = [0.5, 0.2];
-        assert!(snap_to_others(&mut m, a, 1, [0.01, 0.01]));
-        assert_eq!(m.surfaces[0].corners[1], [0.5, 0.2]);
-        m.surfaces[0].corners[2] = [0.9, 0.9];
-        assert!(!snap_to_others(&mut m, a, 2, [0.001, 0.001]), "nothing close");
+    fn snapping_follows_a_slow_drag() {
+        let grid = 64.0;
+        let mut state = None;
+        let mut shown = vec![[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]];
+        let first = snap_step(&mut state, 1, &shown, &[], [0.004, 0.004], grid, false);
+        assert_eq!(first, shown, "nothing moves when the drag starts");
+        // One corner, 0.001 a frame (a fifteenth of a grid cell).
+        for _ in 0..60 {
+            let mut cur = shown.clone();
+            cur[0][0] += 0.001;
+            shown = snap_step(&mut state, 1, &cur, &[], [0.004, 0.004], grid, false);
+        }
+        assert!((shown[0][0] - 0.31).abs() <= 0.5 / grid + 1e-5, "followed the mouse: {}", shown[0][0]);
+        assert!(((shown[0][0] * grid).round() / grid - shown[0][0]).abs() < 1e-6, "on the grid");
+        assert_eq!(shown[1], [0.75, 0.25], "the other corners stay");
+        // Close to another slice's point, it lands on it.
+        let mut cur = shown.clone();
+        cur[0][0] += 0.02;
+        // (The mouse has taken it to 0.33; a neighbor's point sits 0.002 from there, inside the snap distance.)
+        let other = [[0.332, 0.2502]];
+        shown = snap_step(&mut state, 1, &cur, &other, [0.004, 0.004], grid, false);
+        assert_eq!(shown[0], other[0]);
+        // The whole slice dragged slowly: it moves as one, its shape kept.
+        let mut state = None;
+        let mut shown = vec![[0.2, 0.2], [0.53, 0.21], [0.5, 0.6], [0.22, 0.58]];
+        let shape: Vec<[f32; 2]> = shown.iter().map(|p| [p[0] - shown[0][0], p[1] - shown[0][1]]).collect();
+        snap_step(&mut state, 2, &shown, &[], [0.004, 0.004], grid, false);
+        for _ in 0..50 {
+            let cur: Vec<[f32; 2]> = shown.iter().map(|p| [p[0] + 0.0013, p[1]]).collect();
+            shown = snap_step(&mut state, 2, &cur, &[], [0.004, 0.004], grid, false);
+        }
+        assert!((shown[0][0] - 0.265).abs() <= 0.5 / grid + 1e-5, "{}", shown[0][0]);
+        for (p, d) in shown.iter().zip(&shape) {
+            assert!((p[0] - shown[0][0] - d[0]).abs() < 1e-5 && (p[1] - shown[0][1] - d[1]).abs() < 1e-5, "shape kept");
+        }
+        // Alt: exactly where the mouse is.
+        let mut cur = shown.clone();
+        cur[1][0] += 0.0007;
+        let want = cur[1][0];
+        // (The free point is the raw one: the mouse's travel so far, not the snapped place plus the move.)
+        let free = snap_step(&mut state, 2, &cur, &[], [0.004, 0.004], grid, true);
+        assert!((free[1][0] - want).abs() < 0.02);
     }
 }
 

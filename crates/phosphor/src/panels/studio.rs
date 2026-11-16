@@ -373,7 +373,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         });
         let now = ui.input(|i| i.time);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
-        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
+        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged slice moves as one onto the grid. Hold Alt while dragging to place it freely");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)").changed() && vs.drawing {
@@ -482,22 +482,26 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         let touched = mapping_handles(&mut child, frame, &mut o.mapping, selected_surface, true);
-        if touched && vs.snap {
-            // Dragging one point: onto another slice's point within 8 screen pixels, else onto the grid.
-            let dragging = ui.input(|i| i.pointer.primary_down());
-            match super::mapping_points::selected_point(ui.ctx()).filter(|(sid, _)| Some(*sid) == *selected_surface && dragging) {
-                Some((sid, i)) => {
-                    let radius = [8.0 / frame.width(), 8.0 / frame.height()];
-                    if !super::mapping_points::snap_to_others(&mut o.mapping, sid, i, radius)
-                        && let Some(p) = o.mapping.surfaces.iter_mut().find(|s| s.id == sid).and_then(|s| super::mapping_points::points_mut(s).into_iter().nth(i))
-                    {
-                        p[0] = (p[0] * 64.0).round() / 64.0;
-                        p[1] = (p[1] * 64.0).round() / 64.0;
-                    }
+        // Snap: what's dragged follows the mouse exactly and only where it is shown is snapped
+        // (`mapping_points::snap_step`). Alt held = free, for a placement between the grid lines.
+        let snap_id = key.with("snap_drag");
+        let (dragging, free) = ui.input(|i| (i.pointer.primary_down(), i.modifiers.alt));
+        match (*selected_surface).filter(|_| vs.snap && dragging) {
+            Some(id) => {
+                let mut state: Option<super::mapping_points::SnapDrag> = ui.ctx().data(|d| d.get_temp(snap_id));
+                let others: Vec<[f32; 2]> = o.mapping.surfaces.iter_mut().filter(|s| s.id != id).flat_map(|s| super::mapping_points::points_mut(s).into_iter().map(|p| *p).collect::<Vec<_>>()).collect();
+                let cur: Vec<[f32; 2]> = super::mapping_points::shape_points(&mut o.mapping, id).into_iter().map(|p| *p).collect();
+                // Onto another slice's point within 8 screen pixels, else onto the 1/64 grid.
+                let radius = [8.0 / frame.width(), 8.0 / frame.height()];
+                let placed = super::mapping_points::snap_step(&mut state, id, &cur, &others, radius, 64.0, free);
+                for (p, q) in super::mapping_points::shape_points(&mut o.mapping, id).into_iter().zip(placed) {
+                    *p = q;
                 }
-                None => snap_selected(&mut o.mapping, *selected_surface),
+                ui.ctx().data_mut(|d| d.insert_temp(snap_id, state));
             }
+            None => ui.ctx().data_mut(|d| d.remove_temp::<Option<super::mapping_points::SnapDrag>>(snap_id)).map(|_| ()).unwrap_or(()),
         }
+        let _ = touched;
         // Right-click: what can be done here. The slice under the pointer becomes the selected one.
         let menu_key = key.with("menu_at");
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("studio_canvas_rect"), frame));
@@ -734,23 +738,6 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
     }
 }
 
-/// Rounds the selected slice's corners / mesh points (or mask points) to a 1/64 grid.
-fn snap_selected(mapping: &mut phosphor_engine::Mapping, selected: Option<u64>) {
-    let snap = |p: &mut [f32; 2]| {
-        p[0] = (p[0] * 64.0).round() / 64.0;
-        p[1] = (p[1] * 64.0).round() / 64.0;
-    };
-    for s in mapping.surfaces.iter_mut().filter(|s| Some(s.id) == selected) {
-        s.corners.iter_mut().for_each(snap);
-        if let Some(m) = &mut s.mesh {
-            m.points.iter_mut().for_each(snap);
-        }
-    }
-    for m in mapping.masks.iter_mut().filter(|m| Some(m.id) == selected) {
-        m.points.iter_mut().for_each(snap);
-    }
-}
-
 /// The picture a slice takes its part from, with every slice's input rectangle; the selected one is draggable.
 fn input_view(
     ui: &mut egui::Ui,
@@ -919,20 +906,5 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
     });
     if let Some((sid, a)) = fx_action {
         super::effects::apply_fx_action(st, sid, a);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn snapping_only_moves_the_selected_slice() {
-        let mut m = phosphor_engine::Mapping::default();
-        m.add_surface(1).corners[0] = [0.101, 0.199];
-        m.add_surface(2).corners[0] = [0.101, 0.199];
-        snap_selected(&mut m, Some(1));
-        assert_eq!(m.surfaces[0].corners[0], [6.0 / 64.0, 13.0 / 64.0]);
-        assert_eq!(m.surfaces[1].corners[0], [0.101, 0.199]);
     }
 }
