@@ -6,7 +6,7 @@ use egui_phosphor::regular as icon;
 
 use crate::app::State;
 
-pub const DONATE_URL: &str = "https://phosphorfx.com/donate/";
+pub const DONATE_URL: &str = "https://donate.stripe.com/eVqdRb8kv3XW08LcNaaEE04";
 pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
 
 /// Donate's orange, the same as GCarve's (the one orange in either app).
