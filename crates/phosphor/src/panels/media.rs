@@ -476,6 +476,13 @@ pub(crate) fn confirm_removes(ctx: &egui::Context, st: &mut State, acts: Vec<Med
 /// Does what the Media panel's tiles and buttons asked.
 pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
     for act in acts {
+        // A skipped file doesn't go live from Media, whichever button asked.
+        if let MediaAct::Assign(i) | MediaAct::PlayOn(i, _) | MediaAct::NewLayer(i) = &act
+            && st.comp.media_bin.get(*i).is_some_and(|m| m.skip)
+        {
+            st.notice = Some("That file is skipped: right-click it › Play it again to use it".into());
+            continue;
+        }
         match act {
             MediaAct::Assign(i) => {
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
@@ -840,7 +847,7 @@ pub(crate) fn media_tile(
             ui.close();
         }
         ui.separator();
-        if crate::ui::command(ui, label(icon::PLUS, "Put on a new layer")).clicked() {
+        if !item.skip && crate::ui::command(ui, label(icon::PLUS, "Put on a new layer")).clicked() {
             acts.push(MediaAct::NewLayer(i));
             ui.close();
         }
