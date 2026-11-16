@@ -42,8 +42,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - File info › How it will play: what to know about any movie, the conversion that suits it, and Convert a click away.
 
 **Mapping Studio**
-- Snap follows the mouse exactly (it stuck, lagged and jumped). A dragged slice or mask moves as one. Hold Alt
-  to place freely.
+- Snap follows the mouse exactly (it stuck, lagged and jumped). A dragged or resized slice or mask lands on the grid without bending. Hold Cmd
+  (Ctrl on Windows) to place freely.
 - Masks from an EPS drawing as well as an SVG: Import mask… in the toolbar, and in every Add mask menu.
 
 **Safer**

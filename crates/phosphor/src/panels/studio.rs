@@ -398,7 +398,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         });
         let now = ui.input(|i| i.time);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
-        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged slice moves as one onto the grid. Hold Alt while dragging to place it freely");
+        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged or resized slice lands on the grid without bending. Hold Cmd (Ctrl on Windows) while dragging to place it freely");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)").changed() && vs.drawing {
@@ -508,9 +508,10 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         }
         let touched = mapping_handles(&mut child, frame, &mut o.mapping, selected_surface, true);
         // Snap: what's dragged follows the mouse exactly and only where it is shown is snapped
-        // (`mapping_points::snap_step`). Alt held = free, for a placement between the grid lines.
+        // (`mapping_points::snap_step`). Cmd held = free, for a placement between the grid lines (Alt is taken:
+        // it resizes from the middle).
         let snap_id = key.with("snap_drag");
-        let (dragging, free) = ui.input(|i| (i.pointer.primary_down(), i.modifiers.alt));
+        let (dragging, free) = ui.input(|i| (i.pointer.primary_down(), i.modifiers.command));
         super::mapping_points::snap_drag(ui.ctx(), snap_id, &mut o.mapping, (*selected_surface).filter(|_| vs.snap && dragging), [8.0 / frame.width(), 8.0 / frame.height()], 64.0, free);
         let _ = touched;
         // Right-click: what can be done here. The slice under the pointer becomes the selected one.

@@ -159,7 +159,9 @@ pub(crate) struct SnapDrag {
 /// jumped, which felt like lag and like it snapped where it wanted. Owner, 2026-11-16.)
 /// - One point dragged: it lands on another slice's point within `radius`, else on the grid.
 /// - The whole thing dragged: it moves as one, its first point on the grid (its shape is never bent).
-/// - Anything else (a scale, a rotate), or `free` (Alt held): no snapping.
+/// - A resize (some points moved, or all by different amounts): the edge of its box that moved lands on the grid
+///   and the points inside keep their proportions.
+/// - `free` (Cmd held; Alt already means "resize from the middle"): no snapping.
 pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]], others: &[[f32; 2]], radius: [f32; 2], grid: f32, free: bool) -> Vec<[f32; 2]> {
     let on_grid = |p: [f32; 2]| [(p[0] * grid).round() / grid, (p[1] * grid).round() / grid];
     let st = match state {
@@ -169,26 +171,55 @@ pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]],
             return cur.to_vec();
         }
     };
-    let moved: Vec<usize> = (0..cur.len()).filter(|&k| (cur[k][0] - st.shown[k][0]).abs() > 1e-7 || (cur[k][1] - st.shown[k][1]).abs() > 1e-7).collect();
+    // Which coordinates the drag moved this frame (a resize moves some corners along one axis only).
+    let delta: Vec<[f32; 2]> = (0..cur.len()).map(|k| [cur[k][0] - st.shown[k][0], cur[k][1] - st.shown[k][1]]).collect();
+    let went = |d: f32| d.abs() > 1e-7;
+    let moved: Vec<usize> = (0..cur.len()).filter(|&k| went(delta[k][0]) || went(delta[k][1])).collect();
+    // (The box around the raw points before this frame's move: a resize is told by which of its edges moved.)
+    let bounds = |pts: &[[f32; 2]], axis: usize| pts.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p[axis]), hi.max(p[axis])));
+    let before = [bounds(&st.raw, 0), bounds(&st.raw, 1)];
     for &k in &moved {
-        st.raw[k][0] += cur[k][0] - st.shown[k][0];
-        st.raw[k][1] += cur[k][1] - st.shown[k][1];
+        st.raw[k][0] += delta[k][0];
+        st.raw[k][1] += delta[k][1];
     }
     let mut out = st.raw.clone();
-    if !free {
+    // The whole thing carried along: every point moved, all by the same amount.
+    let carried = moved.len() == cur.len() && cur.len() > 1 && delta.iter().all(|d| (d[0] - delta[0][0]).abs() < 1e-6 && (d[1] - delta[0][1]).abs() < 1e-6);
+    if moved.is_empty() {
+        // Nothing moved this frame: what's shown stays as it is.
+        out.clone_from(&st.shown);
+    } else if !free {
         if let [k] = moved[..] {
             let p = st.raw[k];
             let near = others.iter().filter(|q| (q[0] - p[0]).abs() <= radius[0] && (q[1] - p[1]).abs() <= radius[1]).min_by(|a, b| (a[0] - p[0]).hypot(a[1] - p[1]).total_cmp(&(b[0] - p[0]).hypot(b[1] - p[1])));
             out[k] = near.copied().unwrap_or_else(|| on_grid(p));
-        } else if moved.len() == cur.len() && cur.len() > 1 {
+        } else if carried {
             let to = on_grid(st.raw[0]);
             let shift = [to[0] - st.raw[0][0], to[1] - st.raw[0][1]];
             for p in &mut out {
                 *p = [p[0] + shift[0], p[1] + shift[1]];
             }
-        } else if moved.is_empty() {
-            // Nothing moved this frame: what's shown stays as it is.
-            out.clone_from(&st.shown);
+        } else {
+            // A resize (an edge or a corner of the box pulled, from the far side or with Alt from the middle): the
+            // edge of the box that moved lands on the grid and everything inside keeps its proportions, so a warped
+            // slice or a mesh is scaled, never bent. (Resizing didn't snap at all: only a single point or the whole
+            // slice did. Owner, 2026-11-16.)
+            for axis in 0..2 {
+                let (lo0, hi0) = before[axis];
+                let (lo, hi) = bounds(&st.raw, axis);
+                if hi - lo < 1e-6 {
+                    continue;
+                }
+                let snap = |v: f32, was: f32| if (v - was).abs() > 1e-7 { (v * grid).round() / grid } else { v };
+                let (to_lo, to_hi) = (snap(lo, lo0), snap(hi, hi0));
+                // (Never squeezed flat by two edges landing on one grid line.)
+                if to_hi - to_lo < 0.5 / grid {
+                    continue;
+                }
+                for (k, p) in out.iter_mut().enumerate() {
+                    p[axis] = to_lo + (st.raw[k][axis] - lo) * (to_hi - to_lo) / (hi - lo);
+                }
+            }
         }
     }
     st.shown.clone_from(&out);
@@ -313,6 +344,54 @@ mod tests {
         for (p, d) in shown.iter().zip(&shape) {
             assert!((p[0] - shown[0][0] - d[0]).abs() < 1e-5 && (p[1] - shown[0][1] - d[1]).abs() < 1e-5, "shape kept");
         }
+        // A resize: the right edge of a box pulled out slowly (its two right corners move, in x only). The edge
+        // lands on the grid and stays straight; the left edge and every y stay exactly where they were.
+        let mut state = None;
+        let mut shown = vec![[0.25, 0.25], [0.5, 0.25], [0.5, 0.5], [0.25, 0.5]];
+        snap_step(&mut state, 3, &shown, &[], [0.004, 0.004], grid, false);
+        for _ in 0..45 {
+            let mut cur = shown.clone();
+            cur[1][0] += 0.0012;
+            cur[2][0] += 0.0012;
+            shown = snap_step(&mut state, 3, &cur, &[], [0.004, 0.004], grid, false);
+        }
+        assert!((shown[1][0] - shown[2][0]).abs() < 1e-6, "the edge stays straight");
+        assert!(((shown[1][0] * grid).round() / grid - shown[1][0]).abs() < 1e-6, "on the grid: {}", shown[1][0]);
+        assert!((shown[1][0] - 0.554).abs() <= 0.5 / grid + 1e-4, "followed the mouse: {}", shown[1][0]);
+        assert!((shown[0][0] - 0.25).abs() < 1e-6 && (shown[3][0] - 0.25).abs() < 1e-6, "the other edge didn't move");
+        assert!((shown[1][1] - 0.25).abs() < 1e-6 && (shown[2][1] - 0.5).abs() < 1e-6, "nor did any height");
+        // A warped slice resized: its far edge lands on the grid and the corners in between keep their proportions.
+        let mut state = None;
+        let mut shown = vec![[0.2, 0.2], [0.6, 0.25], [0.5, 0.6], [0.26, 0.55]];
+        snap_step(&mut state, 5, &shown, &[], [0.004, 0.004], grid, false);
+        for _ in 0..40 {
+            // (As the side handle does it: every point moves away from the left edge in proportion.)
+            let (lo, hi) = (0.2f32, shown.iter().map(|p| p[0]).fold(f32::MIN, f32::max));
+            let cur: Vec<[f32; 2]> = shown.iter().map(|p| [lo + (p[0] - lo) * (hi - lo + 0.0013) / (hi - lo), p[1]]).collect();
+            shown = snap_step(&mut state, 5, &cur, &[], [0.004, 0.004], grid, false);
+        }
+        let right = shown.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
+        assert!(((right * grid).round() / grid - right).abs() < 1e-5, "the pulled edge is on the grid: {right}");
+        assert!((right - 0.652).abs() <= 0.5 / grid + 1e-3, "followed the mouse: {right}");
+        let part = |p: [f32; 2]| (p[0] - 0.2) / (right - 0.2);
+        assert!((part(shown[2]) - 0.75).abs() < 0.01 && (part(shown[3]) - 0.15).abs() < 0.01, "proportions kept: {shown:?}");
+        assert!((shown[0][0] - 0.2).abs() < 1e-5, "the anchored edge stays");
+        // A corner of the box pulled (three corners move, the opposite one is the anchor): still a box, on the grid.
+        let mut state = None;
+        let mut shown = vec![[0.25, 0.25], [0.5, 0.25], [0.5, 0.5], [0.25, 0.5]];
+        snap_step(&mut state, 4, &shown, &[], [0.004, 0.004], grid, false);
+        for _ in 0..30 {
+            let mut cur = shown.clone();
+            cur[1][0] += 0.001;
+            cur[2][0] += 0.001;
+            cur[2][1] += 0.0007;
+            cur[3][1] += 0.0007;
+            shown = snap_step(&mut state, 4, &cur, &[], [0.004, 0.004], grid, false);
+        }
+        assert_eq!(shown[0], [0.25, 0.25], "the anchor");
+        let same = |a: f32, b: f32| (a - b).abs() < 1e-6;
+        assert!(same(shown[1][0], shown[2][0]) && same(shown[2][1], shown[3][1]) && same(shown[1][1], 0.25) && same(shown[3][0], 0.25), "still a box: {shown:?}");
+        assert!((shown[2][0] - 0.53).abs() <= 0.5 / grid + 1e-4 && (shown[2][1] - 0.521).abs() <= 0.5 / grid + 1e-4, "{shown:?}");
         // Alt: exactly where the mouse is.
         let mut cur = shown.clone();
         cur[1][0] += 0.0007;
