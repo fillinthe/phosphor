@@ -15,6 +15,7 @@ pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod preload;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod health;
 pub mod present;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod clip_cache;
@@ -853,6 +854,19 @@ impl MediaManager {
         }
         #[cfg(target_arch = "wasm32")]
         std::collections::HashMap::new()
+    }
+
+    /// What's known about how a movie layer is playing, for `health::advise` (the rest is filled in by the caller:
+    /// where the file lives, the CPU share, the project's size). None for live inputs, sound and layers without a movie.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn health_facts(&self, layer: u64) -> Option<health::Facts> {
+        let p = self.players.get(&layer).filter(|p| !p.is_live())?;
+        let (width, height) = p.size();
+        if (width, height) == (0, 0) {
+            return None;
+        }
+        let s = p.stats();
+        Some(health::Facts { codec: s.codec, hardware: (s.frames_decoded > 0).then_some(s.hardware), width, height, decoded: s.frames_decoded, skipped: s.frames_skipped, reverse_slow: s.reverse_slow, has_audio: p.has_sound(), ..Default::default() })
     }
 
     /// Codec and decoder details for a movie layer, for the Inspector.

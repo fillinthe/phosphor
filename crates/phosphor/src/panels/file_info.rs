@@ -114,6 +114,16 @@ pub(crate) fn describe(item: &MediaItem, probe: Option<&Result<crate::convert::P
 
 /// The File info window (drawn app-level while open).
 pub(crate) fn file_info_window(ctx: &egui::Context, st: &mut State) {
+    // A layer card's warning sign was clicked: this file's info.
+    if let Some(path) = ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new(super::FILE_INFO_REQUEST))) {
+        // (A file playing on a layer but not in the bin goes into the bin first: File info reads from there.)
+        if !st.comp.media_bin.iter().any(|m| m.path == path) {
+            st.comp.add_media(&crate::media::clip_name(&path), &path);
+        }
+        if st.file_info.as_ref().is_none_or(|i| i.path != path) {
+            st.file_info = Some(FileInfo::open(&path));
+        }
+    }
     let Some(info) = &st.file_info else { return };
     let Some(item) = st.comp.media_bin.iter().find(|m| m.path == info.path).cloned() else {
         st.file_info = None;
@@ -123,7 +133,14 @@ pub(crate) fn file_info_window(ctx: &egui::Context, st: &mut State) {
     if probe.is_none() {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
-    let text = describe(&item, probe.as_ref(), uses(&st.comp, &item.path));
+    // How it will play: from what the file is, and from how it's playing right now if a layer has it on.
+    let advice = how_it_plays(ctx, st, &item.path, probe.as_ref());
+    let mut text = describe(&item, probe.as_ref(), uses(&st.comp, &item.path));
+    if !advice.is_empty() {
+        text.push_str("\n\nHow it will play:\n");
+        text.push_str(&crate::media::health::as_text(&advice));
+    }
+    let mut convert = false;
     let mut open = true;
     let mut copy: Option<Vec<EffectState>> = None;
     crate::ui::dialog(ctx, format!("{} File info", icon::INFO)).id(egui::Id::new("file_info")).open(&mut open).default_width(420.0).resizable(true).collapsible(false).show(ctx, |ui| {
@@ -138,6 +155,23 @@ pub(crate) fn file_info_window(ctx: &egui::Context, st: &mut State) {
                 crate::os::reveal(&item.path);
             }
         });
+        if !advice.is_empty() {
+            crate::ui::section(ui, "file_info_plays", "How it will play", true, |ui| {
+                for a in &advice {
+                    let (sign, color) = if a.serious { (icon::WARNING, crate::theme::WARN) } else { (icon::INFO, ui.visuals().weak_text_color()) };
+                    ui.horizontal_top(|ui| {
+                        ui.label(egui::RichText::new(sign).color(color));
+                        ui.vertical(|ui| {
+                            ui.add(egui::Label::new(a.what.as_str()).wrap());
+                            ui.add(egui::Label::new(egui::RichText::new(format!("{} {}", icon::ARROW_RIGHT, a.try_this)).color(crate::theme::accent())).wrap());
+                        });
+                    });
+                }
+                if crate::media::is_movie(&item.name) && crate::ui::command(ui, crate::ui::label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show; it shows the size first and where it will be saved").clicked() {
+                    convert = true;
+                }
+            });
+        }
         crate::ui::column_scroll(ui).max_height(420.0).show(ui, |ui| {
             // Read-only, but selectable: drag over any part to copy it.
             let mut shown = text.as_str();
@@ -165,9 +199,35 @@ pub(crate) fn file_info_window(ctx: &egui::Context, st: &mut State) {
         st.notice = Some(if fx.len() == 1 { "Effect copied: Paste it in any effects list's menu".into() } else { format!("{} effects copied: Paste them in any effects list's menu", fx.len()) });
         st.fx_clipboard = fx;
     }
+    if convert {
+        st.convert.open_for(&item.path, &item.name);
+    }
     if !open {
         st.file_info = None;
     }
+}
+
+/// The advice for one file: what `probe` read from it, joined with how it's playing now on a layer that has it on.
+fn how_it_plays(ctx: &egui::Context, st: &State, path: &str, probe: Option<&Result<crate::convert::Probe, String>>) -> Vec<crate::media::health::Advice> {
+    use crate::media::health;
+    // A layer playing it: the live advice is the whole story (it has the size and codec too).
+    let live = st.comp.layers.iter().filter(|l| phosphor_engine::file_of(&l.source) == Some(path)).find_map(|l| super::play_health(ctx, l.id));
+    let Some(Ok(p)) = probe else { return live.map_or_else(Vec::new, |(_, a)| a.to_vec()) };
+    if !crate::media::is_movie(path) {
+        return Vec::new();
+    }
+    let mbps = (p.seconds > 0.0).then(|| p.bytes as f64 * 8.0 / p.seconds / 1e6);
+    let from_file = health::Facts { codec: p.codec.clone(), width: p.width, height: p.height, fps: p.fps, mbps, has_audio: p.has_audio, place: health::place_of(path), canvas: (st.comp.width, st.comp.height), ..Default::default() };
+    let mut out = live.map_or_else(Vec::new, |(_, a)| a.to_vec());
+    // What only the file can say (its bit rate off the disk, its true size), without saying anything twice.
+    for a in health::advise(&from_file) {
+        let said = |b: &health::Advice| b.what.split(':').next() == a.what.split(':').next() || (b.what.contains("network share") && a.what.contains("network share"));
+        if !out.iter().any(said) && !(a.what.contains("smoothly forwards") && !out.is_empty()) {
+            out.push(a);
+        }
+    }
+    out.sort_by_key(|a| !a.serious);
+    out
 }
 
 #[cfg(test)]
