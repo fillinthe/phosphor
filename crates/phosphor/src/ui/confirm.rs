@@ -74,3 +74,26 @@ pub(crate) fn confirmed(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt
     ctx.data_mut(|d| d.insert_temp(slot, ask));
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// With asking switched off (Don't ask again), a remove goes ahead on the next look, once; with it on, nothing
+    /// happens until the pop-up is answered, and another thing's question is never taken for this one's.
+    #[test]
+    fn dont_ask_again_goes_straight_ahead() {
+        let ctx = egui::Context::default();
+        set_confirm_removes(false);
+        ask_confirm(&ctx, "a", "Remove A?", "It goes.", "Remove");
+        assert!(!confirmed(&ctx, "b"), "someone else's question");
+        assert!(confirmed(&ctx, "a"));
+        assert!(!confirmed(&ctx, "a"), "only once");
+        set_confirm_removes(true);
+        ask_confirm(&ctx, "a", "Remove A?", "It goes.", "Remove");
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            assert!(!confirmed(ui.ctx(), "a"), "waits for the answer");
+        });
+        out.textures_delta.clear();
+    }
+}
