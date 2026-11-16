@@ -13,10 +13,33 @@ pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
 pub const DONATE_ORANGE: egui::Color32 = crate::theme::DONATE;
 
 /// Heart button that opens the donation page (top bar, menus): filled orange with dark text, like GCarve's.
+/// The top bar's Donate button is on show (the user can hide it; kept in the settings).
+static DONATE_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn donate_shown() -> bool {
+    DONATE_SHOWN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_donate_shown(on: bool) {
+    DONATE_SHOWN.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn donate_button(ui: &mut egui::Ui) {
-    if crate::ui::callout_button(ui, format!("{} Donate", icon::HEART), DONATE_ORANGE).on_hover_text("Phosphor is free and open source. A donation keeps it going.").clicked() {
+    if !donate_shown() {
+        return;
+    }
+    let r = crate::ui::callout_button(ui, format!("{} Donate", icon::HEART), DONATE_ORANGE).on_hover_text("Phosphor is free and open source. A donation keeps it going. Right-click to hide this button");
+    if r.clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
     }
+    // Anyone may put it away for good (it stays in the Help menu, and the brightness menu brings the button back).
+    use crate::ui::RightMenu;
+    r.right_menu(|ui| {
+        if crate::ui::command(ui, crate::ui::label(icon::EYE_SLASH, "Hide this button")).on_hover_text("It won't show again. Donating stays in the Help menu; the brightness menu (the sun) has a switch to bring the button back").clicked() {
+            set_donate_shown(false);
+            ui.close();
+        }
+    });
 }
 
 /// The Report a Bug window's state.
