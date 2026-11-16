@@ -49,6 +49,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Damaged files from other apps (Resolume, MadMapper) and damaged movies are refused instead of crashing.
 
 **Fixed**
+- Projects: a project whose drive wasn't seen can still be clicked. It opens if the drive is there (also when the
+  drive came back under a slightly different name), and it stays in Recent when it isn't.
 - Effect-style launch fades and masked slices no longer rebuild their pictures every frame.
 - Closing a clip on a pulled drive or a stalled share no longer freezes the app.
 - Control Surface "Moves by itself" and Designer "Save as a box…" stay open while you use them.

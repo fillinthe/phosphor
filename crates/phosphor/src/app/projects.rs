@@ -92,13 +92,15 @@ const PICTURE_H: f32 = CARD_W * 9.0 / 16.0;
 /// accent color; one whose file isn't there (a drive unplugged) is dimmed and says so.
 fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>) -> egui::Response {
     let size = egui::vec2(CARD_W, PICTURE_H + 44.0);
-    let (rect, r) = ui.allocate_exact_size(size, if card.there { Sense::click() } else { Sense::hover() });
+    // (Always clickable: "not found" is only what the last look at the disk said. A click tries for real, and finds
+    // a drive that came back under another name.)
+    let (rect, r) = ui.allocate_exact_size(size, Sense::click());
     if !ui.is_rect_visible(rect) {
         return r;
     }
     let v = ui.visuals();
     let p = ui.painter();
-    let hovered = r.hovered() && card.there;
+    let hovered = r.hovered();
     p.rect_filled(rect, 6.0, if hovered { v.widgets.hovered.weak_bg_fill } else { v.faint_bg_color });
     let pic = egui::Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(CARD_W - 12.0, PICTURE_H - 12.0));
     let dim = if card.there { Color32::WHITE } else { crate::theme::faint() };
@@ -113,7 +115,7 @@ fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>
         }
     }
     if !card.there {
-        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Not found: drive unplugged?", egui::FontId::proportional(12.0), crate::theme::WARN);
+        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Drive not connected? Click to try", egui::FontId::proportional(12.0), crate::theme::WARN);
     }
     let text_w = CARD_W - 14.0;
     let name_color = if card.current { crate::theme::accent() } else if card.there { v.strong_text_color() } else { v.weak_text_color() };
@@ -348,8 +350,11 @@ impl PhosphorApp {
         }
         match pick {
             Some(Pick::File(path)) => {
+                let before = st.notice.clone();
                 st.open_project_file(&path);
-                st.projects.open = false;
+                // (The window stays up when it couldn't be opened, so another one can be picked.)
+                let failed = st.notice != before && st.notice.as_deref().is_some_and(crate::ui::notice::is_problem);
+                st.projects.open = failed;
             }
             Some(Pick::Cloud(id)) => {
                 st.account.open(ctx, &id);
