@@ -17,7 +17,6 @@ impl PhosphorApp {
         let mut open_outputs = false;
         let mut unmute = false;
         let mut web_toggle = false;
-        let mut dismiss = false;
         let mut open_tab = None;
         let mut lift_blackout = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
@@ -141,16 +140,6 @@ impl PhosphorApp {
                         }
                     }
                 }
-                // News (Saved…, Watching…): here, out of the way; it goes by itself.
-                if let Some(text) = crate::ui::notice::news(st) {
-                    ui.separator();
-                    // Leaves room for the frame rate and Library on the right.
-                    let room = egui::vec2((ui.available_width() - 420.0).max(60.0), ui.spacing().interact_size.y);
-                    let r = ui.allocate_ui(room, |ui| ui.add(egui::Label::new(small(format!("{} {text}", icon::INFO), theme::accent())).truncate().sense(egui::Sense::click()))).inner;
-                    if r.on_hover_text(format!("{text}\nClick to clear")).clicked() {
-                        dismiss = true;
-                    }
-                }
                 // Right: the side-column toggles (areas), then frame rate and load.
                 let s = self.state.stats.latest;
                 // CPU as a share of the whole computer (Activity Monitor's figure counts one core as 100%, so 78% on a
@@ -178,9 +167,6 @@ impl PhosphorApp {
         }
         if let Some(tab) = open_tab {
             self.show_tab_anywhere(tab);
-        }
-        if dismiss {
-            self.state.notice = None;
         }
         if web_toggle {
             let on = self.state.comp.web_control_off;
