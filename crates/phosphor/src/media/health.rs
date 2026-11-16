@@ -189,9 +189,15 @@ fn mounts() -> Vec<Mount> {
     use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
     static CACHE: OnceLock<Mutex<(Instant, Vec<Mount>)>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new((Instant::now() - Duration::from_secs(60), Vec::new())));
+    // (None = never looked yet.)
+    static LOOKED: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new((Instant::now(), Vec::new())));
     let Ok(mut c) = cache.lock() else { return Vec::new() };
-    if c.0.elapsed() > Duration::from_secs(8) {
+    let fresh = LOOKED.get_or_init(|| Mutex::new(None)).lock().ok().is_some_and(|l| l.is_some_and(|at| at.elapsed() <= Duration::from_secs(8)));
+    if !fresh {
+        if let Ok(mut l) = LOOKED.get_or_init(|| Mutex::new(None)).lock() {
+            *l = Some(Instant::now());
+        }
         let mut list = Vec::new();
         // SAFETY: getfsstat fills at most `size` bytes of our buffer; MNT_NOWAIT returns what the kernel already
         // knows without asking any drive, so it can't block on a dead share.
@@ -204,7 +210,10 @@ fn mounts() -> Vec<Mount> {
                     buf.set_len((got as usize).min(buf.capacity()));
                     for s in &buf {
                         let at = std::ffi::CStr::from_ptr(s.f_mntonname.as_ptr()).to_string_lossy().into_owned();
-                        let local = s.f_flags & libc::MNT_LOCAL as u32 != 0;
+                        // Another computer's disk: the network file systems by name. (Not "anything that isn't
+                        // local": a cloud-drive or encrypted-folder mount isn't a share that drops out mid-show.)
+                        let kind = std::ffi::CStr::from_ptr(s.f_fstypename.as_ptr()).to_string_lossy().to_lowercase();
+                        let local = !["smbfs", "nfs", "afpfs", "webdav", "cifs", "ftp"].iter().any(|k| kind.starts_with(k));
                         // The startup disk and its own volumes sit at / or under /System; plugged-in drives under /Volumes.
                         let own = at == "/" || at.starts_with("/System/") || at.starts_with("/private/");
                         list.push((at, local, own));

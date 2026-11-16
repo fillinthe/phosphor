@@ -195,6 +195,13 @@ pub fn relocated(path: &str) -> Option<String> {
     relocated_in(std::path::Path::new("/Volumes"), path)
 }
 
+/// Is `name` the drive `drive` mounted again the way macOS names it: the same name, a space, a number
+/// ("_FOOTAGE 1")? Nothing looser: "SHOW OLD" or "SHOW_BACKUP" is another drive, and a project with the same
+/// path on it is another (older) project.
+fn remounted(drive: &str, name: &str) -> bool {
+    name.strip_prefix(drive).and_then(|rest| rest.strip_prefix(' ')).is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+}
+
 fn relocated_in(volumes: &std::path::Path, path: &str) -> Option<String> {
     let p = std::path::Path::new(path);
     if p.exists() {
@@ -204,7 +211,7 @@ fn relocated_in(volumes: &std::path::Path, path: &str) -> Option<String> {
     let mut parts = rest.components();
     let drive = parts.next()?.as_os_str().to_string_lossy().into_owned();
     let inside = parts.as_path();
-    let mut names: Vec<String> = std::fs::read_dir(volumes).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| *n != drive && n.starts_with(&drive)).collect();
+    let mut names: Vec<String> = std::fs::read_dir(volumes).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| remounted(&drive, n)).collect();
     names.sort();
     names.into_iter().map(|n| volumes.join(n).join(inside)).find(|c| c.exists()).map(|c| c.to_string_lossy().into_owned())
 }
@@ -217,6 +224,12 @@ mod relocated_tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("_FOOTAGE 1/shows")).unwrap();
         std::fs::create_dir_all(root.join("Other")).unwrap();
+        // (Drives that only begin the same are other drives: never opened in its place.)
+        for other in ["_FOOTAGE OLD", "_FOOTAGE_BACKUP", "_FOOTAGE2023"] {
+            std::fs::create_dir_all(root.join(other).join("shows")).unwrap();
+            std::fs::write(root.join(other).join("shows/a.phosphor"), "{}").unwrap();
+        }
+        assert!(super::remounted("SHOW", "SHOW 2") && !super::remounted("SHOW", "SHOW") && !super::remounted("SHOW", "SHOW OLD") && !super::remounted("SHOW", "SHOW 2b") && !super::remounted("SHOW", "SHOW2"));
         std::fs::write(root.join("_FOOTAGE 1/shows/a.phosphor"), "{}").unwrap();
         let saved = root.join("_FOOTAGE/shows/a.phosphor").to_string_lossy().into_owned();
         let found = super::relocated_in(&root, &saved).unwrap();

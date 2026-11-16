@@ -51,6 +51,9 @@ pub(crate) fn confirmed(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt
         ctx.data_mut(|d| d.remove::<Ask>(slot));
         return ask.answered;
     }
+    // (Asked for every frame while it's up: an app that only draws when something happens would otherwise let
+    // the half second above run out while you read, and close the question on the next mouse move.)
+    ctx.request_repaint();
     let (mut yes, mut no) = (false, false);
     let modal = egui::Modal::new(egui::Id::new("phosphor_confirm_modal")).show(ctx, |ui| {
         ui.set_width(340.0);

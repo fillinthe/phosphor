@@ -300,6 +300,8 @@ impl State {
             self.also_clips.retain(|k| has_clip(&self.comp, *k));
             self.pending_triggers.clear();
             self.notice = Some(if step < 0 { "Undone".into() } else { "Redone".into() });
+        } else {
+            self.notice = Some(if step < 0 { "Nothing to undo".into() } else { "Nothing to redo".into() });
         }
     }
 }

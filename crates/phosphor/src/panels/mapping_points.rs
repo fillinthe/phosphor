@@ -183,6 +183,19 @@ pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]],
         st.raw[k][1] += delta[k][1];
     }
     let mut out = st.raw.clone();
+    // A resize moves every point along an axis in step with where it sits on that axis (the far edge the most,
+    // the anchored edge not at all). A turn doesn't: how far a point goes sideways depends on its height. Only a
+    // resize or a plain move is snapped; a turn is left exactly as the mouse made it (snapped as a resize, the
+    // slice was squashed a little every frame and no longer turned).
+    let in_step = |axis: usize| {
+        let (lo, hi) = (0..cur.len()).fold((0usize, 0usize), |(lo, hi), k| (if st.shown[k][axis] < st.shown[lo][axis] { k } else { lo }, if st.shown[k][axis] > st.shown[hi][axis] { k } else { hi }));
+        let span = st.shown[hi][axis] - st.shown[lo][axis];
+        (0..cur.len()).all(|k| {
+            let want = if span.abs() < 1e-6 { delta[lo][axis] } else { delta[lo][axis] + (st.shown[k][axis] - st.shown[lo][axis]) / span * (delta[hi][axis] - delta[lo][axis]) };
+            (delta[k][axis] - want).abs() < 2e-5
+        })
+    };
+    let free = free || (moved.len() > 1 && !(in_step(0) && in_step(1)));
     // The whole thing carried along: every point moved, all by the same amount.
     let carried = moved.len() == cur.len() && cur.len() > 1 && delta.iter().all(|d| (d[0] - delta[0][0]).abs() < 1e-6 && (d[1] - delta[0][1]).abs() < 1e-6);
     if moved.is_empty() {
@@ -230,7 +243,11 @@ pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]],
 /// moved it, with `dragged` = the slice or mask being dragged with Snap on (None otherwise: the drag is over and
 /// what was kept is let go). It lands on another slice's point within `radius` (output units), else on a 1/`grid` grid.
 pub(crate) fn snap_drag(ctx: &egui::Context, key: egui::Id, mapping: &mut Mapping, dragged: Option<u64>, radius: [f32; 2], grid: f32, free: bool) {
-    let Some(id) = dragged else {
+    // Not snapped: a mask that rides on a slice (its points are in that slice's own square, not the output's, so
+    // the output's grid and other slices' corners mean nothing there), and a mask with curve handles (its handles
+    // would be left behind by a resize snap).
+    let own_space = |id: u64| mapping.masks.iter().any(|m| m.id == id && (m.attached.is_some() || m.handles.iter().any(|h| h.is_some())));
+    let Some(id) = dragged.filter(|id| !own_space(*id)) else {
         ctx.data_mut(|d| d.remove::<SnapDrag>(key));
         return;
     };
@@ -242,6 +259,10 @@ pub(crate) fn snap_drag(ctx: &egui::Context, key: egui::Id, mapping: &mut Mappin
     let placed = snap_step(&mut state, id, &cur, &others, radius, grid, free);
     for (p, q) in shape_points(mapping, id).into_iter().zip(placed) {
         *p = q;
+    }
+    // (What a slice works out from its points follows them in the same frame.)
+    if let Some(s) = mapping.surfaces.iter_mut().find(|s| s.id == id) {
+        s.sync_corners();
     }
     if let Some(state) = state {
         ctx.data_mut(|d| d.insert_temp(key, state));
@@ -392,6 +413,20 @@ mod tests {
         let same = |a: f32, b: f32| (a - b).abs() < 1e-6;
         assert!(same(shown[1][0], shown[2][0]) && same(shown[2][1], shown[3][1]) && same(shown[1][1], 0.25) && same(shown[3][0], 0.25), "still a box: {shown:?}");
         assert!((shown[2][0] - 0.53).abs() <= 0.5 / grid + 1e-4 && (shown[2][1] - 0.521).abs() <= 0.5 / grid + 1e-4, "{shown:?}");
+        // A turn (every point moved, sideways by how high it sits): left exactly as the mouse made it, never
+        // squashed onto the grid.
+        let mut state = None;
+        let mut shown = vec![[0.3, 0.3], [0.6, 0.3], [0.6, 0.5], [0.3, 0.5]];
+        snap_step(&mut state, 6, &shown, &[], [0.004, 0.004], grid, false);
+        let (c, a) = ([0.45f32, 0.4f32], 0.01f32);
+        for _ in 0..30 {
+            let cur: Vec<[f32; 2]> = shown.iter().map(|p| [c[0] + (p[0] - c[0]) * a.cos() - (p[1] - c[1]) * a.sin(), c[1] + (p[0] - c[0]) * a.sin() + (p[1] - c[1]) * a.cos()]).collect();
+            let got = snap_step(&mut state, 6, &cur, &[], [0.004, 0.004], grid, false);
+            assert!(got.iter().zip(&cur).all(|(g, w)| (g[0] - w[0]).abs() < 1e-5 && (g[1] - w[1]).abs() < 1e-5), "a turn isn't snapped");
+            shown = got;
+        }
+        let side = |p: [f32; 2], q: [f32; 2]| (p[0] - q[0]).hypot(p[1] - q[1]);
+        assert!((side(shown[0], shown[1]) - 0.3).abs() < 1e-3 && (side(shown[1], shown[2]) - 0.2).abs() < 1e-3, "still the same size: {shown:?}");
         // Alt: exactly where the mouse is.
         let mut cur = shown.clone();
         cur[1][0] += 0.0007;

@@ -58,7 +58,22 @@ pub fn set_undo_playback(on: bool) {
 /// A different thing is on this layer (another clip, another source).
 fn playing_changed(a: &phosphor_engine::LayerState, b: &phosphor_engine::LayerState) -> bool {
     // (Whose effects ride on the layer changes a moment after the launch, when its fade is done: the same launch.)
-    a.active_clip != b.active_clip || a.source != b.source || a.clip_effects_from != b.clip_effects_from
+    a.active_clip != b.active_clip || !same_source(&a.source, &b.source) || a.clip_effects_from != b.clip_effects_from
+}
+
+/// The same thing on the layer, live text's own words aside: a clock or a counter rewrites its text by itself,
+/// and that is not something else playing.
+fn same_source(a: &phosphor_engine::SourceSpec, b: &phosphor_engine::SourceSpec) -> bool {
+    use phosphor_engine::{LiveText, SourceSpec::Text};
+    match (a, b) {
+        (Text(x), Text(y)) if x.live != LiveText::Off && x.live == y.live => {
+            let mut y = y.clone();
+            y.text.clone_from(&x.text);
+            y.live_start = x.live_start;
+            *x == y
+        }
+        _ => a == b,
+    }
 }
 
 /// What's playing on `from`, put onto `into`: the clip, its source and its own settings and effects (what a launch
@@ -76,6 +91,17 @@ fn carry_playback(from: &phosphor_engine::LayerState, into: &mut phosphor_engine
     (into.rate, into.direction, into.playing) = (from.rate, from.direction, from.playing);
     (into.loop_in, into.loop_out, into.loop_beats, into.sync_beats) = (from.loop_in, from.loop_out, from.loop_beats, from.sync_beats);
     into.collection.clone_from(&from.collection);
+    // A clip that carries its own effects puts them on the layer when it's launched.
+    let brings_effects = from.active_clip.and_then(|id| from.clips.iter().find(|c| c.id == id)).and_then(|c| c.own.as_ref()).is_some_and(|o| o.with_effects);
+    if brings_effects {
+        into.effects.clone_from(&from.effects);
+    }
+    // And the clip that was playing gets its settings written back as it leaves.
+    for c in &mut into.clips {
+        if let Some(src) = from.clips.iter().find(|s| s.id == c.id) {
+            c.own.clone_from(&src.own);
+        }
+    }
 }
 
 /// A step about to be shown (Undo / Redo) keeps everything live as it is now: what moves by itself, the lasers'
@@ -141,7 +167,12 @@ fn settle_volatile(from: &Composition, into: &mut Composition) {
     // second while music played and the real edits fell off the end.
     for m in &mut into.modulators {
         if let Some(src) = from.modulators.iter().find(|s| s.id == m.id) {
-            m.value = src.value;
+            // (A Designer Value box's own number is a setting the user typed: that one is an edit. Every other
+            // value is moved by something: a sound band, data, tracking, a mapped knob, a preview pad.)
+            let own_setting = m.designer && m.band.is_none() && m.data.is_none();
+            if !own_setting {
+                m.value = src.value;
+            }
             m.live.clone_from(&src.live);
             m.looper.clone_from(&src.looper);
         }
@@ -184,13 +215,13 @@ impl History {
             return;
         }
         self.checked_at = now;
-        // A launch isn't an edit: the last step takes on what's playing now, with everything the launch brought
-        // (the clip's settings, its effects, what it wrote back to the clip it replaced). Only here, where steps
-        // are made: a step being shown by Undo keeps its own edits (`keep_live` carries just what's playing).
+        // A launch isn't an edit: the last step takes on what's playing now, with what the launch brought (the
+        // clip's settings, its effects, what it wrote back to the clip it replaced). Only that: an edit to the
+        // same layer that hasn't settled yet (a fader held while autopilot moves on) stays an edit.
         if !undo_playback() {
             for l in &mut committed.layers {
                 if let Some(src) = comp.layers.iter().find(|s| s.id == l.id).filter(|s| playing_changed(s, l)) {
-                    l.clone_from(src);
+                    carry_playback(src, l);
                 }
             }
         }
@@ -269,8 +300,10 @@ impl History {
         (c != *current).then_some(c)
     }
 
-    pub fn can_undo(&self, current: &Composition) -> bool {
-        !self.undo.is_empty() || self.unsettled(current).is_some()
+    /// Is there anything to take back? (Cheap enough to ask every frame: `changed_at` is set by `track` while an
+    /// edit is waiting to settle, so no project is copied or compared here.)
+    pub fn can_undo(&self, _current: &Composition) -> bool {
+        !self.undo.is_empty() || self.changed_at.is_some()
     }
 
     pub fn can_redo(&self) -> bool {
@@ -343,11 +376,14 @@ mod tests {
         let mut h = History::default();
         let mut comp = Composition::starter();
         let id = comp.layers[0].id;
-        let mut t = 0.0;
-        let mut settle = |h: &mut History, comp: &Composition| {
+        let t = std::cell::Cell::new(0.0);
+        let tick = || {
+            t.set(t.get() + 0.1);
+            t.get()
+        };
+        let settle = |h: &mut History, comp: &Composition| {
             for _ in 0..8 {
-                t += 0.1;
-                h.track(comp, t, false);
+                h.track(comp, tick(), false);
             }
         };
         settle(&mut h, &comp);
@@ -360,6 +396,20 @@ mod tests {
         settle(&mut h, &comp);
         assert_eq!(h.steps(), 0, "a launch is not a step");
         assert!(!h.can_undo(&comp));
+        // An edit still waiting to settle when a launch comes (a fader held while autopilot moves on) stays an edit.
+        comp.layer_mut(id).unwrap().opacity = 0.7;
+        h.track(&comp, tick(), true);
+        plays(&mut comp, "rings");
+        h.track(&comp, tick(), true);
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), 1, "the held fader became a step, the launch didn't swallow it");
+        let back = h.undo(&comp).unwrap();
+        assert_eq!(back.layer(id).unwrap().opacity, 1.0);
+        assert_eq!(back.layer(id).unwrap().source, phosphor_engine::SourceSpec::Generator("rings".into()));
+        // (Start over for the rest.)
+        comp = back;
+        h = History::default();
+        settle(&mut h, &comp);
         comp.layer_mut(id).unwrap().opacity = 0.4;
         settle(&mut h, &comp);
         assert_eq!(h.steps(), 1, "an edit is");
