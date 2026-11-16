@@ -119,7 +119,7 @@ Every control is one of these. A panel never hand-rolls a button, slider, field,
 | Job | Component | Variants / sizes | States |
 |---|---|---|---|
 | Makes something happen now | `action_button(Act::Go)` (accent, dark ink) · `Act::Record` (red, white ink) | `action_button_sized`, `steady_action_button` (width held while the label changes) | hover: white outline · disabled: `command_if` style gray · mapped: gold badge |
-| A command (opens, edits, adds) | `command` · `small_command` (tight row) · `command_sized` · `wide_button` · `callout_button` (Donate, an update) | `*_if(enabled)` grays it out until it can be used | hover: lifted fill + accent outline · pressed: accent fill · disabled: gray |
+| A command (opens, edits, adds) | `command` · `small_command` (tight row) · `command_sized` · `wide_button` · `callout` · `callout_closable` (with an x to put it away) (Donate, an update) | `*_if(enabled)` grays it out until it can be used | hover: lifted fill + accent outline · pressed: accent fill · disabled: gray |
 | Delete / remove / stop watching / clear | `danger_button` (red words, `theme::DANGER`) | `small_danger` (a red trash can or X in a row) | every command that takes something away is red; `ask_confirm` + `confirmed` ("are you sure?" with Don't ask again) when what goes is more than one thing or isn't brought back by Undo |
 | On / off | `toggle` (pill with a light) · `toggle_mapped` · `icon_toggle` (compact) · `eye_toggle` (show / hide) | `toggle_locked` | on: accent light and outline · off: hollow |
 | Pick one of a few | `segmented` · `choice_buttons` · `choice_mapped` · `segmented_list` | wraps in a narrow panel | picked: raised segment |

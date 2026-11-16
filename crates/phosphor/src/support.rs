@@ -28,30 +28,20 @@ pub fn donate_button(ui: &mut egui::Ui) {
     if !donate_shown() {
         return;
     }
-    // Anyone may put it away for good: a small x at its right end (and the same in its right-click menu). Donating
-    // stays in the Help menu, and the brightness menu's Donate button switch brings the button back.
-    let close = |ui: &mut egui::Ui| {
-        let r = crate::ui::small_command(ui, egui::RichText::new(icon::X).small().color(ui.visuals().weak_text_color()))
-            .on_hover_text("Hide the Donate button. Donating stays in the Help menu; the brightness menu (the sun) has a switch to bring the button back");
-        if r.clicked() {
-            set_donate_shown(false);
-            crate::ui::notice::tell(ui.ctx(), "Donate button hidden: Help › Donate to Phosphor… is always there, and the brightness menu brings the button back".into());
-        }
-    };
-    let donate = |ui: &mut egui::Ui| crate::ui::callout_button(ui, format!("{} Donate", icon::HEART), DONATE_ORANGE).on_hover_text("Phosphor is free and open source. A donation keeps it going. The x beside it hides this button");
-    // The two as one piece, the x on the right whichever way the bar is laid out (the top bar fills from the right).
-    let gap = ui.spacing().item_spacing.x;
-    ui.spacing_mut().item_spacing.x = 2.0;
-    let r = if ui.layout().main_dir() == egui::Direction::RightToLeft {
-        close(ui);
-        donate(ui)
-    } else {
-        let r = donate(ui);
-        close(ui);
-        r
-    };
-    ui.spacing_mut().item_spacing.x = gap;
-    ui.add_space(gap - 2.0);
+    // Anyone may put it away for good: an x inside the orange button, at its right end (and the same in its
+    // right-click menu). Donating stays in the Help menu, and the brightness menu's Donate button switch brings the
+    // button back.
+    let (r, closed) = crate::ui::callout_closable(
+        ui,
+        format!("{} Donate", icon::HEART),
+        DONATE_ORANGE,
+        "Phosphor is free and open source. A donation keeps it going. The x at its end hides this button",
+        "Hide the Donate button. Donating stays in the Help menu; the brightness menu (the sun) has a switch to bring the button back",
+    );
+    if closed {
+        set_donate_shown(false);
+        crate::ui::notice::tell(ui.ctx(), "Donate button hidden: Help › Donate to Phosphor… is always there, and the brightness menu brings the button back".into());
+    }
     if r.clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
     }
