@@ -1,7 +1,7 @@
-//! Whatever `State::notice` says. Plain news (Saved, Watching…) is written in the status line at the bottom
-//! (`news`, so it covers nothing) and goes by itself after a few seconds; a problem (Couldn't open…, files
-//! missing…) stays above the status line until OK; a failure also offers Report a problem (the bug window, filled
-//! in) so anyone can tell the Phosphor team in one click.
+//! Whatever `State::notice` says. Plain news (Saved, Undone, Watching…) is a small note floating just above the
+//! status line: it takes no room, so nothing moves when it comes and goes, and it leaves by itself. A problem
+//! (Couldn't open…, files missing…) stays there until OK; a failure also offers Report a problem (the bug window,
+//! filled in) so anyone can tell the Phosphor team in one click.
 
 use eframe::egui;
 use egui_phosphor::regular as icon;
@@ -35,16 +35,31 @@ pub(crate) fn take_told(ctx: &egui::Context) -> Option<String> {
 pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
     let Some(text) = st.notice.clone() else { return };
     let problem = is_problem(&text);
-    if !problem && now - st.notice_since > NEWS_SECS {
+    // Short news goes sooner (Undone, Saved); a sentence gets time to be read.
+    let stays = (2.5 + text.chars().count() as f64 / 14.0).min(NEWS_SECS);
+    if !problem && now - st.notice_since > stays {
         st.notice = None;
         return;
     }
     if !problem {
-        // Written in the status line (`news`).
-        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        // A small note floating just above the status line, bottom center: it takes no room, so nothing on screen
+        // moves when it comes and goes. (It used to be written into the status line, which wraps: on a full line
+        // the news made a second row and the whole window shifted up; owner, 2026-11-16.)
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        let mut clear = false;
+        egui::Area::new(egui::Id::new("news_note")).order(egui::Order::Tooltip).interactable(true).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -34.0)).show(ctx, |ui| {
+            ui.set_max_width((ctx.content_rect().width() - 80.0).clamp(120.0, 620.0));
+            egui::Frame::popup(ui.style()).fill(crate::theme::GOOD_FILL).inner_margin(egui::Margin::symmetric(10, 5)).show(ui, |ui| {
+                let words = egui::RichText::new(format!("{} {text}", icon::INFO)).small().color(crate::theme::accent());
+                clear = ui.add(egui::Label::new(words).wrap().selectable(false).sense(egui::Sense::click())).on_hover_text("Click to clear").clicked();
+            });
+        });
+        if clear {
+            st.notice = None;
+        }
         return;
     }
-    let fill = if problem { crate::theme::PROBLEM_FILL } else { crate::theme::GOOD_FILL };
+    let fill = crate::theme::PROBLEM_FILL;
     // (At the bottom, just above the status line: it never covers the menus or the panels' tabs.)
     egui::Area::new(egui::Id::new("notice_bar")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -36.0)).show(ctx, |ui| {
         ui.set_max_width(ctx.content_rect().width() - 40.0);
@@ -70,10 +85,6 @@ pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
     });
 }
 
-/// Plain news, for the status line: the words (None when there's none, or it's a problem: those pop up).
-pub(crate) fn news(st: &State) -> Option<&str> {
-    st.notice.as_deref().filter(|t| !is_problem(t))
-}
 
 #[cfg(test)]
 mod tests {
