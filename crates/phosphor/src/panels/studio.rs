@@ -511,21 +511,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         // (`mapping_points::snap_step`). Alt held = free, for a placement between the grid lines.
         let snap_id = key.with("snap_drag");
         let (dragging, free) = ui.input(|i| (i.pointer.primary_down(), i.modifiers.alt));
-        match (*selected_surface).filter(|_| vs.snap && dragging) {
-            Some(id) => {
-                let mut state: Option<super::mapping_points::SnapDrag> = ui.ctx().data(|d| d.get_temp(snap_id));
-                let others: Vec<[f32; 2]> = o.mapping.surfaces.iter_mut().filter(|s| s.id != id).flat_map(|s| super::mapping_points::points_mut(s).into_iter().map(|p| *p).collect::<Vec<_>>()).collect();
-                let cur: Vec<[f32; 2]> = super::mapping_points::shape_points(&mut o.mapping, id).into_iter().map(|p| *p).collect();
-                // Onto another slice's point within 8 screen pixels, else onto the 1/64 grid.
-                let radius = [8.0 / frame.width(), 8.0 / frame.height()];
-                let placed = super::mapping_points::snap_step(&mut state, id, &cur, &others, radius, 64.0, free);
-                for (p, q) in super::mapping_points::shape_points(&mut o.mapping, id).into_iter().zip(placed) {
-                    *p = q;
-                }
-                ui.ctx().data_mut(|d| d.insert_temp(snap_id, state));
-            }
-            None => ui.ctx().data_mut(|d| d.remove_temp::<Option<super::mapping_points::SnapDrag>>(snap_id)).map(|_| ()).unwrap_or(()),
-        }
+        super::mapping_points::snap_drag(ui.ctx(), snap_id, &mut o.mapping, (*selected_surface).filter(|_| vs.snap && dragging), [8.0 / frame.width(), 8.0 / frame.height()], 64.0, free);
         let _ = touched;
         // Right-click: what can be done here. The slice under the pointer becomes the selected one.
         let menu_key = key.with("menu_at");
