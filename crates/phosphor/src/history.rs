@@ -94,6 +94,33 @@ fn keep_live(current: &Composition, step: &mut Composition) {
 /// Fields that change on their own (tempo following, transitions in flight, live text) aren't edits.
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
+    // How the project is being looked at is not an edit either, and Undo must never move the view (owner,
+    // 2026-11-16: "make sure there isn't screens shifting"): which comp is open, what's folded, the Control
+    // Surface's page, which screen an output fills. A step used to fold a group back open or switch the comp tab
+    // along with the edit it undid, and folding something was a step of its own.
+    into.open_comp = from.open_comp;
+    into.surface.page = from.surface.page;
+    for c in &mut into.comps {
+        if let Some(src) = from.comps.iter().find(|s| s.id == c.id) {
+            c.collapsed = src.collapsed;
+        }
+    }
+    for g in &mut into.groups {
+        if let Some(src) = from.groups.iter().find(|s| s.id == g.id) {
+            g.collapsed = src.collapsed;
+        }
+    }
+    for o in &mut into.outputs {
+        if let Some(src) = from.outputs.iter().find(|s| s.id == o.id) {
+            o.screen.clone_from(&src.screen);
+            o.frozen = src.frozen;
+            for g in &mut o.mapping.groups {
+                if let Some(sg) = src.mapping.groups.iter().find(|s| s.id == g.id) {
+                    g.collapsed = sg.collapsed;
+                }
+            }
+        }
+    }
     // (The id counter only goes up: a launch hands ids out, and a step shown by Undo must never hand one out twice.)
     into.next_id = into.next_id.max(from.next_id);
     keep_lasers_live(from, into);
@@ -353,6 +380,39 @@ mod tests {
         settle(&mut h, &comp);
         assert_eq!(h.steps(), 1);
         set_undo_playback(false);
+    }
+
+    /// Undo never moves the view: folding a group or switching the open comp is not a step, and a step taken back
+    /// leaves what's folded and which comp is open as they are now.
+    #[test]
+    fn undo_never_moves_the_view() {
+        let mut h = History::default();
+        let mut comp = Composition::starter();
+        comp.ensure_outputs();
+        let a = comp.layers[0].id;
+        let b = comp.add_layer().id;
+        let g = comp.create_group(&[a, b]).unwrap();
+        let mut t = 0.0;
+        let mut settle = |h: &mut History, comp: &Composition| {
+            for _ in 0..8 {
+                t += 0.1;
+                h.track(comp, t, false);
+            }
+        };
+        settle(&mut h, &comp);
+        comp.master_fade = 0.5;
+        settle(&mut h, &comp);
+        let steps = h.steps();
+        comp.groups.iter_mut().find(|x| x.id == g).unwrap().collapsed = true;
+        comp.open_comp = Some(77);
+        comp.outputs.iter_mut().for_each(|o| o.screen = "Projector".into());
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), steps, "looking around is not a step");
+        let back = h.undo(&comp).unwrap();
+        assert_eq!(back.master_fade, 1.0, "the edit is undone");
+        assert!(back.groups.iter().find(|x| x.id == g).unwrap().collapsed, "still folded");
+        assert_eq!(back.open_comp, Some(77), "the same comp is open");
+        assert!(back.outputs.iter().all(|o| o.screen == "Projector"), "outputs stay on their screens");
     }
 
     #[test]
