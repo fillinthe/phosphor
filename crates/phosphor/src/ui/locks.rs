@@ -19,6 +19,10 @@ pub enum PrefChange {
     ClearSnaps(ControlTarget),
     /// Set the low (true) or high limit to a 0..1 point, or clear both (None).
     Limit(ControlTarget, bool, Option<f32>),
+    /// One slider's own click way (jump / drag), or None to follow the app's setting again.
+    Click(ControlTarget, Option<bool>),
+    /// Every slider follows the app's setting again.
+    ClearClicks,
 }
 
 impl PrefChange {
@@ -29,6 +33,8 @@ impl PrefChange {
             PrefChange::RemoveSnap(t, u) => p.remove_snap(&t, u),
             PrefChange::ClearSnaps(t) => p.clear_snaps(&t),
             PrefChange::Limit(t, low, u) => p.set_limit(&t, low, u),
+            PrefChange::Click(t, jump) => p.set_click(&t, jump),
+            PrefChange::ClearClicks => p.clicks.clear(),
         }
     }
 }
@@ -39,6 +45,52 @@ fn prefs(ui: &egui::Ui) -> Option<std::sync::Arc<ControlPrefs>> {
 
 pub(crate) fn is_locked(ui: &egui::Ui, target: &ControlTarget) -> bool {
     prefs(ui).is_some_and(|p| p.is_locked(target))
+}
+
+/// Whether a click puts this slider where you clicked (true) or it moves from where it is: its own way if it was
+/// given one, else the app's setting.
+pub(crate) fn jumps(ui: &egui::Ui, target: Option<&ControlTarget>) -> bool {
+    target.and_then(|t| prefs(ui).and_then(|p| p.click_of(t))).unwrap_or_else(crate::ui::sliders_jump)
+}
+
+/// "Click: Jump / Drag" for a slider's right-click menu: this slider's own way, and one button to make every
+/// slider the same (the app's setting, also in the brightness menu).
+pub(crate) fn click_items(ui: &mut egui::Ui, target: Option<&ControlTarget>) {
+    let jump = jumps(ui, target);
+    let own = target.is_some_and(|t| prefs(ui).is_some_and(|p| p.click_of(t).is_some()));
+    crate::ui::field_menu(ui, crate::ui::label(icon::CURSOR_CLICK, if jump { "Click: Jump" } else { "Click: Drag" }), |ui| {
+        ui.set_min_width(260.0);
+        let mut pick = None;
+        if crate::ui::pick_item(ui, jump, "Jump: the value goes where you click").clicked() {
+            pick = Some(true);
+        }
+        if crate::ui::pick_item(ui, !jump, "Drag: moves from where it is (a click leaves it)").clicked() {
+            pick = Some(false);
+        }
+        match (target, pick) {
+            // A slider the project knows: the pick is its own.
+            (Some(t), Some(j)) => ask(ui, PrefChange::Click(t.clone(), Some(j))),
+            // One it doesn't (a setting in a window): the app's setting is all there is.
+            (None, Some(j)) => crate::ui::set_sliders_jump(j),
+            _ => {}
+        }
+        ui.separator();
+        if target.is_some() {
+            hint(ui, if own { "For this slider only" } else { "This slider follows the setting for all" });
+            let all = if jump { "Use Jump for every slider" } else { "Use Drag for every slider" };
+            if crate::ui::command(ui, all).on_hover_text("Sets it for all sliders (the brightness menu at the top has the same switch), and sliders with their own way follow it again").clicked() {
+                crate::ui::set_sliders_jump(jump);
+                ask(ui, PrefChange::ClearClicks);
+                ui.close();
+            }
+            if own && crate::ui::command(ui, "Follow the setting for all again").clicked() {
+                ask(ui, PrefChange::Click(target.unwrap().clone(), None));
+                ui.close();
+            }
+        } else {
+            hint(ui, "For every slider");
+        }
+    });
 }
 
 /// A control's limits (0..1 of its range), if it has any.

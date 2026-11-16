@@ -117,7 +117,7 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
                         swap = Some((i, i + 1));
                         ui.close();
                     }
-                    if crate::ui::command(ui, label(icon::TRASH, "Remove")).clicked() {
+                    if crate::ui::danger_button(ui, label(icon::TRASH, "Remove")).clicked() {
                         remove = Some(i);
                         ui.close();
                     }
@@ -126,7 +126,7 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
                     hint(ui, format!("{:.0}%", fx.mix * 100.0));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove effect").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Remove effect").clicked() {
                         remove = Some(i);
                     }
                     if crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() && i + 1 < count {

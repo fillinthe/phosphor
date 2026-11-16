@@ -368,6 +368,10 @@ impl PhosphorApp {
                             if crate::ui::toggle(ui, &mut jump, "Sliders jump to the click").on_hover_text("On: a click puts the slider where you clicked. Off: drag to move it from where it is (a click alone leaves it)").changed() {
                                 crate::ui::set_sliders_jump(jump);
                             }
+                            let mut ask = crate::ui::confirm_removes();
+                            if crate::ui::toggle(ui, &mut ask, "Ask before removing").on_hover_text("On: an \"are you sure?\" before a watched folder, a collection or its folder is removed. Ticking \"Don't ask again\" there switches this off").changed() {
+                                crate::ui::set_confirm_removes(ask);
+                            }
                             let mut tips = theme::tooltips_on();
                             if crate::ui::toggle(ui, &mut tips, "Tooltips").on_hover_text("Off: no hover text over buttons (for people who know the app). (i) help still opens on a click").changed() {
                                 theme::set_tooltips(ui.ctx(), tips);

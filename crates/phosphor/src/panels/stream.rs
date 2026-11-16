@@ -237,7 +237,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
                     if action_button(ui, Act::Record, label(icon::RECORD, "Record")).clicked() {
                         toggle = Some(i);
                     }
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove this recorder").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Remove this recorder").clicked() {
                         remove = Some(i);
                     }
                 }

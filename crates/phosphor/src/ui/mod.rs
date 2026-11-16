@@ -15,6 +15,7 @@ pub(crate) mod activity;
 pub(crate) mod nodes;
 mod binding;
 mod budget;
+mod confirm;
 pub(crate) mod eyedropper;
 mod kit;
 mod learn;
@@ -28,6 +29,7 @@ mod tool_window;
 mod widgets;
 
 pub(crate) use binding::*;
+pub(crate) use confirm::*;
 pub(crate) use kit::*;
 pub mod notice;
 pub(crate) use learn::*;

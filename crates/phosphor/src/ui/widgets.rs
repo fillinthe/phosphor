@@ -576,7 +576,7 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
                     ui.close();
                 }
                 r.context_menu(|ui| {
-                    if crate::ui::command(ui, label(icon::TRASH, "Remove swatch")).clicked() {
+                    if crate::ui::danger_button(ui, label(icon::TRASH, "Remove swatch")).clicked() {
                         remove = Some(k);
                         ui.close();
                     }

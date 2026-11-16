@@ -111,7 +111,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
             action = Some(GroupAction::Ungroup);
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::TRASH, "Delete group and its layers")).clicked() {
+        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete group and its layers")).clicked() {
             action = Some(GroupAction::Delete);
             ui.close();
         }

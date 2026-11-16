@@ -200,7 +200,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             if steady_small_button(ui, pause, &[&resume, &hold]).clicked() {
                 control.monitor_paused = !control.monitor_paused;
             }
-            if crate::ui::small_command(ui, label(icon::TRASH, "Clear")).clicked() {
+            if crate::ui::small_danger(ui, label(icon::TRASH, "Clear")).clicked() {
                 control.recent.clear();
             }
             hint(ui, format!("{} messages", control.recent.len()));
@@ -416,7 +416,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                     range_editor(ui, &mut m.range);
                     value_fx_menu(ui, &mut m.fx, true);
                 });
-                if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete").clicked() {
+                if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete").clicked() {
                     remove = Some(i);
                 }
                 ui.end_row();

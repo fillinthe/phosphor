@@ -274,7 +274,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                                 hint(ui, "No displays found");
                             }
                         });
-                        if count > 1 && crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove output").clicked() {
+                        if count > 1 && crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Remove output").clicked() {
                             remove = Some(i);
                         }
                     });
@@ -304,7 +304,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, crate::theme::WARN) };
                     ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
                         .on_hover_text(if connected { "Saved with the project; \"All to their screens\" sends it here" } else { "That screen isn't connected right now" });
-                    if crate::ui::small_command(ui, icon::X).on_hover_text("Forget this screen").clicked() {
+                    if crate::ui::small_danger(ui, icon::X).on_hover_text("Forget this screen").clicked() {
                         o.screen.clear();
                     }
                 });

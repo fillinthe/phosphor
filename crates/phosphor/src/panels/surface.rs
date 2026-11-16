@@ -903,7 +903,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                     if let Some(picked) = target_picker(ui, ("computed_in", id, i), targets, Some(t), 220.0) {
                         *t = picked;
                     }
-                    if crate::ui::small_command(ui, icon::X).on_hover_text("Remove").clicked() {
+                    if crate::ui::small_danger(ui, icon::X).on_hover_text("Remove").clicked() {
                         remove = Some(i);
                     }
                 });
@@ -987,7 +987,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     ui.add_space(6.0);
     crate::ui::toolbar(ui, |ui| {
         duplicate = crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked();
-        delete = crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked();
+        delete = crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked();
     });
     if duplicate {
         st.comp.surface.duplicate(id);
@@ -1024,7 +1024,7 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_MY_PANEL), i));
                         ui.close();
                     }
-                    if sf.pages.len() > 1 && crate::ui::command(ui, label(icon::TRASH, "Delete page and its widgets")).clicked() {
+                    if sf.pages.len() > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Delete page and its widgets")).clicked() {
                         remove = Some(i);
                         ui.close();
                     }

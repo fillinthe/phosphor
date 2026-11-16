@@ -102,7 +102,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     });
     let now = ui.ctx().input(|i| i.time);
     for (id, t) in seeks {
-        st.media.seek(id, t);
+        st.media.scrub(id, t);
     }
     for (id, q) in quick {
         st.quick_on(q, Some(id), now);

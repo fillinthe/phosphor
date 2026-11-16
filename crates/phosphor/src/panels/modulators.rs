@@ -85,7 +85,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     if i + 1 < n && crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() {
                         moves = Some((i, i + 1));
                     }
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete (controls following it stop moving)").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete (controls following it stop moving)").clicked() {
                         remove = Some(i);
                     }
                 });
@@ -219,7 +219,7 @@ fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
                     if steady_action_button(ui, Act::Go, play, &[&stop, &start]).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
                         l.playing = !l.playing;
                     }
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Forget the take").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Forget the take").clicked() {
                         l.samples.clear();
                         l.playing = false;
                     }

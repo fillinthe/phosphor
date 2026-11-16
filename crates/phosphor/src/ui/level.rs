@@ -144,7 +144,7 @@ impl<'a> Level<'a> {
         let primary = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());
         // Jump (the default): the value goes to the spot pressed. Drag from value: it moves from where it was by how far
         // the pointer has gone since the press, and a plain click leaves it.
-        let jump = super::sliders_jump();
+        let jump = super::locks::jumps(ui, target.as_ref());
         let start_key = r.id.with("drag_from");
         if !jump && r.drag_started() {
             let t0 = to_t(*value);
@@ -394,19 +394,8 @@ impl<'a> Level<'a> {
             } else {
                 typed_value(ui, typed_id, value, min, max, percent);
             }
-            // How every slider takes a click (the same setting as in the brightness menu): a menu row like the others.
-            let jump = super::sliders_jump();
-            ui.menu_button(super::label(icon::CURSOR_CLICK, if jump { "Click: Jump" } else { "Click: Drag" }), |ui| {
-                if super::pick_item(ui, jump, "Jump: the value goes where you click").clicked() {
-                    super::set_sliders_jump(true);
-                    ui.close();
-                }
-                if super::pick_item(ui, !jump, "Drag: moves from where it is (a click leaves it)").clicked() {
-                    super::set_sliders_jump(false);
-                    ui.close();
-                }
-                hint(ui, "For every slider");
-            });
+            // How this slider takes a click (its own way, or one button to set every slider).
+            super::locks::click_items(ui, target.as_ref());
             if let Some(t) = &target {
                 snap_items(ui, t, unit_now, &shown_unit);
                 super::locks::limit_items(ui, t, unit_now, &shown_unit);

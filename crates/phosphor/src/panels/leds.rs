@@ -188,7 +188,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(120.0));
                     hint(ui, f.span());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete").clicked() {
+                        if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete").clicked() {
                             remove = Some(i);
                         }
                     });
@@ -261,7 +261,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             crate::ui::text_field(ui, &mut e.name, &format!("channel {}", f.head.channels() + i + 1), Some(80.0));
                             let name = if e.name.is_empty() { format!("Ch {}", f.head.channels() + i + 1) } else { e.name.clone() };
                             Level::percent(&mut e.value, &name).default(0.0).width(160.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
-                            if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove this channel (the ones after it move up one)").clicked() {
+                            if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Remove this channel (the ones after it move up one)").clicked() {
                                 gone = Some(i);
                             }
                         });

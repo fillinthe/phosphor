@@ -43,6 +43,7 @@ pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
     }
     tools(ui, st);
     browse(ui, st, &mut acts);
+    let acts = super::media::confirm_removes(ui.ctx(), st, acts);
     apply_acts(st, acts, now);
 }
 

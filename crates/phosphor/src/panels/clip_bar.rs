@@ -50,6 +50,6 @@ pub(crate) fn publish(ctx: &egui::Context, st: &mut State) {
     let positions: HashMap<u64, (f64, f64)> = st.comp.layers.iter().filter(|l| matches!(l.source, SourceSpec::Movie { .. })).filter_map(|l| Some((l.id, st.media.position(l.id)?))).collect();
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(POSITIONS), Arc::new(positions)));
     if let Some((layer, t)) = ctx.data_mut(|d| d.remove_temp::<(u64, f64)>(egui::Id::new(SEEK_REQUEST))) {
-        st.media.seek(layer, t);
+        st.media.scrub(layer, t);
     }
 }

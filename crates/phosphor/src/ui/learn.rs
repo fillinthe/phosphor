@@ -112,7 +112,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     if !sources.is_empty() {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(MAPPED));
-            if crate::ui::small_command(ui, label(icon::X, "Forget")).clicked() {
+            if crate::ui::small_danger(ui, label(icon::X, "Forget")).clicked() {
                 request(ui, UNLEARN_REQUEST, target.clone());
                 ui.close();
             }
@@ -148,7 +148,7 @@ fn follow_items(ui: &mut egui::Ui, target: &ControlTarget) {
         for f in &mine {
             ui.horizontal(|ui| {
                 ui.label(name(&f.source));
-                if crate::ui::small_command(ui, icon::X).on_hover_text("Stop following").clicked() {
+                if crate::ui::small_danger(ui, icon::X).on_hover_text("Stop following").clicked() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(FOLLOW_REQUEST), (target.clone(), f.source.clone(), false)));
                 }
             });
@@ -181,7 +181,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
         for to in &mine {
             ui.horizontal(|ui| {
                 ui.label(to.label());
-                if crate::ui::small_command(ui, icon::X).on_hover_text("Stop sending").clicked() {
+                if crate::ui::small_danger(ui, icon::X).on_hover_text("Stop sending").clicked() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), to.clone(), false)));
                 }
             });
