@@ -1355,16 +1355,33 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
 }
 
 /// The edited output's mapping as an SVG drawing, or shapes from one as masks.
+#[cfg(not(target_arch = "wasm32"))]
+const IMPORT_MASK_TIP: &str = "Each closed shape in an SVG or EPS drawing becomes a mask on this output, each open line a line slice (from Illustrator, Affinity, Inkscape…: outlines only, text turned into outlines first)";
+
+/// Asks for a drawing (SVG or EPS) whose shapes become masks on the output being mapped.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn import_masks(st: &mut State) {
+    st.dialogs.pick_file(crate::dialogs::Purpose::ImportMasksSvg(st.mapping_output), Some(("Drawing", &["svg", "eps", "ai"])));
+}
+
+/// "Import mask…" as a button of its own (the Studio's toolbar: it was only inside the SVG menu).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn import_mask_button(ui: &mut egui::Ui, st: &mut State) {
+    if crate::ui::command(ui, label(icon::FILE_ARROW_DOWN, "Import mask…")).on_hover_text(IMPORT_MASK_TIP).clicked() {
+        import_masks(st);
+    }
+}
+
 pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
-    ui.menu_button(label(icon::FILE_SVG, "SVG"), |ui| {
+    ui.menu_button(label(icon::FILE_SVG, "SVG / EPS"), |ui| {
         let oid = st.mapping_output;
         if crate::ui::command(ui, "Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PDF to print; PNG for a picture). Pick the kind by the file name's ending.").clicked() {
             st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("Drawing", &["svg", "png", "pdf"]), "Mapping.svg");
             ui.close();
         }
-        if crate::ui::command(ui, "Masks and lines from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output, each open line a line slice").clicked() {
-            st.dialogs.pick_file(crate::dialogs::Purpose::ImportMasksSvg(oid), Some(("SVG", &["svg"])));
+        if crate::ui::command(ui, "Masks and lines from a drawing…").on_hover_text(IMPORT_MASK_TIP).clicked() {
+            import_masks(st);
             ui.close();
         }
     });

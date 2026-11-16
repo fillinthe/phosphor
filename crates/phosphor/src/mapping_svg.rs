@@ -157,6 +157,117 @@ pub fn import(text: &str) -> Result<Drawing, String> {
     Ok(out)
 }
 
+/// A drawing file's shapes, whichever kind it is: SVG, or EPS / an Illustrator file saved the PostScript way.
+pub fn import_file(bytes: &[u8]) -> Result<Drawing, String> {
+    let text = String::from_utf8_lossy(bytes);
+    let head = &text[..text.len().min(2048)];
+    if head.contains("%!PS") || head.contains("%%BoundingBox") {
+        import_eps(&text)
+    } else if head.starts_with("%PDF") || head.contains("%PDF-") {
+        Err("this file is a PDF inside (a newer Illustrator file): save it as SVG or EPS and bring that in".into())
+    } else {
+        import(&text)
+    }
+}
+
+/// Every outline in an EPS drawing, in 0..1 of its bounding box: closed ones as shapes, open ones as lines; curves
+/// are followed in short steps. It reads the path-building words (moveto / lineto / curveto / closepath, the
+/// relative ones, and Illustrator's short forms m l c v y h and re); pictures, text and patterns are passed over.
+pub fn import_eps(text: &str) -> Result<Drawing, String> {
+    let nums = |s: &str| s.split_whitespace().filter_map(|t| t.parse::<f32>().ok()).collect::<Vec<_>>();
+    let bbox = ["%%HiResBoundingBox:", "%%BoundingBox:"]
+        .iter()
+        .find_map(|key| text.lines().find_map(|l| l.trim().strip_prefix(key)).map(nums).filter(|v| v.len() == 4 && v[2] > v[0] && v[3] > v[1]))
+        .ok_or("the drawing doesn't say how big it is (no bounding box)")?;
+    let (w, h) = (bbox[2] - bbox[0], bbox[3] - bbox[1]);
+    // (PostScript's y runs up the page.)
+    let unit = |p: [f32; 2]| [((p[0] - bbox[0]) / w).clamp(0.0, 1.0), (1.0 - (p[1] - bbox[1]) / h).clamp(0.0, 1.0)];
+    let mut out = Drawing::default();
+    let (mut stack, mut path, mut at, mut start): (Vec<f32>, Vec<[f32; 2]>, [f32; 2], [f32; 2]) = (Vec::new(), Vec::new(), [0.0; 2], [0.0; 2]);
+    let finish = |path: &mut Vec<[f32; 2]>, closed: bool, out: &mut Drawing| {
+        let mut pts: Vec<[f32; 2]> = std::mem::take(path).into_iter().map(unit).collect();
+        pts.dedup();
+        if closed && pts.len() > 3 && pts.first() == pts.last() {
+            pts.pop();
+        }
+        // (Nothing bigger than a show could use: a drawing of thousands of shapes is not a set of masks.)
+        if out.shapes.len() + out.lines.len() < 512 {
+            if closed && pts.len() >= 3 {
+                out.shapes.push(pts);
+            } else if !closed && pts.len() >= 2 {
+                out.lines.push(pts);
+            }
+        }
+    };
+    let curve = |path: &mut Vec<[f32; 2]>, a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2]| {
+        for k in 1..=12 {
+            let t = k as f32 / 12.0;
+            let u = 1.0 - t;
+            path.push([u * u * u * a[0] + 3.0 * u * u * t * b[0] + 3.0 * u * t * t * c[0] + t * t * t * d[0], u * u * u * a[1] + 3.0 * u * u * t * b[1] + 3.0 * u * t * t * c[1] + t * t * t * d[1]]);
+        }
+    };
+    for line in text.lines().filter(|l| !l.trim_start().starts_with('%')) {
+        for word in line.split_whitespace() {
+            if let Ok(v) = word.parse::<f32>() {
+                if v.is_finite() && stack.len() < 64 {
+                    stack.push(v);
+                }
+                continue;
+            }
+            let n = stack.len();
+            let last = |k: usize| stack[n - k];
+            match word {
+                "moveto" | "m" | "rmoveto" if n >= 2 => {
+                    finish(&mut path, false, &mut out);
+                    at = if word == "rmoveto" { [at[0] + last(2), at[1] + last(1)] } else { [last(2), last(1)] };
+                    start = at;
+                    path.push(at);
+                }
+                "lineto" | "l" | "L" | "rlineto" if n >= 2 && !path.is_empty() => {
+                    at = if word == "rlineto" { [at[0] + last(2), at[1] + last(1)] } else { [last(2), last(1)] };
+                    path.push(at);
+                }
+                "curveto" | "c" | "C" if n >= 6 && !path.is_empty() => {
+                    let d = [last(2), last(1)];
+                    curve(&mut path, at, [last(6), last(5)], [last(4), last(3)], d);
+                    at = d;
+                }
+                // Illustrator: the first handle sits on the point before (v), or the second on the point reached (y).
+                "v" | "V" if n >= 4 && !path.is_empty() => {
+                    let d = [last(2), last(1)];
+                    curve(&mut path, at, at, [last(4), last(3)], d);
+                    at = d;
+                }
+                "y" | "Y" if n >= 4 && !path.is_empty() => {
+                    let d = [last(2), last(1)];
+                    curve(&mut path, at, [last(4), last(3)], d, d);
+                    at = d;
+                }
+                "re" if n >= 4 => {
+                    finish(&mut path, false, &mut out);
+                    let (x, y, rw, rh) = (last(4), last(3), last(2), last(1));
+                    path.extend([[x, y], [x + rw, y], [x + rw, y + rh], [x, y + rh]]);
+                    finish(&mut path, true, &mut out);
+                }
+                "closepath" | "h" | "cp" => {
+                    finish(&mut path, true, &mut out);
+                    at = start;
+                }
+                // Painting words end the outline (the closing ones close it first).
+                "s" | "b" | "b*" | "f" | "F" | "f*" | "B" | "B*" | "fill" | "eofill" => finish(&mut path, true, &mut out),
+                "S" | "n" | "N" | "stroke" | "newpath" => finish(&mut path, false, &mut out),
+                _ => {}
+            }
+            stack.clear();
+        }
+    }
+    finish(&mut path, false, &mut out);
+    if out.shapes.is_empty() && out.lines.is_empty() {
+        return Err("no outlines found in that drawing (text and pictures don't count: turn text into outlines first)".into());
+    }
+    Ok(out)
+}
+
 /// The corner points of an SVG path (M, L, H, V, C, S, Q, T, A, Z; absolute or relative). Curves keep their end points.
 fn path_points(d: &str) -> Vec<[f32; 2]> {
     // Split into commands and numbers.
@@ -252,6 +363,25 @@ mod tests {
     }
 
     /// The PDF: one page the output's size, the cross-reference table pointing at each object, names escaped.
+    /// An EPS as a drawing program writes it: a triangle the long way, a square and a curve in Illustrator's short
+    /// words, an open line. Shapes come back in 0..1 with y running down.
+    #[test]
+    fn outlines_come_out_of_an_eps() {
+        let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 100\n%%EndComments\nnewpath\n0 0 moveto 200 0 lineto 100 100 lineto closepath fill\n50 25 m 150 25 l 150 75 l 50 75 l h f\n0 50 m 0 100 100 100 100 50 c S\n10 10 30 20 re f\n";
+        let d = import_file(eps.as_bytes()).unwrap();
+        assert_eq!(d.shapes.len(), 3, "triangle, square, rectangle");
+        assert_eq!(d.shapes[0], vec![[0.0, 1.0], [1.0, 1.0], [0.5, 0.0]], "y flipped");
+        assert_eq!(d.shapes[1], vec![[0.25, 0.75], [0.75, 0.75], [0.75, 0.25], [0.25, 0.25]]);
+        assert_eq!(d.lines.len(), 1, "the open curve");
+        assert_eq!(d.lines[0].len(), 13, "followed in steps");
+        let top = d.lines[0].iter().map(|p| p[1]).fold(1.0f32, f32::min);
+        assert!((top - 0.125).abs() < 0.02, "the curve bulges up: {top}");
+        // Not a drawing, or one with nothing to cut along: said plainly.
+        assert!(import_file(b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 10 10\n(hello) show\n").is_err());
+        assert!(import_file(b"%PDF-1.5 ...").unwrap_err().contains("SVG or EPS"));
+        assert!(import_file(b"<svg viewBox=\"0 0 10 10\"><rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>").is_ok(), "an SVG still reads");
+    }
+
     #[test]
     fn mapping_as_a_pdf() {
         let mut m = Mapping::default();

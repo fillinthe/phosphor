@@ -407,7 +407,7 @@ impl PhosphorApp {
                 }
                 Purpose::ImportMasksSvg(id) => {
                     if let Some(p) = paths.first() {
-                        match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| crate::mapping_svg::import(&t)) {
+                        match std::fs::read(p).map_err(|e| e.to_string()).and_then(|bytes| crate::mapping_svg::import_file(&bytes)) {
                             Ok(drawing) => {
                                 let ids: Vec<u64> = drawing.shapes.iter().chain(&drawing.lines).map(|_| st.comp.new_id()).collect();
                                 let mut ids = ids.into_iter();
