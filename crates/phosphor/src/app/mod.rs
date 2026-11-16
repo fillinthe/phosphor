@@ -121,6 +121,8 @@ const KEY_HELP_ICONS: &str = "help_icons_chosen";
 const KEY_SLIDERS_JUMP: &str = "sliders_jump";
 /// Ask "are you sure?" before removing things ("0": the user ticked Don't ask again).
 const KEY_CONFIRM_REMOVES: &str = "confirm_removes";
+/// The Donate button in the top bar ("0": the user hid it).
+const KEY_DONATE_SHOWN: &str = "donate_button";
 /// The interface language (`i18n::Lang::code`).
 const KEY_LANGUAGE: &str = "language";
 const KEY_TOOLTIPS: &str = "tooltips";

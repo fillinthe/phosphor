@@ -21,6 +21,7 @@ impl PhosphorApp {
         // (PHOSPHOR_SLIDERS_DRAG=1: drag-from-value in a bench.)
         let sliders_jump = stored(KEY_SLIDERS_JUMP).is_none_or(|v| v == "1") && std::env::var_os("PHOSPHOR_SLIDERS_DRAG").is_none();
         let confirm_removes = stored(KEY_CONFIRM_REMOVES).is_none_or(|v| v == "1");
+        crate::support::set_donate_shown(stored(KEY_DONATE_SHOWN).is_none_or(|v| v == "1"));
         // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
         let lang = std::env::var("PHOSPHOR_LANG").ok().or_else(|| stored(KEY_LANGUAGE)).map_or(crate::i18n::Lang::Auto, |c| crate::i18n::Lang::from_code(&c));
         crate::i18n::set_language(&cc.egui_ctx, lang);
