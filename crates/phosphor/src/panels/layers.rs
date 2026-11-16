@@ -576,7 +576,11 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         }
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
         let width = if tight { (ui.available_width() - slot).clamp(40.0, 180.0) } else { (ui.available_width() - 2.0 * slot).clamp(60.0, 180.0) };
-        crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(layer.source.label()).show_ui(ui, |ui| {
+        // The name is cut to the list's width with an ellipsis (whole on hover): a long file name made the list as
+        // wide as the name and pushed Open and Live off the card (owner, 2026-11-16).
+        let whole = layer.source.label();
+        let shown = crate::ui::cut_to_width(ui, &whole, (width - ui.spacing().icon_width - 2.0 * ui.spacing().button_padding.x - 4.0).max(20.0));
+        let list = crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(shown).show_ui(ui, |ui| {
             // Search: every generator (built in and imported) by name; typing goes straight here.
             let id = ui.id().with(("source_search", layer.id));
             let mut q = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_default();
@@ -671,6 +675,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 }
             }
         });
+        list.response.on_hover_text(whole);
         if !tight && crate::ui::command(ui, icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
             action = Some(LayerAction::OpenFile);
         }

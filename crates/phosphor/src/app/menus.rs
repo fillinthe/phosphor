@@ -372,6 +372,10 @@ impl PhosphorApp {
                             if crate::ui::toggle(ui, &mut ask, "Ask before removing").on_hover_text("On: an \"are you sure?\" before a watched folder, a collection or its folder is removed. Ticking \"Don't ask again\" there switches this off").changed() {
                                 crate::ui::set_confirm_removes(ask);
                             }
+                            let mut launches = crate::history::undo_playback();
+                            if crate::ui::toggle(ui, &mut launches, "Undo includes clip launches").on_hover_text("Off (the usual): Undo steps through your edits (settings, effects, values, layout) and leaves what's playing on each layer alone. On: launching a clip or changing a layer's source is an undo step too").changed() {
+                                crate::history::set_undo_playback(launches);
+                            }
                             let mut donate = crate::support::donate_shown();
                             if crate::ui::toggle(ui, &mut donate, "Donate button").on_hover_text("The orange Donate button in the top bar (right-click it to hide it). Donating is always in the Help menu").changed() {
                                 crate::support::set_donate_shown(donate);

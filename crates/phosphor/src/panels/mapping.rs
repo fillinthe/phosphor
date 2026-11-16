@@ -712,6 +712,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     let canvas = (st.comp.width, st.comp.height);
     let mut add_surface = false;
     let mut add_mask: Option<phosphor_engine::mapping::MaskShape> = None;
+    let mut import_mask = false;
     {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -736,6 +737,13 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         ui.close();
                     }
                 }
+                if !cfg!(target_arch = "wasm32") {
+                    ui.separator();
+                    if crate::ui::command(ui, label(icon::FILE_ARROW_DOWN, "From a drawing (SVG / EPS)…")).on_hover_text("Each closed shape in the drawing becomes a mask on this output").clicked() {
+                        import_mask = true;
+                        ui.close();
+                    }
+                }
             })
             .response
             .on_hover_text("A shape that blacks out part of this output (doors, faces, the booth…); drag its points to fit");
@@ -752,6 +760,12 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if import_mask {
+        import_masks(st);
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = import_mask;
     if let Some(shape) = add_mask {
         let id = st.comp.new_id();
         if let Some(o) = st.comp.output_mut(oid) {

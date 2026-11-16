@@ -43,6 +43,8 @@ enum TreeAction {
     /// A slice centered where the canvas was right-clicked (output space 0..1).
     AddSliceAt(u64, [f32; 2]),
     AddMask(u64, MaskShape),
+    /// Masks from a drawing (SVG / EPS) onto this output.
+    ImportMask(u64),
     /// A mask drawn by hand on output `.0` (output space points).
     DrawnMask(u64, Vec<[f32; 2]>),
     /// A line slice drawn by hand on output `.0`.
@@ -153,6 +155,9 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                             ui.close();
                         }
                     }
+                    if import_mask_item(ui) {
+                        action = Some(TreeAction::ImportMask(o.id));
+                    }
                 });
             });
             ui.add_space(6.0);
@@ -186,8 +191,26 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
     }
 }
 
+/// "From a drawing…" at the foot of an Add mask menu: true when picked.
+fn import_mask_item(ui: &mut egui::Ui) -> bool {
+    if cfg!(target_arch = "wasm32") {
+        return false;
+    }
+    ui.separator();
+    let picked = crate::ui::command(ui, label(icon::FILE_ARROW_DOWN, "From a drawing (SVG / EPS)…")).on_hover_text("Each closed shape in the drawing becomes a mask on this output").clicked();
+    if picked {
+        ui.close();
+    }
+    picked
+}
+
 fn apply(st: &mut State, action: Option<TreeAction>, canvas: (u32, u32)) {
     match action {
+        Some(TreeAction::ImportMask(oid)) => {
+            st.mapping_output = oid;
+            #[cfg(not(target_arch = "wasm32"))]
+            super::mapping::import_masks(st);
+        }
         Some(TreeAction::AddSlice(oid)) => {
             let id = st.comp.new_id();
             if let Some(o) = st.comp.output_mut(oid) {
@@ -721,6 +744,9 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
                 *action = Some(TreeAction::AddMask(oid, shape));
                 ui.close();
             }
+        }
+        if import_mask_item(ui) {
+            *action = Some(TreeAction::ImportMask(oid));
         }
     });
     ui.separator();

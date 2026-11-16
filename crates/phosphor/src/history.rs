@@ -42,9 +42,60 @@ fn differences(path: &str, a: &serde_json::Value, b: &serde_json::Value, out: &m
     }
 }
 
+/// Whether launching a clip (or putting anything else on a layer) is an undo step. Off by default (owner,
+/// 2026-11-16): what plays on the layers is the show, not an edit, and Undo leaves it alone; settings, effects and
+/// values are what it steps through. The brightness menu's "Undo includes clip launches" turns it on.
+static UNDO_PLAYBACK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn undo_playback() -> bool {
+    UNDO_PLAYBACK.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_undo_playback(on: bool) {
+    UNDO_PLAYBACK.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// A different thing is on this layer (another clip, another source).
+fn playing_changed(a: &phosphor_engine::LayerState, b: &phosphor_engine::LayerState) -> bool {
+    // (Whose effects ride on the layer changes a moment after the launch, when its fade is done: the same launch.)
+    a.active_clip != b.active_clip || a.source != b.source || a.clip_effects_from != b.clip_effects_from
+}
+
+/// What's playing on `from`, put onto `into`: the clip, its source and its own settings and effects (what a launch
+/// brings with it). Everything else about the layer (opacity, blend, its own effects, its clip grid) is left.
+fn carry_playback(from: &phosphor_engine::LayerState, into: &mut phosphor_engine::LayerState) {
+    into.source.clone_from(&from.source);
+    into.active_clip = from.active_clip;
+    into.generator_values.clone_from(&from.generator_values);
+    into.generator_mods.clone_from(&from.generator_mods);
+    into.clip_effects.clone_from(&from.clip_effects);
+    into.clip_effects_from.clone_from(&from.clip_effects_from);
+    into.flash_return.clone_from(&from.flash_return);
+    into.transition.clone_from(&from.transition);
+    into.voice_turn = from.voice_turn;
+    (into.rate, into.direction, into.playing) = (from.rate, from.direction, from.playing);
+    (into.loop_in, into.loop_out, into.loop_beats, into.sync_beats) = (from.loop_in, from.loop_out, from.loop_beats, from.sync_beats);
+    into.collection.clone_from(&from.collection);
+}
+
+/// A step about to be shown (Undo / Redo) keeps everything live as it is now: what moves by itself, the lasers'
+/// switches, and (unless clip launches are undo steps) what's playing on each layer.
+fn keep_live(current: &Composition, step: &mut Composition) {
+    settle_volatile(current, step);
+    if !undo_playback() {
+        for l in &mut step.layers {
+            if let Some(now) = current.layers.iter().find(|n| n.id == l.id).filter(|n| playing_changed(n, l)) {
+                carry_playback(now, l);
+            }
+        }
+    }
+}
+
 /// Fields that change on their own (tempo following, transitions in flight, live text) aren't edits.
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
+    // (The id counter only goes up: a launch hands ids out, and a step shown by Undo must never hand one out twice.)
+    into.next_id = into.next_id.max(from.next_id);
     keep_lasers_live(from, into);
     // Blackout is a live switch with a clock that ticks every frame, what tracking last read comes from the camera,
     // and a moving fader's position moves by itself: none of them is an edit. (The blackout clock alone made a new
@@ -106,6 +157,16 @@ impl History {
             return;
         }
         self.checked_at = now;
+        // A launch isn't an edit: the last step takes on what's playing now, with everything the launch brought
+        // (the clip's settings, its effects, what it wrote back to the clip it replaced). Only here, where steps
+        // are made: a step being shown by Undo keeps its own edits (`keep_live` carries just what's playing).
+        if !undo_playback() {
+            for l in &mut committed.layers {
+                if let Some(src) = comp.layers.iter().find(|s| s.id == l.id).filter(|s| playing_changed(s, l)) {
+                    l.clone_from(src);
+                }
+            }
+        }
         settle_volatile(comp, committed);
         if committed == comp {
             self.changed_at = None;
@@ -142,10 +203,16 @@ impl History {
 
     /// Steps back; returns the project to load.
     pub fn undo(&mut self, current: &Composition) -> Option<Composition> {
-        // An edit that hasn't settled yet is undone first.
-        let pending = self.committed.as_ref().is_some_and(|c| c != current);
-        let mut target = if pending { self.committed.clone()? } else { self.undo.pop()? };
-        keep_lasers_live(current, &mut target);
+        // An edit that hasn't settled yet is undone first. Then back through the steps to the first one that
+        // differs from what's here now: a step that only held a clip launch (kept as it is now) or a value that
+        // moves by itself would be a Cmd-Z that does nothing.
+        let mut target = self.unsettled(current);
+        while target.is_none() {
+            let mut step = self.undo.pop()?;
+            keep_live(current, &mut step);
+            target = (step != *current).then_some(step);
+        }
+        let target = target?;
         self.redo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
@@ -153,16 +220,30 @@ impl History {
     }
 
     pub fn redo(&mut self, current: &Composition) -> Option<Composition> {
-        let mut target = self.redo.pop()?;
-        keep_lasers_live(current, &mut target);
+        let mut target = None;
+        while target.is_none() {
+            let mut step = self.redo.pop()?;
+            keep_live(current, &mut step);
+            target = (step != *current).then_some(step);
+        }
+        let target = target?;
         self.undo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
         Some(target)
     }
 
+    /// The last step, if the project has an edit since it that hasn't settled into a step of its own yet
+    /// (compared with everything that moves by itself brought up to date: the blackout clock alone made every
+    /// first Cmd-Z a step that changed nothing).
+    fn unsettled(&self, current: &Composition) -> Option<Composition> {
+        let mut c = self.committed.clone()?;
+        keep_live(current, &mut c);
+        (c != *current).then_some(c)
+    }
+
     pub fn can_undo(&self, current: &Composition) -> bool {
-        !self.undo.is_empty() || self.committed.as_ref().is_some_and(|c| c != current)
+        !self.undo.is_empty() || self.unsettled(current).is_some()
     }
 
     pub fn can_redo(&self) -> bool {
@@ -225,6 +306,53 @@ mod tests {
         }
         assert_eq!(h.steps(), 1);
         assert_eq!(h.undo(&comp).unwrap().master_fade, 1.0);
+    }
+
+    /// Launching clips is not an undo step, and Undo leaves what's playing alone: an effect value changed
+    /// between two launches is what Cmd-Z takes back, with the clip that's on now still on.
+    #[test]
+    fn clip_launches_stay_out_of_undo() {
+        set_undo_playback(false);
+        let mut h = History::default();
+        let mut comp = Composition::starter();
+        let id = comp.layers[0].id;
+        let mut t = 0.0;
+        let mut settle = |h: &mut History, comp: &Composition| {
+            for _ in 0..8 {
+                t += 0.1;
+                h.track(comp, t, false);
+            }
+        };
+        settle(&mut h, &comp);
+        let plays = |comp: &mut Composition, name: &str| {
+            let l = comp.layer_mut(id).unwrap();
+            l.source = phosphor_engine::SourceSpec::Generator(name.into());
+            l.active_clip = Some(name.len() as u64);
+        };
+        plays(&mut comp, "noise");
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), 0, "a launch is not a step");
+        assert!(!h.can_undo(&comp));
+        comp.layer_mut(id).unwrap().opacity = 0.4;
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), 1, "an edit is");
+        plays(&mut comp, "plasma2");
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), 1);
+        let back = h.undo(&comp).unwrap();
+        let l = back.layer(id).unwrap();
+        assert_eq!(l.opacity, 1.0, "the edit is undone");
+        assert_eq!(l.source, phosphor_engine::SourceSpec::Generator("plasma2".into()), "what's playing stays");
+        assert!(h.undo(&back).is_none(), "nothing more: the launches were never steps");
+        // With the setting on, a launch is a step like any other.
+        set_undo_playback(true);
+        let mut h = History::default();
+        let mut comp = Composition::starter();
+        settle(&mut h, &comp);
+        plays(&mut comp, "noise");
+        settle(&mut h, &comp);
+        assert_eq!(h.steps(), 1);
+        set_undo_playback(false);
     }
 
     #[test]
