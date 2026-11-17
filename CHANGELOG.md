@@ -4,14 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.5.10 (not released yet)
+## 0.5.10 (2026-11-17)
 
 - **Report a Bug › Save a snapshot…:** one text file with everything about Phosphor at that moment (graphics
   card, every layer and how its movie decodes, outputs, the run's log, the project) to attach to a report. Save it
   while the problem is on screen. Reports also say which graphics card is in use and how many movies decode on
   the card or on the processor.
-- **Windows: movies decode on the graphics card** (H.264, HEVC and VP9, any card). Many movie layers at once no
-  longer pin the processor while the card sits idle. A movie the card can't take still plays, on the processor.
+- **Windows: movies are handed to the graphics card to decode** (H.264, HEVC and VP9, any card), so many movie
+  layers at once shouldn't pin the processor while the card sits idle. A movie the card can't take still plays, on
+  the processor. This is new: if a movie looks or plays wrong, please tell us (Help › Report a Bug).
 - **Audience play: what guests get is its own row** (Session › Audience play › Guests get): Clip columns, Surprise
   button, Game pad. Switch one off and it leaves the play page and its presses are refused.
 - **Four more languages:** Nederlands, Polski, Türkçe and Korean (brightness (sun) menu › Language), so the app
