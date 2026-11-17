@@ -36,6 +36,8 @@ pub(crate) struct ProjectsUi {
     pub cloud_asked: bool,
     /// Projects that have a picture (looked at when the window opens and when the search finishes, not each frame).
     pub pictures: std::collections::HashSet<String>,
+    /// Projects this computer keeps a copy of (they open with their drive away); looked at with the pictures.
+    pub copies: std::collections::HashSet<String>,
     pub pictures_checked: bool,
 }
 
@@ -60,6 +62,8 @@ struct Card {
     picture: Option<String>,
     current: bool,
     there: bool,
+    /// Its file isn't there, but this computer's copy of it opens.
+    copy: bool,
     open: Pick,
     /// A file (right-click: Show in Finder…).
     path: Option<String>,
@@ -115,7 +119,10 @@ fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>
         }
     }
     if !card.there {
-        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Drive not connected? Click to try", egui::FontId::proportional(12.0), crate::theme::WARN);
+        let words = if card.copy { "Drive not connected: opens this computer's copy" } else { "Drive not connected? Click to try" };
+        let font = egui::FontId::proportional(12.0);
+        let galley = p.layout(crate::i18n::tr(words), font, crate::theme::WARN, pic.width() - 12.0);
+        p.galley(pic.center() - galley.size() / 2.0, galley, crate::theme::WARN);
     }
     let text_w = CARD_W - 14.0;
     let name_color = if card.current { crate::theme::accent() } else if card.there { v.strong_text_color() } else { v.weak_text_color() };
@@ -151,6 +158,7 @@ impl PhosphorApp {
         if !st.projects.pictures_checked {
             st.projects.pictures_checked = true;
             st.projects.pictures.clear();
+            st.projects.copies = st.recent.iter().filter(|p| crate::project_files::kept_copy_path(p).is_some_and(|c| c.exists())).cloned().collect();
             let all: Vec<String> = st.recent.iter().cloned().chain(st.projects.files.found.iter().map(|f| f.path.clone())).collect();
             for project in all {
                 if let Some(p) = crate::project_files::picture_path(&project) {
@@ -185,7 +193,7 @@ impl PhosphorApp {
             #[cfg(target_arch = "wasm32")]
             let picture = None;
             let ago = if when > 0 { format!(" · {}", crate::ui::ago_secs(when)) } else { String::new() };
-            Card { name: project_name(path), detail: format!("{}{ago}", folder_of(path)), when, picture, current: current.as_deref() == Some(path), there, open: Pick::File(path.to_string()), path: Some(path.to_string()) }
+            Card { name: project_name(path), detail: format!("{}{ago}", folder_of(path)), when, picture, current: current.as_deref() == Some(path), there, copy: !there && st.projects.copies.contains(path), open: Pick::File(path.to_string()), path: Some(path.to_string()) }
         };
         let when_of = |path: &str| found.iter().find(|f| f.path == path).map_or(0, |f| f.modified);
         let recent: Vec<Card> = st
@@ -211,7 +219,7 @@ impl PhosphorApp {
             .account
             .projects
             .iter()
-            .map(|p| Card { name: p.name.clone(), detail: format!("{} · {:.0} KB", crate::ui::ago_secs(p.updated), p.size as f64 / 1024.0), when: p.updated, picture: None, current: cloud_current.as_deref() == Some(p.id.as_str()), there: true, open: Pick::Cloud(p.id.clone()), path: None })
+            .map(|p| Card { name: p.name.clone(), detail: format!("{} · {:.0} KB", crate::ui::ago_secs(p.updated), p.size as f64 / 1024.0), when: p.updated, picture: None, current: cloud_current.as_deref() == Some(p.id.as_str()), there: true, copy: false, open: Pick::Cloud(p.id.clone()), path: None })
             .collect();
         let (signed_in, cloud_busy) = (st.account.signed_in(), st.account.busy > 0);
         let ui_state = &mut st.projects;

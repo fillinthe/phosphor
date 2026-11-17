@@ -167,6 +167,69 @@ mod tests {
     }
 }
 
+/// The copy of a project kept on this computer (the settings folder's cache), so a project whose file is on a drive
+/// that isn't plugged in still opens. Written at every open and save.
+pub fn kept_copy_path(project: &str) -> Option<PathBuf> {
+    let h = phosphor_engine::stable_hash(&[project.as_bytes()]);
+    Some(crate::show::storage_dir()?.join("cache").join("project copies").join(format!("{h:016x}.phosphor")))
+}
+
+/// Beside a kept copy: it was saved while the project's own file couldn't be written (its drive away), so it is
+/// newer than that file until a save reaches the drive again.
+fn ahead_mark(copy: &Path) -> PathBuf {
+    copy.with_extension("ahead")
+}
+
+/// Keeps `json` as this computer's copy of `project`. `ahead` = the project's own file doesn't have this yet.
+pub fn keep_copy(project: &str, json: &str, ahead: bool) -> std::io::Result<()> {
+    let path = kept_copy_path(project).ok_or_else(|| std::io::Error::other("no settings folder"))?;
+    keep_copy_at(&path, json, ahead)
+}
+
+fn keep_copy_at(path: &Path, json: &str, ahead: bool) -> std::io::Result<()> {
+    std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?;
+    // (Written whole, then swapped in: a crash mid-write never leaves half a project.)
+    let part = path.with_extension("part");
+    std::fs::write(&part, json)?;
+    std::fs::rename(&part, path)?;
+    let mark = ahead_mark(path);
+    if ahead {
+        std::fs::write(mark, "")?;
+    } else {
+        let _ = std::fs::remove_file(mark);
+    }
+    Ok(())
+}
+
+/// This computer's copy of `project`, and whether it is newer than the project's own file.
+pub fn kept_copy(project: &str) -> Option<(String, bool)> {
+    kept_copy_at(&kept_copy_path(project)?)
+}
+
+fn kept_copy_at(path: &Path) -> Option<(String, bool)> {
+    Some((std::fs::read_to_string(path).ok()?, ahead_mark(path).exists()))
+}
+
+#[cfg(test)]
+mod kept_copy_tests {
+    #[test]
+    fn a_copy_saved_while_the_drive_was_away_is_known_to_be_newer() {
+        let dir = std::env::temp_dir().join(format!("phosphor-copies-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("a.phosphor");
+        assert_eq!(super::kept_copy_at(&path), None);
+        super::keep_copy_at(&path, "one", false).unwrap();
+        assert_eq!(super::kept_copy_at(&path), Some(("one".to_string(), false)));
+        // Saved with the drive away: this copy is ahead of the file on the drive.
+        super::keep_copy_at(&path, "two", true).unwrap();
+        assert_eq!(super::kept_copy_at(&path), Some(("two".to_string(), true)));
+        // A save that reached the drive again: level.
+        super::keep_copy_at(&path, "three", false).unwrap();
+        assert_eq!(super::kept_copy_at(&path), Some(("three".to_string(), false)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// Where a project's picture is kept (a small picture of its output, saved with it): the settings folder's cache.
 pub fn picture_path(project: &str) -> Option<PathBuf> {
     let h = phosphor_engine::stable_hash(&[project.as_bytes()]);

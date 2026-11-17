@@ -1149,6 +1149,7 @@
 "Draws points as a lit surface through a camera": "포인트를 카메라로 본 조명 받은 표면으로 그립니다",
 "Draws points as lines between neighbors through a camera": "포인트를 카메라로 본 이웃 사이의 선으로 그립니다",
 "Draws points as soft dots through a camera": "포인트를 카메라로 본 부드러운 점으로 그립니다",
+"Drive not connected: opens this computer's copy": "드라이브 연결 안 됨: 이 컴퓨터의 사본을 엽니다",
 "Drive not connected? Click to try": "드라이브가 연결되지 않았나요? 클릭해서 다시 시도",
 "Drive this control with": "이 컨트롤을 움직일 소스",
 "Drive this with audio or an LFO": "오디오나 LFO로 움직이기",

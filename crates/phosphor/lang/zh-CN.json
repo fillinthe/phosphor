@@ -1149,6 +1149,7 @@
 "Draws points as a lit surface through a camera": "通过相机把点绘成受光的表面",
 "Draws points as lines between neighbors through a camera": "通过相机把点绘成相邻点之间的线",
 "Draws points as soft dots through a camera": "通过相机把点绘成柔和的圆点",
+"Drive not connected: opens this computer's copy": "驱动器未连接:打开这台电脑上的副本",
 "Drive not connected? Click to try": "磁盘没接上?点击重试",
 "Drive this control with": "驱动此控件的来源",
 "Drive this with audio or an LFO": "用音频或 LFO 驱动它",

@@ -542,14 +542,31 @@ impl State {
         }
         #[cfg(not(target_arch = "wasm32"))]
         match &self.project_path {
-            Some(p) => match crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs()).and_then(|_| {
+            Some(p) => {
                 let json = self.comp.to_json();
-                self.saved_hash = hash_text(&json);
-                std::fs::write(p, json)
-            }) {
-                Ok(()) => self.notice = Some(format!("Saved {}", std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned()))),
-                Err(e) => self.notice = Some(format!("Save failed: {e}")),
-            },
+                let name = std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+                // Its folder isn't there (the drive unplugged): the work goes into this computer's copy, and nobody
+                // is stopped. The next save with the drive back writes the file.
+                let away = !std::path::Path::new(p).parent().is_some_and(|d| d.as_os_str().is_empty() || d.exists());
+                if away {
+                    self.notice = Some(match crate::project_files::keep_copy(p, &json, true) {
+                        Ok(()) => {
+                            self.saved_hash = hash_text(&json);
+                            format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else")
+                        }
+                        Err(e) => format!("Save failed: {e}"),
+                    });
+                    return;
+                }
+                match crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs()).and_then(|_| std::fs::write(p, &json)) {
+                    Ok(()) => {
+                        self.saved_hash = hash_text(&json);
+                        let _ = crate::project_files::keep_copy(p, &json, false);
+                        self.notice = Some(format!("Saved {name}"));
+                    }
+                    Err(e) => self.notice = Some(format!("Save failed: {e}")),
+                }
+            }
             None => self.save_project_as(),
         }
     }
@@ -595,19 +612,45 @@ impl State {
         }
         let asked = path;
         let path = moved.as_deref().unwrap_or(path);
-        if !cfg!(target_arch = "wasm32") && !std::path::Path::new(path).exists() {
-            // Not there right now (its drive unplugged, a share not connected): said plainly, and it stays in
-            // Recent for when the drive is back. (It used to be dropped from Recent on the first failed click.)
-            let name = std::path::Path::new(asked).file_stem().map_or(asked.to_string(), |n| n.to_string_lossy().into_owned());
+        let name = std::path::Path::new(asked).file_stem().map_or(asked.to_string(), |n| n.to_string_lossy().into_owned());
+        #[cfg(not(target_arch = "wasm32"))]
+        let kept = crate::project_files::kept_copy(path);
+        #[cfg(target_arch = "wasm32")]
+        let kept: Option<(String, bool)> = None;
+        let there = cfg!(target_arch = "wasm32") || std::path::Path::new(path).exists();
+        // Its file isn't there right now (the drive unplugged, a share not connected), or this computer's copy was
+        // saved while it was away and is newer: the copy opens. Nobody is stopped by a missing drive.
+        if let Some((json, ahead)) = kept.filter(|(_, ahead)| !there || *ahead)
+            && let Ok(comp) = Composition::from_json(&json)
+        {
+            self.load_composition(comp);
+            self.set_project_path(path);
+            // Level with the copy; a copy that is ahead of a drive that's back counts as unsaved, so Save (and
+            // autosave) writes it to the drive.
+            self.saved_hash = if there && ahead { 0 } else { hash_text(&self.comp.to_json()) };
+            self.notice = Some(if there {
+                format!("\"{name}\": opened this computer's copy, saved while its drive was away. Save puts it on the drive")
+            } else {
+                format!("\"{name}\": its drive isn't connected, so this computer's copy is open. Clips on that drive are missing until it's back; Save keeps your work here meanwhile")
+            });
+            return true;
+        }
+        if !there {
+            // No copy either (never opened on this computer): said plainly, and it stays in Recent for when the
+            // drive is back. (It used to be dropped from Recent on the first failed click.)
             self.notice = Some(format!("Couldn't open \"{name}\": its file isn't there right now ({asked}). Plug in its drive and click it again, or use Open a file… to find it."));
             return false;
         }
-        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
-            Ok(comp) => {
+        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map(|c| (c, j)).map_err(|e| e.to_string())) {
+            Ok((comp, json)) => {
                 let newer = comp.made_by_newer();
                 self.load_composition(comp);
                 self.set_project_path(path);
                 self.saved_hash = hash_text(&self.comp.to_json());
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = crate::project_files::keep_copy(path, &json, false);
+                #[cfg(target_arch = "wasm32")]
+                let _ = json;
                 if newer {
                     self.notice = Some("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it.".into());
                 }                true
