@@ -687,6 +687,42 @@ impl PhosphorApp {
                 self.switch_workspace(3);
                 continue;
             }
+            if name == "switch" {
+                // Three generators into a Switch; a slow LFO into Pick moves through them, fading.
+                use phosphor_engine::{NodeKind, SWITCH_INPUTS};
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Switch");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+                net.disconnect(out, 0);
+                net.node_mut(pic).unwrap().pos = [40.0, 20.0];
+                let more = [net.add(NodeKind::Picture, [40.0, 250.0]), net.add(NodeKind::Picture, [40.0, 480.0])];
+                let switch = net.add(NodeKind::Switch, [330.0, 150.0]);
+                let lfo = net.add(NodeKind::Number, [330.0, 520.0]);
+                net.node_mut(out).unwrap().pos = [620.0, 150.0];
+                net.node_mut(switch).unwrap().fade = 1.0;
+                for (k, p) in [pic, more[0], more[1]].into_iter().enumerate() {
+                    net.connect(p, switch, k);
+                }
+                net.connect(switch, out, 0);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let part = |n: u32, k: usize| net.node(n).unwrap().parts[k];
+                for (n, g) in [pic, more[0], more[1]].into_iter().zip(["plasma", "tunnel", "rings"]) {
+                    comp.layer_mut(part(n, 0)).unwrap().set_generator(g);
+                }
+                if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == part(lfo, 0)) {
+                    m.signal.rate = 0.25;
+                }
+                let wired = comp.connect_boxes(cid, &[], lfo, switch, SWITCH_INPUTS);
+                comp.sync_network(cid);
+                let following = (1..=3).filter(|k| comp.layer(part(switch, *k)).is_some_and(|l| l.opacity_mod.is_some())).count();
+                println!("QUICK switch: {} boxes, pick wired={wired}, pictures following={following}", net.nodes.len());
+                self.switch_workspace(3);
+                continue;
+            }
             if name == "data" {
                 // Designer phase 5: a Clock → a Text box ("It's {raw}") → Output; a Timer into an effect; an Event.
                 use phosphor_engine::NodeKind;

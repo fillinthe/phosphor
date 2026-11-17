@@ -148,6 +148,9 @@ pub struct Modulation {
     pub phase: f32,
     /// Pulse width: how much of a square wave's cycle is on (0.5 = half), and how sharp the exponential ramp is.
     pub width: f32,
+    /// Range mode: once the signal is at or past this, the setting drops to its lowest (0 = never). A Switch box's
+    /// pictures use it to step aside once the next one has faded in.
+    pub off_above: f32,
 }
 
 impl Default for Modulation {
@@ -165,6 +168,7 @@ impl Default for Modulation {
             link: 0,
             phase: 0.0,
             width: 0.5,
+            off_above: 0.0,
         }
     }
 }

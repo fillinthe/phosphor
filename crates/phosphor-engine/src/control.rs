@@ -95,6 +95,9 @@ pub fn modulate(base: f32, min: f32, max: f32, m: Option<&Modulation>, inputs: &
         None => base,
         Some(m) if m.range => {
             let v = source_value(m, inputs);
+            if m.off_above > 0.0 && v >= m.off_above {
+                return min;
+            }
             (min + (m.min + v * (m.max - m.min)) * (max - min)).clamp(lo, hi)
         }
         Some(m) => (base + m.amount * source_value(m, inputs) * (max - min)).clamp(lo, hi),

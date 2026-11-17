@@ -1080,10 +1080,12 @@ fn bench_drag(run: &mut BenchRun, ctx: &egui::Context, raw: &mut egui::RawInput)
     let Some((from, to)) = run.cfg.drag.clone() else { return };
     let point = |s: &str| bench_point(ctx, s);
     let step = ctx.data(|d| d.get_temp::<u32>(egui::Id::new("bench_drag_step"))).unwrap_or(0);
-    if ctx.input(|i| i.time) < 1.0 {
+    // "x,y:x,y@3": start at 3 seconds instead of 1 (a workspace that takes longer to draw).
+    let (to, when) = to.split_once('@').map_or((to.as_str(), 1.0), |(p, t)| (p, t.parse().unwrap_or(1.0)));
+    if ctx.input(|i| i.time) < when {
         return;
     }
-    let (Some(a), Some(b)) = (point(&from), point(&to)) else { return };
+    let (Some(a), Some(b)) = (point(&from), point(to)) else { return };
     const STEPS: u32 = 12;
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     match step {
