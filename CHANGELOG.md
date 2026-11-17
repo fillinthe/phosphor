@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.10 (not released yet)
 
+- **Windows: movies decode on the graphics card** (H.264, HEVC and VP9, any card). Many movie layers at once no
+  longer pin the processor while the card sits idle. A movie the card can't take still plays, on the processor.
+- **Audience play: what guests get is its own row** (Session › Audience play › Guests get): Clip columns, Surprise
+  button, Game pad. Switch one off and it leaves the play page and its presses are refused.
 - **Four more languages:** Nederlands, Polski, Türkçe and Korean (brightness (sun) menu › Language), so the app
   speaks the same twelve languages as the website. Korean uses the font already on your Mac or PC. The other seven
   languages are complete again: everything added since 0.4 was still in English.

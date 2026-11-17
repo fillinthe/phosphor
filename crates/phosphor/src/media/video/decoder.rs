@@ -824,11 +824,12 @@ impl Decoder {
         Ok(())
     }
 
-    /// Returns a CPU-accessible frame, mapping VideoToolbox surfaces when needed.
+    /// Returns a CPU-accessible frame, mapping or downloading a hardware decoder's frame (VideoToolbox, D3D11) when
+    /// needed.
     fn download(&mut self, sh: &Shared) -> Result<*const ffi::AVFrame, String> {
         unsafe {
             let f = self.frame.as_ptr();
-            if (*f).format != Px::AV_PIX_FMT_VIDEOTOOLBOX as i32 {
+            if (*f).hw_frames_ctx.is_null() {
                 return Ok(f);
             }
             sh.hardware.store(true, Ordering::Relaxed);
@@ -851,7 +852,16 @@ impl Decoder {
     }
 }
 
-/// Opens a decoder for `stream`, attaching VideoToolbox when `try_hw` and the codec supports it.
+/// The graphics card's video decoder on this system, and the frame format it hands out: VideoToolbox on a Mac,
+/// Direct3D 11 on Windows (any card: NVIDIA, AMD, Intel). None = FFmpeg decodes on the CPU.
+#[cfg(target_os = "macos")]
+const HW: Option<(ffi::AVHWDeviceType, Px)> = Some((ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX, Px::AV_PIX_FMT_VIDEOTOOLBOX));
+#[cfg(target_os = "windows")]
+const HW: Option<(ffi::AVHWDeviceType, Px)> = Some((ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA, Px::AV_PIX_FMT_D3D11));
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const HW: Option<(ffi::AVHWDeviceType, Px)> = None;
+
+/// Opens a decoder for `stream`, attaching the hardware decoder (`HW`) when `try_hw` and the codec supports it.
 fn open_decoder(
     input: &ff::format::context::Input,
     stream: usize,
@@ -864,14 +874,17 @@ fn open_decoder(
     let id = params.id();
     let src_fmt = unsafe { (*params.as_ptr()).format };
     let has_alpha = alpha_mode || fmt_flags(src_fmt) & ffi::AV_PIX_FMT_FLAG_ALPHA as u64 != 0;
-    // Codecs VideoToolbox handles on Apple Silicon; others (MPEG-4 Part 2...) only log init failures.
-    // Hardware decoding is VideoToolbox, so only on the Mac (elsewhere the native AV1 decoder, which only works with
-    // a hwaccel, would give no frames: libdav1d decodes AV1 there).
+    // Codecs VideoToolbox handles on Apple Silicon; others (MPEG-4 Part 2...) only log init failures. On Windows the
+    // card decodes H.264, HEVC and VP9 (20 movies at once on the CPU ran at 11 fps with the card idle: ticket 46);
+    // AV1 stays with libdav1d there (the native AV1 decoder only works with a hwaccel, so a card without AV1 would
+    // give no frames). `PHOSPHOR_SW_DECODE=1` keeps every movie on the CPU.
+    let mac = cfg!(target_os = "macos");
     let try_hw = try_hw
-        && cfg!(target_os = "macos")
+        && HW.is_some()
+        && std::env::var_os("PHOSPHOR_SW_DECODE").is_none()
         // Alpha survives VideoToolbox for ProRes 4444 (only); other codecs with alpha decode in software.
-        && (!has_alpha || (id == Id::PRORES && std::env::var_os("PHOSPHOR_SW_PRORES_ALPHA").is_none()))
-        && matches!(id, Id::H264 | Id::HEVC | Id::PRORES | Id::VP9 | Id::AV1);
+        && (!has_alpha || (mac && id == Id::PRORES && std::env::var_os("PHOSPHOR_SW_PRORES_ALPHA").is_none()))
+        && (matches!(id, Id::H264 | Id::HEVC | Id::VP9) || (mac && matches!(id, Id::PRORES | Id::AV1)));
 
     let codec = match id {
         // libavcodec's native VP8/VP9 decoders drop the alpha side channel; libvpx keeps it.
@@ -890,9 +903,11 @@ fn open_decoder(
     if id == Id::HAP && unsafe { (*ctx.as_ptr()).codec_tag } == u32::from_le_bytes(super::HAP_R) {
         unsafe { (*ctx.as_mut_ptr()).codec_tag = u32::from_le_bytes(*b"Hap1") };
     }
-    let hw = try_hw && unsafe { attach_videotoolbox(ctx.as_mut_ptr(), codec.as_ptr()) };
+    let hw = try_hw && unsafe { attach_hw(ctx.as_mut_ptr(), codec.as_ptr()) };
     unsafe { (*ctx.as_mut_ptr()).pkt_timebase = (*st.as_ptr()).time_base };
-    if !hw {
+    // On Windows the threads stay: a movie the card turns down (an odd profile, too many at once) falls back to the
+    // CPU inside FFmpeg, and must not be left decoding on one thread.
+    if !hw || !mac {
         let threads = std::thread::available_parallelism()
             .map_or(4, |n| n.get())
             .min(8);
@@ -912,9 +927,10 @@ fn open_decoder(
     Ok((dec, codec.name().to_string(), hw))
 }
 
-/// Enables VideoToolbox on `ctx` if the decoder supports it. FFmpeg falls back to software
+/// Enables the hardware decoder (`HW`) on `ctx` if the decoder supports it. FFmpeg falls back to software
 /// automatically if the hwaccel can't handle a particular stream.
-unsafe fn attach_videotoolbox(ctx: *mut ffi::AVCodecContext, codec: *const ffi::AVCodec) -> bool {
+unsafe fn attach_hw(ctx: *mut ffi::AVCodecContext, codec: *const ffi::AVCodec) -> bool {
+    let Some((device, _)) = HW else { return false };
     unsafe {
         let mut supported = false;
         for i in 0.. {
@@ -922,7 +938,7 @@ unsafe fn attach_videotoolbox(ctx: *mut ffi::AVCodecContext, codec: *const ffi::
             if cfg.is_null() {
                 break;
             }
-            if (*cfg).device_type == ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX
+            if (*cfg).device_type == device
                 && (*cfg).methods & ffi::AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX as i32 != 0
             {
                 supported = true;
@@ -935,7 +951,7 @@ unsafe fn attach_videotoolbox(ctx: *mut ffi::AVCodecContext, codec: *const ffi::
         let mut dev: *mut ffi::AVBufferRef = ptr::null_mut();
         let r = ffi::av_hwdevice_ctx_create(
             &mut dev,
-            ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
+            device,
             ptr::null(),
             ptr::null_mut(),
             0,
@@ -944,16 +960,16 @@ unsafe fn attach_videotoolbox(ctx: *mut ffi::AVCodecContext, codec: *const ffi::
             return false;
         }
         (*ctx).hw_device_ctx = dev;
-        (*ctx).get_format = Some(pick_videotoolbox);
+        (*ctx).get_format = Some(pick_hw);
         true
     }
 }
 
-unsafe extern "C" fn pick_videotoolbox(ctx: *mut ffi::AVCodecContext, fmts: *const Px) -> Px {
+unsafe extern "C" fn pick_hw(ctx: *mut ffi::AVCodecContext, fmts: *const Px) -> Px {
     unsafe {
         let mut p = fmts;
         while *p != Px::AV_PIX_FMT_NONE {
-            if *p == Px::AV_PIX_FMT_VIDEOTOOLBOX {
+            if HW.is_some_and(|(_, format)| *p == format) {
                 return *p;
             }
             p = p.add(1);
