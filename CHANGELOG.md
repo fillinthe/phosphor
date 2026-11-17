@@ -4,6 +4,25 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.9 (not released yet)
+
+**Designer**
+- **Numbers that work on other numbers** (right-click the canvas › Numbers): Math (two numbers into one), Smooth
+  (follows slowly, with its own rise and fall), Range (a part of the travel stretched onto a new range), Gate (on
+  above a line), Steps, Hold (a new value each time another number rises), Count (one step up on every rise, then
+  around again), Envelope (a rise and a fall on every rise), Speed (a ramp that runs as fast as the number says),
+  Delay (the number a moment ago) and Formula (your own: `a * b`, `sin(t * 0.2)`, `a > b`). Wire a Number box in,
+  wire the result into any setting.
+- **Feedback box**: shows another box's picture as it was a frame ago. Pick the box in it, wire it back in before
+  that box (through an effect, into a Mix) and the picture feeds on itself: trails, tunnels, echoes.
+- **Rename a box** (right-click its title › Rename…); a box of boxes shows its name in the path at the top.
+- **Switch an Effect box off** (right-click its title › Switch off): the picture passes straight through.
+
+**Also**
+- Donate opens the new donation page, and the Donate button has an x to put it away (it stays in Help and can be
+  brought back from the brightness menu).
+- The stutter warning counts frames over the last few seconds, not since the movie started.
+
 ## 0.5.8 (2026-11-16)
 
 **Undo**

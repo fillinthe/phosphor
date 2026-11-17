@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use phosphor_engine::control::MAX_SHARED;
-use phosphor_engine::{ChainMode, Composition, DataFeed, DataKind, DesignerNode, ISS_READINGS, LiveText, ModSource, Network, NodeKind, PortKind, QUAKE_READINGS, SavedBox, SourceSpec, Trigger, WEATHER_READINGS};
+use phosphor_engine::{ChainMode, Composition, DataFeed, DataKind, DesignerNode, ISS_READINGS, LiveText, MathMode, ModSource, Network, NodeKind, NumberOp, PortKind, QUAKE_READINGS, SavedBox, SourceSpec, Trigger, WEATHER_READINGS};
 use crate::ui::guarded;
 
 use super::*;
@@ -40,6 +40,9 @@ const DATA_BOXES: [(&str, &str); 7] = [
     ("Text (words, with a number in them)", "text"),
     ("Event (a number crossing a line sets a control)", "event"),
 ];
+
+/// The Numbers submenu's preset ids: "op:N" = a Number box with the N-th operator of `NumberOp::all()`.
+const OP_BOXES: [&str; 11] = ["op:0", "op:1", "op:2", "op:3", "op:4", "op:5", "op:6", "op:7", "op:8", "op:9", "op:10"];
 
 const BOX_W: f32 = 230.0;
 const ROW_H: f32 = 26.0;
@@ -93,7 +96,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
         for i in 0..path.len() {
             ui.label(RichText::new(icon::CARET_RIGHT).small());
             let last = i + 1 == path.len();
-            let crumb = format!("Box {}", path[i]);
+            let crumb = net.at(&path[..i]).and_then(|l| l.node(path[i])).map(|n| n.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Box {}", path[i]));
             if last {
                 crate::ui::heading(ui, crumb);
             } else if crate::ui::command(ui, crumb).clicked() {
@@ -107,7 +110,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
             step = Some(1);
         }
         crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));
-        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
+        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · Numbers in the menu work on other numbers (math, smooth, count, envelope) · a Feedback box brings a box's last frame back around · double-click a box of boxes to build inside it");
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id) && *id != cid).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
@@ -175,6 +178,9 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 }
             } else if shader == "event" {
                 m.event = Some(Trigger::default());
+            } else if let Some(n) = shader.strip_prefix("op:").and_then(|n| n.parse::<usize>().ok()) {
+                m.op = NumberOp::all().into_iter().nth(n);
+                m.name = m.op.as_ref().map_or(m.name.clone(), |o| o.name().to_string());
             }
         }
         comp.sync_network(cid);
@@ -292,6 +298,11 @@ impl View<'_> {
         ui.add(crate::ui::meter(value).desired_width(width).desired_height(METER_H)).on_hover_text("Its value now (0 to 1)");
         let Some(m) = self.comp.modulators.iter_mut().find(|m| m.id == mid) else { return false };
         let mut changed = false;
+        let is_op = m.op.is_some();
+        if let Some(op) = m.op.as_mut() {
+            op_rows(ui, op, id, width);
+        }
+        if !is_op {
         let shown = m.signal.source.name().to_string();
         crate::ui::dropdown(ui, ("designer_source", id), width - 20.0).selected_text(shown).show_ui(ui, |ui| {
             for s in ModSource::ALL.into_iter().filter(|s| *s != ModSource::Drawn) {
@@ -383,8 +394,9 @@ impl View<'_> {
             };
             hint(ui, status);
         }
+        }
         crate::ui::toolbar(ui, |ui| {
-            if !m.signal.source.is_audio() && m.signal.source != ModSource::Hand {
+            if !is_op && !m.signal.source.is_audio() && m.signal.source != ModSource::Hand {
                 crate::ui::toggle(ui, &mut m.signal.sync, "Beat").on_hover_text("Its cycle follows the tempo");
             }
             let mut event = m.event.is_some();
@@ -392,7 +404,7 @@ impl View<'_> {
                 m.event = event.then(Trigger::default);
                 changed = true;
             }
-            if let Some(c) = m.chain.as_mut() {
+            if let Some(c) = m.chain.as_mut().filter(|_| !is_op) {
                 let mut mode = c.mode;
                 crate::ui::dropdown(ui, ("designer_chain", id), 110.0).selected_text(mode.name()).show_ui(ui, |ui| {
                     for k in ChainMode::ALL {
@@ -424,6 +436,12 @@ impl View<'_> {
         changed
     }
 
+    /// The effect behind an Effect box.
+    fn box_effect(&self, id: u32) -> Option<&phosphor_engine::EffectState> {
+        let n = self.node(id).filter(|n| n.kind == NodeKind::Effect)?;
+        self.comp.layer(*n.parts.first()?)?.effects.first()
+    }
+
     /// Adds a saved box here.
     fn add_saved(&mut self, json: &str, at: [f32; 2]) -> bool {
         let Ok(saved) = serde_json::from_str::<SavedBox>(json) else {
@@ -452,13 +470,21 @@ impl Graph for View<'_> {
     }
     fn title(&self, id: u32) -> String {
         let Some(n) = self.node(id) else { return String::new() };
+        if !n.name.is_empty() {
+            return n.name.clone();
+        }
         match n.kind {
+            NodeKind::Feedback => match self.node(n.target).filter(|_| n.target != 0) {
+                Some(_) => format!("Feedback of {}", self.title(n.target)),
+                None => "Feedback".to_string(),
+            },
             NodeKind::Layer => self.comp.layer(n.layer).map_or_else(|| "Layer".to_string(), |l| format!("Layer: {}", l.name)),
             NodeKind::Picture => n.parts.first().and_then(|p| self.comp.layer(*p)).map_or_else(|| "Picture".to_string(), |l| l.source.label()),
             NodeKind::Effect => n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or_else(|| "Effect".to_string(), |d| d.name.to_string()),
             NodeKind::Number => n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m)).map_or_else(
                 || "Number".to_string(),
                 |m| match (&m.data, &m.event) {
+                    _ if m.op.is_some() => m.op.as_ref().map_or(String::new(), |o| o.name().to_string()),
                     (Some(d), _) if m.signal.source == ModSource::Hand => d.kind.name().to_string(),
                     (None, Some(_)) => "Event".to_string(),
                     _ => m.signal.source.name().to_string(),
@@ -480,7 +506,7 @@ impl Graph for View<'_> {
             _ => {}
         }
         match self.node(id).map(|n| n.kind) {
-            Some(NodeKind::Layer | NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
+            Some(NodeKind::Layer | NodeKind::Picture | NodeKind::Input | NodeKind::Feedback) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
             Some(NodeKind::Mix) => crate::theme::Hue::Live.color(),
             Some(NodeKind::Number | NodeKind::NumberInput) => crate::theme::Hue::Control.color(),
@@ -507,7 +533,7 @@ impl Graph for View<'_> {
         let Some(n) = self.node(id) else { return 0.0 };
         let pic = self.preview_h() + 3.0;
         match n.kind {
-            NodeKind::Layer => pic + ROW_H,
+            NodeKind::Layer | NodeKind::Feedback => pic + ROW_H,
             NodeKind::Picture => {
                 let text = n.parts.first().and_then(|p| self.comp.layer(*p)).is_some_and(|l| matches!(l.source, SourceSpec::Text(_)));
                 pic + ROW_H + if text { PARAM_H } else { 0.0 }
@@ -525,6 +551,9 @@ impl Graph for View<'_> {
                 let m = n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m));
                 let data = m.and_then(|m| m.data.as_ref().filter(|_| m.signal.source == ModSource::Hand)).map_or(0.0, |d| 1.0 + data_rows(&d.kind));
                 let event = if m.is_some_and(|m| m.event.is_some()) { 4.0 } else { 0.0 };
+                if let Some(op) = m.and_then(|m| m.op.as_ref()) {
+                    return METER_H + ROW_H + PARAM_H * (op_row_count(op) + event) + 6.0;
+                }
                 METER_H + ROW_H + PARAM_H * (2.0 + data + event) + 6.0
             }
             NodeKind::Output | NodeKind::Input => pic,
@@ -624,6 +653,37 @@ impl Graph for View<'_> {
                 }
             }
             NodeKind::Number => return self.number_body(ui, &n, id),
+            // Another box's last frame: pick which (a wire would be a loop, so it's picked, not wired).
+            NodeKind::Feedback => {
+                self.preview(ui, n.parts.first().copied());
+                let boxes: Vec<(u32, String)> = self.level().map_or_else(Vec::new, |l| {
+                    l.nodes
+                        .iter()
+                        .filter(|x| x.id != id && !matches!(x.kind, NodeKind::Output | NodeKind::Number | NodeKind::NumberInput | NodeKind::Feedback) && self.comp.node_output(x) == PortKind::Picture)
+                        .map(|x| (x.id, format!("{} · box {}", self.title(x.id), x.id)))
+                        .collect()
+                });
+                let shown = boxes.iter().find(|(b, _)| *b == n.target).map_or("Pick a box…".to_string(), |(_, t)| t.clone());
+                let mut pick: Option<u32> = None;
+                crate::ui::dropdown(ui, ("designer_feedback", id), width - 20.0).selected_text(shown).show_ui(ui, |ui| {
+                    crate::ui::column_scroll(ui).max_height(320.0).show(ui, |ui| {
+                        for (b, name) in &boxes {
+                            if crate::ui::pick_item(ui, n.target == *b, name).clicked() {
+                                pick = Some(*b);
+                            }
+                        }
+                        if boxes.is_empty() {
+                            hint(ui, "No other picture boxes yet");
+                        }
+                    });
+                });
+                if let Some(b) = pick {
+                    if let Some(node) = self.level_mut().and_then(|x| x.node_mut(id)) {
+                        node.target = b;
+                    }
+                    return true;
+                }
+            }
             NodeKind::Group => {
                 self.preview(ui, n.picture());
                 let boxes = n.inner.as_ref().map_or(0, |i| i.nodes.len());
@@ -715,6 +775,20 @@ impl Graph for View<'_> {
                 }
             }
         });
+        ui.menu_button("Numbers", |ui| {
+            hint(ui, "Boxes that work on other numbers: wire a Number box in, wire the result into any setting");
+            for (op, preset) in NumberOp::all().iter().zip(OP_BOXES) {
+                if crate::ui::command(ui, op.name()).on_hover_text(op.about()).clicked() {
+                    if let Some(l) = self.level_mut() {
+                        let id = l.add(NodeKind::Number, at);
+                        self.preset = Some((id, preset, false));
+                    }
+                    self.resync = true;
+                    added = true;
+                    ui.close();
+                }
+            }
+        });
         ui.menu_button("Data", |ui| {
             hint(ui, "Numbers from the world: a live reading, a web address, a timer, the clock or a table; words that show a number; an event when a number crosses a line");
             for (name, preset) in DATA_BOXES {
@@ -758,6 +832,22 @@ impl Graph for View<'_> {
     }
     fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
         let Some(n) = self.node(id).cloned() else { return false };
+        let mut named: Option<String> = None;
+        crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename…"), |ui| {
+            if let Some(name) = crate::ui::new_name_menu(ui, ("rename_box", id), "A name for this box", "Rename") {
+                named = Some(name);
+            }
+            if !n.name.is_empty() && crate::ui::command(ui, "Back to its own name").clicked() {
+                named = Some(String::new());
+                ui.close();
+            }
+        });
+        if let Some(name) = named {
+            if let Some(node) = self.level_mut().and_then(|l| l.node_mut(id)) {
+                node.name = name;
+            }
+            return true;
+        }
         if !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput)
             && crate::ui::command(ui, label(icon::PACKAGE, "Wrap in a box")).on_hover_text("Puts this box inside a new box of boxes, its wires kept (then build around it inside)").clicked()
         {
@@ -794,11 +884,84 @@ impl Graph for View<'_> {
         ui.separator();
         saved
     }
+    // An Effect box switched off passes its picture straight through (the effect's own on / off).
+    fn bypassable(&self, id: u32) -> bool {
+        self.box_effect(id).is_some_and(|e| e.effect != shaders::POINTS_LIGHT && !shaders::points_in(&e.effect) && !shaders::points_out(&e.effect))
+    }
+    fn bypassed(&self, id: u32) -> bool {
+        self.bypassable(id) && self.box_effect(id).is_some_and(|e| !e.enabled)
+    }
+    fn set_bypassed(&mut self, id: u32, off: bool) {
+        let part = self.node(id).filter(|n| n.kind == NodeKind::Effect).and_then(|n| n.parts.first().copied());
+        if let Some(fx) = part.and_then(|p| self.comp.layer_mut(p)).and_then(|l| l.effects.first_mut()) {
+            fx.enabled = !off;
+        }
+    }
     fn open(&mut self, id: u32) {
         if self.node(id).is_some_and(|n| n.kind == NodeKind::Group) {
             let mut p = self.path.clone();
             p.push(id);
             self.go = Some(p);
+        }
+    }
+}
+
+/// How many setting rows an operator shows.
+fn op_row_count(op: &NumberOp) -> f32 {
+    match op {
+        NumberOp::Range { .. } => 4.0,
+        NumberOp::Math { .. } | NumberOp::Smooth { .. } | NumberOp::Envelope { .. } => 2.0,
+        _ => 1.0,
+    }
+}
+
+/// An operator box's settings.
+fn op_rows(ui: &mut egui::Ui, op: &mut NumberOp, id: u32, width: f32) {
+    let whole = |ui: &mut egui::Ui, n: &mut u32, name: &str| {
+        let mut v = *n as f32;
+        Level::range(&mut v, 2.0, 16.0, name).default(4.0).width(width).show(ui);
+        *n = v.round().clamp(2.0, 64.0) as u32;
+    };
+    match op {
+        NumberOp::Math { mode, b } => {
+            crate::ui::dropdown(ui, ("designer_math", id), width - 20.0).selected_text(mode.name()).show_ui(ui, |ui| {
+                for k in MathMode::ALL {
+                    if crate::ui::pick_item(ui, *mode == k, k.name()).clicked() {
+                        *mode = k;
+                    }
+                }
+            });
+            Level::percent(b, "B").default(0.5).width(width).show(ui).on_hover_text("B while nothing is wired into it");
+        }
+        NumberOp::Smooth { rise, fall } => {
+            Level::range(rise, 0.0, 5.0, "Rise (s)").default(0.3).width(width).show(ui);
+            Level::range(fall, 0.0, 5.0, "Fall (s)").default(0.3).width(width).show(ui);
+        }
+        NumberOp::Range { from, to } => {
+            Level::percent(&mut from[0], "From").default(0.0).width(width).show(ui).on_hover_text("The part of the number's travel that's used: from here…");
+            Level::percent(&mut from[1], "up to").default(1.0).width(width).show(ui);
+            Level::percent(&mut to[0], "Becomes").default(0.0).width(width).show(ui).on_hover_text("…stretched onto this range (swap the two to turn it upside down)");
+            Level::percent(&mut to[1], "up to").default(1.0).width(width).show(ui);
+        }
+        NumberOp::Gate { line } => {
+            Level::percent(line, "Line").default(0.5).width(width).show(ui).on_hover_text("1 while the number is at or above it");
+        }
+        NumberOp::Steps { count } | NumberOp::Count { steps: count } => whole(ui, count, "Steps"),
+        NumberOp::Hold => {
+            hint(ui, "Takes In each time When rises");
+        }
+        NumberOp::Envelope { attack, release } => {
+            Level::range(attack, 0.0, 2.0, "Rise (s)").default(0.05).width(width).show(ui);
+            Level::range(release, 0.0, 5.0, "Fall (s)").default(0.5).width(width).show(ui);
+        }
+        NumberOp::Speed { rate } => {
+            Level::range(rate, 0.05, 20.0, "Cycles a second at 1").log().default(1.0).width(width).show(ui);
+        }
+        NumberOp::Delay { seconds } => {
+            Level::range(seconds, 0.0, phosphor_engine::MAX_DELAY, "Seconds ago").default(0.5).width(width).show(ui);
+        }
+        NumberOp::Formula(f) => {
+            crate::ui::text_field(ui, f, "a * b, sin(t * 0.2), a > b", Some(width)).on_hover_text("a and b = the numbers wired in, t = seconds, beat = the beat count. + - * / % ( ), a > b, min max abs floor fract clamp mix sin cos");
         }
     }
 }
