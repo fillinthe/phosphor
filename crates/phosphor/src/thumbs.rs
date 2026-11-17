@@ -163,9 +163,18 @@ mod native {
         // A file's thumbnail is kept on this Mac's own disk (keyed by path, size and modification time): the next
         // launch reads that instead of decoding the file again from an external drive while a show plays from it.
         let cached = (!path.starts_with("https://")).then(|| cache_file(path, size)).flatten();
-        if let Some(c) = &cached
+        // The file can't be looked at (its drive is away): the last thumbnail made of it still shows.
+        let last = if cached.is_none() && !path.starts_with("https://") { last_known(path, size) } else { None };
+        if let Some(c) = cached.as_ref().or(last.as_ref())
             && let Ok(img) = image::open(c)
         {
+            // Used today: the cache's clean-up goes by when a thumbnail was last used, not when it was made.
+            if let Ok(f) = std::fs::File::options().write(true).open(c) {
+                let _ = f.set_modified(std::time::SystemTime::now());
+            }
+            if cached.is_some() {
+                remember(path, size, c);
+            }
             let rgba = img.to_rgba8();
             return Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()));
         }
@@ -200,11 +209,50 @@ mod native {
             }
             // Written beside, then renamed: a half-written file is never read back.
             let part = c.with_extension("part");
-            if rgba.save_with_format(&part, image::ImageFormat::Png).is_ok() {
-                let _ = std::fs::rename(&part, &c);
+            if rgba.save_with_format(&part, image::ImageFormat::Png).is_ok() && std::fs::rename(&part, &c).is_ok() {
+                remember(path, size, &c);
             }
         }
         Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
+    }
+
+    /// The folder of thumbnails kept on this computer.
+    pub(crate) fn cache_dir() -> Option<std::path::PathBuf> {
+        Some(crate::show::storage_dir()?.join("cache").join("thumbs"))
+    }
+
+    /// The note that says which thumbnail was last made of `path` (by the path alone: it's read when the file itself
+    /// can't be, with its drive away).
+    fn last_note(dir: &std::path::Path, path: &str, size: u32) -> std::path::PathBuf {
+        let h = phosphor_engine::stable_hash(&[path.as_bytes(), &size.to_le_bytes()]);
+        dir.join("last").join(format!("{h:016x}"))
+    }
+
+    fn remember(path: &str, size: u32, thumb: &std::path::Path) {
+        if let (Some(dir), Some(name)) = (thumb.parent(), thumb.file_name()) {
+            remember_in(dir, path, size, &name.to_string_lossy());
+        }
+    }
+
+    pub(super) fn remember_in(dir: &std::path::Path, path: &str, size: u32, name: &str) {
+        let note = last_note(dir, path, size);
+        if std::fs::read_to_string(&note).is_ok_and(|n| n == name) {
+            return;
+        }
+        if let Some(d) = note.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let _ = std::fs::write(note, name);
+    }
+
+    fn last_known(path: &str, size: u32) -> Option<std::path::PathBuf> {
+        last_known_in(&cache_dir()?, path, size)
+    }
+
+    pub(super) fn last_known_in(dir: &std::path::Path, path: &str, size: u32) -> Option<std::path::PathBuf> {
+        let name = std::fs::read_to_string(last_note(dir, path, size)).ok()?;
+        let thumb = dir.join(name.trim());
+        thumb.is_file().then_some(thumb)
     }
 
     /// Where a file's thumbnail at `size` is kept: Phosphor's cache folder, named by a hash of the path, the file's
@@ -215,9 +263,12 @@ mod native {
         let meta = std::fs::metadata(&probe).ok()?;
         let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
         let h = phosphor_engine::stable_hash(&[path.as_bytes(), &meta.len().to_le_bytes(), &modified.to_le_bytes(), &size.to_le_bytes()]);
-        Some(crate::show::storage_dir()?.join("cache").join("thumbs").join(format!("{h:016x}.png")))
+        Some(cache_dir()?.join(format!("{h:016x}.png")))
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use native::cache_dir;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
@@ -228,6 +279,26 @@ mod tests {
         let big = super::native_build(&format!("{icon}{}{}", super::SIZE_SEP, 800)).expect("sized");
         assert_eq!(small.size[0].max(small.size[1]), super::THUMB_W as usize);
         assert_eq!(big.size[0].max(big.size[1]), 800);
+    }
+
+    /// With its drive away a file can't be looked at: its last thumbnail is found by the path alone.
+    #[test]
+    fn the_last_thumbnail_of_a_file_is_found_without_the_file() {
+        let dir = std::env::temp_dir().join(format!("phosphor-thumblast-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = "/Volumes/SHOW/clip.mov";
+        assert_eq!(super::native::last_known_in(&dir, clip, 192), None);
+        std::fs::write(dir.join("abc.png"), b"x").unwrap();
+        super::native::remember_in(&dir, clip, 192, "abc.png");
+        assert_eq!(super::native::last_known_in(&dir, clip, 192), Some(dir.join("abc.png")));
+        // Another size, another file: their own.
+        assert_eq!(super::native::last_known_in(&dir, clip, 480), None);
+        assert_eq!(super::native::last_known_in(&dir, "/Volumes/SHOW/other.mov", 192), None);
+        // The thumbnail was cleared: nothing to show.
+        std::fs::remove_file(dir.join("abc.png")).unwrap();
+        assert_eq!(super::native::last_known_in(&dir, clip, 192), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A thumbnail made once is read back from the cache; an edited file (new length / time) gets a new one.

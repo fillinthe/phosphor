@@ -2,7 +2,7 @@
 //! first time they're opened, and opened from that copy afterwards: loading and looping read the Mac's own disk, and
 //! a clip already copied keeps playing if the drive is unplugged (a player that loses its file reopens it, and the
 //! reopen lands on the copy). Copies run on one thread of their own, at a capped speed so they never starve
-//! playback from the same drive; the cache keeps the most recently used clips within `CAP_BYTES`.
+//! playback from the same drive; the cache keeps the most recently used clips within its cap (`cap_gb`: the user's, in Cache settings).
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -13,8 +13,22 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-/// How much the cache may hold.
-pub const CAP_BYTES: u64 = 25 << 30;
+/// How much the cache may hold unless the user says otherwise (`set_cap_gb`).
+pub const CAP_GB: u32 = 25;
+static CAP: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(CAP_GB);
+
+/// The most the cache may hold, in GB (Cache settings).
+pub fn cap_gb() -> u32 {
+    CAP.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_cap_gb(gb: u32) {
+    CAP.store(gb.clamp(1, 500), std::sync::atomic::Ordering::Relaxed);
+}
+
+fn cap_bytes() -> u64 {
+    (cap_gb() as u64) << 30
+}
 /// Free space a copy must leave on this Mac's disk (recordings, saves and macOS itself need room).
 const KEEP_FREE: u64 = 30 << 30;
 /// Copy speed (bytes per second): well under what an external SSD gives, so playback from it keeps its share.
@@ -93,6 +107,11 @@ pub fn resolve(path: &str) -> String {
     }
 }
 
+/// Is there a copy of `path` on this computer (so it plays with its drive away)? Never touches the drive.
+pub fn has(path: &str) -> bool {
+    cache().and_then(|c| c.lock().ok().map(|c| c.index.get(path).is_some_and(|e| Path::new(&e.local).is_file()))).unwrap_or(false)
+}
+
 /// Drops the copy of `path` (the file was edited: Reload).
 pub fn forget(path: &str) {
     if let Some(c) = cache()
@@ -131,7 +150,7 @@ fn copy_one(dir: &Path, path: &str) {
     // Never fill the disk: the copy must leave plenty free.
     let _ = std::fs::create_dir_all(dir);
     let room = crate::convert::free_space(&dir.to_string_lossy()).is_none_or(|free| free > len + KEEP_FREE);
-    if fresh || !room || len == 0 || len > CAP_BYTES / 4 {
+    if fresh || !room || len == 0 || len > cap_bytes() / 4 {
         if let Some(c) = cache()
             && let Ok(mut c) = c.lock()
         {
@@ -202,16 +221,56 @@ fn copy_capped(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
+/// Removes every copy (Cache settings › Clear). A clip playing from its copy keeps playing: the file goes when the
+/// player lets go of it. Returns the bytes freed.
+pub fn clear() -> u64 {
+    drop_where(|_| true)
+}
+
+/// Removes the copies not opened for `secs` (the automatic clean-up). Returns the bytes freed.
+pub fn drop_unused(secs: u64) -> u64 {
+    let before = now_secs().saturating_sub(secs);
+    drop_where(|e| e.used < before)
+}
+
+fn drop_where(gone: impl Fn(&Entry) -> bool) -> u64 {
+    let Some(c) = cache() else { return 0 };
+    let Ok(mut c) = c.lock() else { return 0 };
+    let freed = drop_from(&mut c.index, gone);
+    if freed > 0 {
+        save_index(&c);
+    }
+    freed
+}
+
+fn drop_from(index: &mut HashMap<String, Entry>, gone: impl Fn(&Entry) -> bool) -> u64 {
+    let mut freed = 0;
+    index.retain(|_, e| {
+        if gone(e) {
+            let _ = std::fs::remove_file(&e.local);
+            freed += e.len;
+            false
+        } else {
+            true
+        }
+    });
+    freed
+}
+
 /// Removes the least recently used copies until the cache fits its cap.
 fn trim(c: &mut Cache) {
+    trim_to(c, cap_bytes());
+}
+
+fn trim_to(c: &mut Cache, cap: u64) {
     let mut total: u64 = c.index.values().map(|e| e.len).sum();
-    if total <= CAP_BYTES {
+    if total <= cap {
         return;
     }
     let mut by_age: Vec<(String, u64, u64)> = c.index.iter().map(|(k, e)| (k.clone(), e.used, e.len)).collect();
     by_age.sort_by_key(|(_, used, _)| *used);
     for (k, _, len) in by_age {
-        if total <= CAP_BYTES {
+        if total <= cap {
             break;
         }
         if let Some(e) = c.index.remove(&k) {
@@ -254,12 +313,19 @@ mod tests {
         let (tx, _rx) = channel();
         let dir = std::env::temp_dir();
         let mut c = Cache { dir, index: HashMap::new(), pending: HashSet::new(), tx };
-        let half = CAP_BYTES / 2 + 1;
+        let cap = 10 << 30;
+        let half = cap / 2 + 1;
         for (k, used) in [("old", 1), ("mid", 2), ("new", 3)] {
             c.index.insert(k.into(), Entry { local: format!("/nonexistent/{k}"), len: half, modified: 0, used });
         }
-        trim(&mut c);
+        trim_to(&mut c, cap);
         assert!(c.index.contains_key("new") && !c.index.contains_key("old"), "{:?}", c.index.keys().collect::<Vec<_>>());
-        assert!(c.index.values().map(|e| e.len).sum::<u64>() <= CAP_BYTES);
+        assert!(c.index.values().map(|e| e.len).sum::<u64>() <= cap);
+        // Not opened since 2: gone (the automatic clean-up); Clear takes the rest.
+        c.index.insert("mid".into(), Entry { local: "/nonexistent/mid".into(), len: 5, modified: 0, used: 2 });
+        assert_eq!(drop_from(&mut c.index, |e| e.used < 3), 5);
+        assert!(c.index.contains_key("new") && !c.index.contains_key("mid"));
+        assert_eq!(drop_from(&mut c.index, |_| true), half);
+        assert!(c.index.is_empty());
     }
 }

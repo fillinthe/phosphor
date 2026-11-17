@@ -288,6 +288,12 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                         p.with_clip_rect(thumb_rect).text(thumb_rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
                     }
                 }
+                // Its file isn't there right now (the drive unplugged): said on the picture.
+                if let SourceSpec::Image { path: Some(pth), .. } | SourceSpec::Movie { path: Some(pth), .. } = &k.source
+                    && crate::ui::file_away(pth)
+                {
+                    crate::ui::away_mark(p, thumb_rect, crate::ui::plays_away(pth));
+                }
                 let mut name = if k.name.is_empty() { k.source.label() } else { k.name.clone() };
                 if name.chars().count() > 14 {
                     name = format!("{}…", name.chars().take(13).collect::<String>());

@@ -23,6 +23,19 @@ impl PhosphorApp {
         let confirm_removes = stored(KEY_CONFIRM_REMOVES).is_none_or(|v| v == "1");
         crate::history::set_undo_playback(stored(KEY_UNDO_PLAYBACK).is_some_and(|v| v == "1"));
         crate::support::set_donate_shown(stored(KEY_DONATE_SHOWN).is_none_or(|v| v == "1"));
+        // The cache: its size and clean-up as chosen, then the clean-up of what went unused (on its own thread).
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(gb) = stored(KEY_CACHE_GB).and_then(|v| v.parse().ok()) {
+                crate::media::clip_cache::set_cap_gb(gb);
+            }
+            if let Some(days) = stored(KEY_CACHE_DAYS).and_then(|v| v.parse().ok()) {
+                crate::cache_store::set_days(days);
+            }
+            if bench.is_none() {
+                crate::cache_store::sweep();
+            }
+        }
         // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
         let lang = std::env::var("PHOSPHOR_LANG").ok().or_else(|| stored(KEY_LANGUAGE)).map_or(crate::i18n::Lang::Auto, |c| crate::i18n::Lang::from_code(&c));
         crate::i18n::set_language(&cc.egui_ctx, lang);

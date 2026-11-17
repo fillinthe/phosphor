@@ -49,6 +49,8 @@ mod calendar;
 #[cfg(not(target_arch = "wasm32"))]
 mod backups;
 #[cfg(not(target_arch = "wasm32"))]
+mod cache_store;
+#[cfg(not(target_arch = "wasm32"))]
 mod project_files;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu_guard;
