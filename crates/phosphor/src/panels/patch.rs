@@ -73,7 +73,7 @@ impl Graph for Patch {
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
         if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id && n.block == "note") {
             // Saved when the words are let be (the patch recompiles on every change).
-            let r = ui.add(egui::TextEdit::multiline(&mut n.text).hint_text("Write a note…").desired_rows(3).desired_width(ui.available_width()).font(egui::FontId::proportional(12.0)));
+            let r = crate::ui::note_field(ui, &mut n.text, "Write a note…", 3);
             return r.lost_focus() && r.changed() || (r.changed() && !r.has_focus());
         }
         let Some(b) = self.node(id).and_then(|n| patch::block(&n.block)) else { return false };

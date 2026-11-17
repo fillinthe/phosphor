@@ -46,6 +46,8 @@ pub enum NodeKind {
     Feedback,
     /// Several pictures in, one out: a number (or a click in the box) picks which, fading from one to the next.
     Switch,
+    /// Words on the canvas (in `Node.name`), wired to nothing.
+    Note,
 }
 
 /// How many pictures a Switch box takes.
@@ -64,7 +66,7 @@ pub enum PortKind {
 
 impl NodeKind {
     /// The kinds you add from the menu (Input only inside a Group; Output comes with every network).
-    pub const ALL: [NodeKind; 9] = [NodeKind::Layer, NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Switch, NodeKind::Feedback, NodeKind::Number, NodeKind::Group, NodeKind::Output];
+    pub const ALL: [NodeKind; 10] = [NodeKind::Layer, NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Switch, NodeKind::Feedback, NodeKind::Number, NodeKind::Group, NodeKind::Note, NodeKind::Output];
 
     /// What its output carries (a Picture or Effect box's may be points, by its shader: `Composition::node_output`).
     pub fn output(self) -> PortKind {
@@ -84,6 +86,7 @@ impl NodeKind {
             NodeKind::NumberInput => "Number input",
             NodeKind::Feedback => "Feedback",
             NodeKind::Switch => "Switch",
+            NodeKind::Note => "Note",
         }
     }
 
@@ -100,6 +103,7 @@ impl NodeKind {
             NodeKind::NumberInput => "A number wired into the box (from outside): wire it into any setting in here",
             NodeKind::Feedback => "Another box's picture as it was a frame ago: pick the box, then wire this back in before it (through a Blur or a Transform, into a Mix) and the picture feeds on itself: trails, tunnels, echoes",
             NodeKind::Switch => "Shows one of the pictures wired in: click which in the box, or wire a Number into Pick and it moves through them (a Count box steps on the beat, an LFO sweeps), fading from one to the next",
+            NodeKind::Note => "Words on the canvas, wired to nothing: what this part does, what to try, what not to touch",
         }
     }
 
@@ -111,7 +115,7 @@ impl NodeKind {
             NodeKind::Switch => &["1", "2", "3", "4"],
             NodeKind::Output => &["In"],
             NodeKind::Number => &["Chain"],
-            NodeKind::Layer | NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Feedback => &[],
+            NodeKind::Layer | NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Feedback | NodeKind::Note => &[],
         }
     }
 }
@@ -150,7 +154,7 @@ impl Node {
     /// The layer or group whose finished picture is this box's output (None for Output and Number).
     pub fn picture(&self) -> Option<u64> {
         match self.kind {
-            NodeKind::Output | NodeKind::Number | NodeKind::NumberInput => None,
+            NodeKind::Output | NodeKind::Number | NodeKind::NumberInput | NodeKind::Note => None,
             NodeKind::Group | NodeKind::Input | NodeKind::Layer => (self.shows != 0).then_some(self.shows),
             _ => self.parts.first().copied(),
         }
@@ -287,7 +291,7 @@ impl Network {
     }
 
     fn wrappable(&self, ids: &[u32]) -> Vec<u32> {
-        ids.iter().copied().filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput))).collect()
+        ids.iter().copied().filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput | NodeKind::Note))).collect()
     }
 
     /// Boxes `ids` can go in one Group: at most one of them feeds boxes outside the set (the group's one output).
@@ -540,7 +544,7 @@ impl Composition {
         let Some(level) = net.at_mut(path) else { return false };
         let (Some(f), Some(t)) = (level.node(from).cloned(), level.node(to).cloned()) else { return false };
         let inputs = self.node_inputs(&t);
-        if f.kind == NodeKind::Output || inputs.get(input).is_none_or(|(_, k)| *k != self.node_output(&f)) {
+        if matches!(f.kind, NodeKind::Output | NodeKind::Note) || inputs.get(input).is_none_or(|(_, k)| *k != self.node_output(&f)) {
             return false;
         }
         let ok = graph::connect(&mut level.wires, from, to, input, inputs.len());
@@ -651,7 +655,7 @@ impl Composition {
                 NodeKind::Picture | NodeKind::Effect | NodeKind::Number | NodeKind::Feedback => 1,
                 NodeKind::Mix => 3,
                 NodeKind::Switch => 1 + SWITCH_INPUTS,
-                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer => 0,
+                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer | NodeKind::Note => 0,
             };
             if have == need {
                 continue;
@@ -684,7 +688,7 @@ impl Composition {
                         vec![mid]
                     }
                 }
-                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer => Vec::new(),
+                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer | NodeKind::Note => Vec::new(),
             };
         }
         // Wires to inputs a box no longer has (its effect changed, an Input box went) go.
@@ -778,7 +782,7 @@ impl Composition {
                     }
                     0
                 }
-                NodeKind::Output => 0,
+                NodeKind::Output | NodeKind::Note => 0,
             };
             net.nodes[i].shows = pic;
             if kind != NodeKind::NumberInput {
@@ -1255,6 +1259,25 @@ mod tests {
     }
 
     /// A Feedback box shows the picked box's picture and draws before it (so what it shows is a frame old).
+    #[test]
+    fn a_note_is_only_words() {
+        let mut comp = Composition::default();
+        let cid = comp.add_comp("Net");
+        comp.start_network(cid);
+        let (layers, mods) = (comp.layers.len(), comp.modulators.len());
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let out = net.nodes.iter().find(|n| n.kind == NodeKind::Output).unwrap().id;
+        let note = net.add(NodeKind::Note, [0.0, 300.0]);
+        net.node_mut(note).unwrap().name = "Try the Fade".into();
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!((comp.layers.len(), comp.modulators.len()), (layers, mods), "nothing is made for it");
+        assert!(!comp.connect_boxes(cid, &[], note, out, 0), "and it wires into nothing");
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        assert_eq!(net.node(note).unwrap().name, "Try the Fade");
+        assert!(net.node(note).unwrap().parts.is_empty() && net.node(note).unwrap().picture().is_none());
+    }
+
     #[test]
     fn a_switch_box_shows_the_picked_picture() {
         use crate::control::{ModInputs, modulate};
