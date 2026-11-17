@@ -19,6 +19,8 @@ pub enum Purpose {
     OpenProject,
     SaveProject,
     SaveSnapshot,
+    /// Report a Bug › Save a snapshot: the program's state as a text file (`support::snapshot_text`).
+    ReportSnapshot,
     StreamFile,
     /// Where Timeline › Render to a movie writes.
     RenderFile,

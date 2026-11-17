@@ -5,6 +5,7 @@ use eframe::egui;
 use egui_phosphor::regular as icon;
 
 use crate::app::State;
+use phosphor_engine::SourceSpec;
 
 pub const DONATE_URL: &str = "https://donate.stripe.com/eVqdRb8kv3XW08LcNaaEE04";
 pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
@@ -146,6 +147,9 @@ fn diagnostics_from(st: &mut State, crash: bool) -> String {
         if st.net.running() { "on" } else { "off" },
         if st.stream.running() { "live" } else { "off" },
     );
+    out.push_str(&format!("GPU {:.2} ms a frame · longest gap {:.0} ms · {} passes\n", s.gpu_ms, s.worst_ms, s.passes));
+    out.push_str(&gpu_lines(st));
+    out.push_str(&movies_line(st));
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(path) = crate::recovery::crash_log_path()
         && let Ok(log) = std::fs::read_to_string(&path)
@@ -173,6 +177,96 @@ fn diagnostics_from(st: &mut State, crash: bool) -> String {
             out.push('\n');
         }
     }
+    out
+}
+
+/// The graphics card drawing the picture, and the others this computer has (a report of low frame rates on a
+/// laptop is often the wrong card).
+fn gpu_lines(st: &State) -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(rs) = &st.render_state {
+        let about = |i: eframe::wgpu::AdapterInfo| {
+            let driver = format!("{} {}", i.driver, i.driver_info);
+            let driver = if driver.trim().is_empty() { String::new() } else { format!(", driver {}", driver.trim()) };
+            format!("{} ({:?}, {:?}{driver})", i.name, i.backend, i.device_type)
+        };
+        let now = rs.adapter.get_info();
+        let others: Vec<String> = rs.available_adapters.iter().map(|a| a.get_info()).filter(|i| i.name != now.name || i.backend != now.backend).map(about).collect();
+        let others = if others.is_empty() { String::new() } else { format!("Other cards: {}\n", others.join("; ")) };
+        return format!("Graphics card: {}\n{others}", about(now));
+    }
+    let _ = st;
+    String::new()
+}
+
+/// How the movies playing now are decoded: on the graphics card or on the processor (many big movies on the
+/// processor is the usual reason for a low frame rate).
+fn movies_line(st: &State) -> String {
+    let (mut card, mut cpu) = (0, 0);
+    for l in &st.comp.layers {
+        match st.media.video_info(l.id) {
+            Some(i) if i.contains("hardware decode") => card += 1,
+            Some(i) if i.contains("software decode") => cpu += 1,
+            _ => {}
+        }
+    }
+    if card + cpu == 0 { String::new() } else { format!("Movies playing: {card} decoded on the graphics card, {cpu} on the processor\n") }
+}
+
+/// Everything about the program right now, as one text file a person can attach to a report: the diagnostics, every
+/// layer (what it plays, how its movie decodes, its effects), the outputs, this run's whole session log and the
+/// project itself. It names files and layers, so it's only ever saved where the user says (never sent by itself).
+pub fn snapshot_text(st: &mut State) -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    let when = crate::backups::stamp(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
+    #[cfg(target_arch = "wasm32")]
+    let when = String::new();
+    let words = st.bug.text.trim().to_string();
+    let mut out = format!("Phosphor snapshot {when} (UTC)\n\n");
+    if !words.is_empty() {
+        out.push_str(&format!("{words}\n\n"));
+    }
+    out.push_str("== Now ==\n");
+    out.push_str(&diagnostics(st));
+    out.push_str(&format!("\n== Settings ==\nRender rate: {:?} · canvas {}×{} · {} bpm\n", st.render_rate, st.comp.width, st.comp.height, st.comp.bpm));
+    out.push_str("\n== Layers (top first) ==\n");
+    let shares = st.media.cpu_shares();
+    for l in st.comp.layers.iter().rev() {
+        let source = match &l.source {
+            SourceSpec::None => "empty".to_string(),
+            SourceSpec::Generator(g) => format!("generator {g}"),
+            SourceSpec::Image { name, .. } => format!("image {name}"),
+            SourceSpec::Movie { name, .. } => format!("movie {name}"),
+            SourceSpec::Live { name, format, .. } => format!("live {name} ({format})"),
+            SourceSpec::Text(_) => "text".to_string(),
+            SourceSpec::Feed { name, .. } => format!("feed of {name}"),
+        };
+        let effects: Vec<&str> = l.effects.iter().map(|e| e.effect.as_str()).collect();
+        let effects = if effects.is_empty() { String::new() } else { format!(" · effects: {}", effects.join(", ")) };
+        out.push_str(&format!("{} · {} · {} · opacity {:.2} · {:?}{effects}\n", l.name, if l.enabled { "on" } else { "off" }, source, l.opacity, l.blend));
+        if let Some(info) = st.media.video_info(l.id) {
+            let share = shares.get(&l.id).map(|c| format!(" · {:.0}% of a core", c * 100.0)).unwrap_or_default();
+            out.push_str(&format!("    {info}{share}\n"));
+        }
+    }
+    if !st.comp.master_effects.is_empty() {
+        out.push_str(&format!("MASTER effects: {}\n", st.comp.master_effects.iter().map(|e| e.effect.as_str()).collect::<Vec<_>>().join(", ")));
+    }
+    out.push_str("\n== Outputs ==\n");
+    for o in &st.comp.outputs {
+        let size = if o.width == 0 { "canvas size".to_string() } else { format!("{}×{}", o.width, o.height) };
+        let screen = if o.screen.is_empty() { "no screen chosen" } else { o.screen.as_str() };
+        out.push_str(&format!("{} · {} · {size} · {screen} · {} slices\n", o.name, if o.enabled { "on" } else { "off" }, o.mapping.surfaces.len()));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(log) = crate::session_log::path().and_then(|p| std::fs::read_to_string(p).ok()) {
+        out.push_str("\n== Session log (this run) ==\n");
+        out.push_str(tail_of(&log, 400_000));
+        out.push('\n');
+    }
+    out.push_str("\n== Project ==\n");
+    out.push_str(&serde_json::to_string_pretty(&st.comp).unwrap_or_else(|e| format!("(couldn't write the project: {e})")));
+    out.push('\n');
     out
 }
 
@@ -288,6 +382,13 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
                 let text = report_text(st);
                 ctx.copy_text(text);
                 st.notice = Some("Report copied. Paste it wherever you like.".into());
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if crate::ui::command(ui, format!("{} Save a snapshot…", icon::FLOPPY_DISK))
+                .on_hover_text("One text file with everything about Phosphor right now: the graphics card, every layer and how its movie decodes, the outputs, this run's log and the project. Save it while the problem is on screen and attach it to your report. It names your files and layers; it holds no pictures or video")
+                .clicked()
+            {
+                st.dialogs.save_file(crate::dialogs::Purpose::ReportSnapshot, ("Text", &["txt"]), "Phosphor snapshot.txt");
             }
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(p) = crate::recovery::crash_log_path()

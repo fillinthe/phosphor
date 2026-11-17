@@ -326,6 +326,14 @@ impl PhosphorApp {
                 self.lock_now(String::new());
                 continue;
             }
+            // Report a Bug › Save a snapshot, without the dialog: the file goes to PHOSPHOR_SNAPSHOT_OUT.
+            if name == "snapshot" {
+                if let Some(out) = std::env::var_os("PHOSPHOR_SNAPSHOT_OUT") {
+                    let text = crate::support::snapshot_text(&mut self.state);
+                    println!("REPORT_SNAPSHOT {} bytes, {} lines, saved={}", text.len(), text.lines().count(), std::fs::write(out, &text).is_ok());
+                }
+                continue;
+            }
             if name == "bug" || name == "bugout" {
                 self.state.bug.open = true;
                 self.state.bug.detached = name == "bugout";
