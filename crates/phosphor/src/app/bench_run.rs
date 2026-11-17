@@ -339,6 +339,30 @@ impl PhosphorApp {
                 }
                 continue;
             }
+            // LED / DMX › Find PixLites, then Add: prints what answered (PIXLITE lines) and what was made.
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "pixlites" {
+                let found = crate::advatek::discover(&crate::net_adapters::ipv4(), std::time::Duration::from_millis(2000));
+                for b in &found.boxes {
+                    let used = || b.outputs.iter().filter(|o| o.pixels > 0);
+                    println!("PIXLITE {} {} {} v{} nick={:?} sacn={:?} outputs={} px={} U{}-{}", b.ip, b.model, b.firmware, b.version, b.nickname, b.sacn, used().count(), b.pixels(), used().map(|o| o.universe).min().unwrap_or(0), used().map(|o| o.last_universe()).max().unwrap_or(0));
+                }
+                for p in &found.problems {
+                    println!("PIXLITE_PROBLEM {p}");
+                }
+                let comp = &mut self.state.comp;
+                let mut next = comp.dmx.fixtures.iter().map(|f| f.id).chain(comp.layers.iter().map(|l| l.id)).max().unwrap_or(0) + 1000;
+                let (n, px) = crate::advatek::import(&mut comp.dmx, &found.boxes, || {
+                    next += 1;
+                    next
+                });
+                // (As Add does: send out of the adapter the boxes answered on.)
+                if let Some(a) = found.boxes.first().and_then(|b| crate::net_adapters::ipv4().into_iter().find(|a| a.reaches(b.ip))) {
+                    comp.dmx.adapter = a.ip.to_string();
+                }
+                println!("PIXLITES_ADDED strips={n} px={px} protocol={:?} adapter={}", comp.dmx.protocol, comp.dmx.adapter);
+                continue;
+            }
             // Report a Bug › Save a snapshot, without the dialog: the file goes to PHOSPHOR_SNAPSHOT_OUT.
             if name == "snapshot" {
                 if let Some(out) = std::env::var_os("PHOSPHOR_SNAPSHOT_OUT") {

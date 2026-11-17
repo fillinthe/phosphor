@@ -145,6 +145,13 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             {
                 control.set_dmx_in(on);
             }
+            let mut last = control.dmx_in_universes;
+            if guarded!(ui, last, egui::DragValue::new(&mut last).range(1..=crate::control::DMX_IN_MAX_UNIVERSES).prefix("sACN universes 1\u{2013}"))
+                .on_hover_text("Which sACN universes to listen to, on every network adapter (Art-Net needs no choosing)")
+                .changed()
+            {
+                control.set_dmx_in_universes(last);
+            }
             if on {
                 hint(ui, control.dmx_status());
             }

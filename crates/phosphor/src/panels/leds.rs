@@ -60,6 +60,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     });
 
     #[cfg(not(target_arch = "wasm32"))]
+    super::led_network::network_row(ui, st);
+    #[cfg(not(target_arch = "wasm32"))]
     dmx_monitor(ui, st);
     #[cfg(not(target_arch = "wasm32"))]
     dmx_recorder(ui, st);
@@ -179,6 +181,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
 
     let mut remove = None;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        let identify = &mut st.led_identify;
         for (i, f) in st.comp.dmx.fixtures.iter_mut().enumerate() {
             let is_sel = selected == Some(f.id);
             let r = card_frame(ui, is_sel).show(ui, |ui| {
@@ -220,6 +224,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     if f.shape != FixtureShape::MovingHead {
                         choice_combo(ui, ("led_order", f.id), &mut f.order, 90.0, false);
                         crate::ui::toggle(ui, &mut f.average, "Average").on_hover_text("Each light takes the average of its own patch of the picture (9 samples) instead of the one point at its center: steadier on detailed or moving pictures");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        super::led_network::identify_buttons(ui, identify, f.id);
                     }
                 });
                 if f.shape == FixtureShape::MovingHead {

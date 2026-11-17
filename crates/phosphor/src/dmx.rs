@@ -1,6 +1,8 @@
 //! Sends LED / DMX universes over the network: Art-Net (ArtDmx, UDP 6454; broadcast when no address is
 //! set) or sACN / E1.31 (UDP 5568; multicast per universe when no address is set), or to a USB interface
-//! (`usb_dmx`). Does nothing while LED output is off; paced to its own frame rate.
+//! (`usb_dmx`). Does nothing while LED output is off; paced to its own frame rate. Network packets go out of the
+//! chosen adapter (`DmxSettings.adapter`: bound to its address, multicast sent through it, broadcast to its
+//! network's broadcast address), else the system's default route.
 
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
@@ -15,6 +17,10 @@ const SACN_PORT: u16 = 5568;
 #[derive(Default)]
 pub struct DmxOut {
     socket: Option<UdpSocket>,
+    /// The adapter address the socket is bound to (None = any: the default route).
+    bound: Option<Ipv4Addr>,
+    /// That adapter's network broadcast address (Art-Net with no target address).
+    broadcast: Option<Ipv4Addr>,
     pacer: FramePacer,
     seq: u8,
     /// Universes sent per frame last time (for the panel), and the last send error.
@@ -47,15 +53,33 @@ impl DmxOut {
             return;
         }
         self.usb = None;
+        let wanted: Option<Ipv4Addr> = s.adapter.trim().parse().ok();
+        if !s.adapter.trim().is_empty() && wanted.is_none() {
+            self.error = Some(format!("\"{}\" isn't an adapter address", s.adapter.trim()));
+            return;
+        }
+        if self.socket.is_some() && self.bound != wanted {
+            self.socket = None;
+        }
         if self.socket.is_none() {
-            match UdpSocket::bind(("0.0.0.0", 0)).and_then(|sock| {
-                sock.set_broadcast(true)?;
-                sock.set_nonblocking(true)?;
-                Ok(sock)
-            }) {
+            // The chosen adapter must be on this computer now (a project opened on another computer, a cable out).
+            let adapter = match wanted {
+                Some(ip) => match crate::net_adapters::with_ip(ip) {
+                    Some(a) => Some(a),
+                    None if ip.is_loopback() => None,
+                    None => {
+                        self.error = Some(format!("no adapter has {ip} on this computer: choose the adapter (Send out of)"));
+                        return;
+                    }
+                },
+                None => None,
+            };
+            match open_socket(wanted) {
                 Ok(sock) => {
                     OWN_PORT.store(sock.local_addr().map_or(0, |a| a.port()), std::sync::atomic::Ordering::Relaxed);
-                    self.socket = Some(sock)
+                    self.socket = Some(sock);
+                    self.bound = wanted;
+                    self.broadcast = adapter.map(|a| a.broadcast());
                 }
                 Err(e) => {
                     self.error = Some(format!("can't open a network socket ({e})"));
@@ -78,7 +102,7 @@ impl DmxOut {
         self.error = None;
         for (uni, data) in universes {
             let (packet, addr) = match s.protocol {
-                DmxProtocol::ArtNet => (artnet_packet(*uni, self.seq, data), SocketAddr::from((target.unwrap_or(Ipv4Addr::BROADCAST), ARTNET_PORT))),
+                DmxProtocol::ArtNet => (artnet_packet(*uni, self.seq, data), SocketAddr::from((target.or(self.broadcast).unwrap_or(Ipv4Addr::BROADCAST), ARTNET_PORT))),
                 DmxProtocol::Sacn => {
                     let uni = (*uni).max(1);
                     let multicast = Ipv4Addr::new(239, 255, (uni >> 8) as u8, uni as u8);
@@ -100,6 +124,19 @@ impl DmxOut {
             self.sent.clear();
         }
     }
+}
+
+/// A sending socket: on `adapter`'s address with multicast going out of it, or anywhere (the default route).
+fn open_socket(adapter: Option<Ipv4Addr>) -> std::io::Result<UdpSocket> {
+    let sock = UdpSocket::bind((adapter.unwrap_or(Ipv4Addr::UNSPECIFIED), 0))?;
+    sock.set_broadcast(true)?;
+    sock.set_nonblocking(true)?;
+    if let Some(ip) = adapter {
+        socket2::SockRef::from(&sock).set_multicast_if_v4(&ip)?;
+    }
+    // (Receivers on this computer hear it too: another program recording, a second Phosphor.)
+    sock.set_multicast_loop_v4(true)?;
+    Ok(sock)
 }
 
 /// Which USB interface a protocol talks to (None = the network).
@@ -168,8 +205,9 @@ pub fn parse_dmx(p: &[u8]) -> Option<(u16, &[u8])> {
 /// The source port Phosphor's own DMX output sends from (its packets aren't controller input).
 static OWN_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
 
-/// DMX in: listens for Art-Net (udp/6454) and sACN (udp/5568, universes 1–16 by multicast) and sends each channel
-/// that changes as controller input (`ControlSource::Dmx`, 0..1). Stops when dropped.
+/// DMX in: listens for Art-Net (udp/6454) and sACN (udp/5568: universes 1 to `last` by multicast, joined on every
+/// IPv4 adapter) and sends each channel that changes as controller input (`ControlSource::Dmx`, 0..1). Stops when
+/// dropped.
 pub struct DmxListener {
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     status: std::sync::Arc<std::sync::Mutex<String>>,
@@ -177,7 +215,7 @@ pub struct DmxListener {
 }
 
 impl DmxListener {
-    pub fn start(tx: std::sync::mpsc::Sender<crate::control::Incoming>) -> Self {
+    pub fn start(tx: std::sync::mpsc::Sender<crate::control::Incoming>, last: u16) -> Self {
         use std::sync::atomic::Ordering;
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let status = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
@@ -187,13 +225,12 @@ impl DmxListener {
         for (port, name) in [(6454u16, "Art-Net"), (5568, "sACN")] {
             match UdpSocket::bind(("0.0.0.0", port)) {
                 Ok(s) => {
+                    let mut what = format!("{name} on udp/{port}");
                     if port == 5568 {
-                        for u in 1..=16u16 {
-                            let _ = s.join_multicast_v4(&Ipv4Addr::new(239, 255, (u >> 8) as u8, u as u8), &Ipv4Addr::UNSPECIFIED);
-                        }
+                        what = format!("{what}, {}", join_sacn(&s, last));
                     }
                     let _ = s.set_read_timeout(Some(std::time::Duration::from_millis(200)));
-                    open.push(format!("{name} on udp/{port}"));
+                    open.push(what);
                     sockets.push(s);
                 }
                 Err(e) => open.push(format!("{name} port {port} busy ({e})")),
@@ -248,6 +285,29 @@ impl Drop for DmxListener {
     fn drop(&mut self) {
         self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
     }
+}
+
+/// Joins sACN universes 1..=`last` on every IPv4 adapter (a rig on its own network as well as the Wi-Fi), or on the
+/// default one when there are none listed. Says what it joined (a system may refuse some: Linux allows 20 groups a
+/// socket unless raised).
+fn join_sacn(s: &UdpSocket, last: u16) -> String {
+    let last = last.clamp(1, crate::control::DMX_IN_MAX_UNIVERSES);
+    let adapters: Vec<Ipv4Addr> = crate::net_adapters::ipv4().into_iter().map(|a| a.ip).collect();
+    let on = if adapters.is_empty() { vec![Ipv4Addr::UNSPECIFIED] } else { adapters };
+    let (mut joined, mut refused) = (0usize, 0usize);
+    for ip in &on {
+        for u in 1..=last {
+            match s.join_multicast_v4(&Ipv4Addr::new(239, 255, (u >> 8) as u8, u as u8), ip) {
+                Ok(()) => joined += 1,
+                Err(_) => refused += 1,
+            }
+        }
+    }
+    let mut out = format!("universes 1\u{2013}{last} on {} adapter{}", on.len(), if on.len() == 1 { "" } else { "s" });
+    if refused > 0 {
+        out = format!("{out} ({refused} of {} refused by the system)", joined + refused);
+    }
+    out
 }
 
 pub fn artnet_packet(universe: u16, seq: u8, data: &[u8; 512]) -> Vec<u8> {
@@ -317,7 +377,7 @@ mod tests {
     #[test]
     fn a_desk_fader_becomes_controller_input() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let listener = DmxListener::start(tx);
+        let listener = DmxListener::start(tx, 32);
         if !listener.status().contains("Art-Net on") {
             return; // port 6454 taken by another app on this machine
         }
@@ -335,7 +395,8 @@ mod tests {
         let got = rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
         assert_eq!(got.source, phosphor_engine::ControlSource::Dmx { universe: 2, channel: 5 });
         assert_eq!(got.value, 1.0);
-        assert!(listener.status().contains("hearing 1 universe"));
+        // (At least this one: a lighting network on this computer's other adapters may be heard too.)
+        assert!(listener.status().contains(" universe(s)"), "{}", listener.status());
     }
 
     use super::*;
@@ -355,6 +416,35 @@ mod tests {
         assert_eq!(u16::from_be_bytes([s[113], s[114]]), 7, "universe");
         assert_eq!(s[125], 0, "start code");
         assert_eq!(s[126], 255, "first slot");
+    }
+
+    /// The chosen adapter: packets leave from its address, and multicast goes out of it.
+    #[test]
+    fn sends_out_of_the_chosen_adapter() {
+        let lo = Ipv4Addr::LOCALHOST;
+        let sock = open_socket(Some(lo)).unwrap();
+        assert_eq!(sock.local_addr().unwrap().ip(), std::net::IpAddr::V4(lo));
+        assert_eq!(socket2::SockRef::from(&sock).multicast_if_v4().unwrap(), lo);
+        // Automatic: anywhere, the system's choice.
+        assert!(open_socket(None).unwrap().local_addr().unwrap().ip().is_unspecified());
+        // Through DmxOut, to an address: it arrives from the adapter's address.
+        let rx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        rx.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+        let s = phosphor_engine::DmxSettings { enabled: true, target: "127.0.0.1".into(), adapter: "127.0.0.1".into(), ..Default::default() };
+        let mut out = DmxOut::default();
+        let mut unis = BTreeMap::new();
+        unis.insert(1u16, [7u8; 512]);
+        // (Art-Net goes to its own port: read it back through the test's socket by sending there directly.)
+        let sock = out.socket.get_or_insert_with(|| open_socket(Some(lo)).unwrap());
+        sock.send_to(&artnet_packet(1, 1, &unis[&1]), rx.local_addr().unwrap()).unwrap();
+        let mut buf = [0u8; 600];
+        let (n, from) = rx.recv_from(&mut buf).unwrap();
+        assert_eq!((n, from.ip()), (530, std::net::IpAddr::V4(lo)));
+        // An adapter that isn't on this computer is said, and nothing goes.
+        let away = phosphor_engine::DmxSettings { adapter: "10.254.254.254".into(), ..s };
+        let mut out = DmxOut::default();
+        out.send(&away, &unis);
+        assert!(out.error.as_deref().is_some_and(|e| e.contains("no adapter has 10.254.254.254")), "{:?}", out.error);
     }
 
     /// Sends to a socket on this Mac and reads it back.

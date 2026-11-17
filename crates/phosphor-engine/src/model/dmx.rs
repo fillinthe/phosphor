@@ -612,11 +612,14 @@ pub struct DmxSettings {
     pub fixtures: Vec<Fixture>,
     /// LED / DMX master: every fixture's color (and moving heads' dimmers) scaled by this (0..1).
     pub master: f32,
+    /// The network adapter Art-Net / sACN go out of, by its IPv4 address ("" = automatic: the system's default
+    /// route). A rig on its own network beside the venue's Wi-Fi needs its adapter chosen.
+    pub adapter: String,
 }
 
 impl Default for DmxSettings {
     fn default() -> Self {
-        Self { enabled: false, protocol: DmxProtocol::ArtNet, target: String::new(), fps: 40.0, fixtures: Vec::new(), master: 1.0 }
+        Self { enabled: false, protocol: DmxProtocol::ArtNet, target: String::new(), fps: 40.0, fixtures: Vec::new(), master: 1.0, adapter: String::new() }
     }
 }
 

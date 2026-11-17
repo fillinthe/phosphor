@@ -84,6 +84,8 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             led_scan,
             #[cfg(not(target_arch = "wasm32"))]
+            led_identify,
+            #[cfg(not(target_arch = "wasm32"))]
             milkdrop,
             #[cfg(not(target_arch = "wasm32"))]
             gdrop,
@@ -313,6 +315,8 @@ impl PhosphorApp {
             // sample).
             let playback = dmx_rec.playback(now);
             let playback = led_scan.universes(&comp.dmx).or(playback);
+            // Finding a string (Flash / Chase) wins over everything: it's what someone across the venue is looking for.
+            let playback = led_identify.universes(&comp.dmx, now).or(playback);
             let points = if comp.dmx.enabled && playback.is_none() { comp.dmx.sample_points() } else { Vec::new() };
             engine.set_sample_points(&points);
             if dmx.frame_due(now, &comp.dmx) {
