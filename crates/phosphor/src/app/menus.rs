@@ -385,6 +385,8 @@ impl PhosphorApp {
                                 theme::set_tooltips(ui.ctx(), tips);
                             }
                         });
+                        #[cfg(not(target_arch = "wasm32"))]
+                        crate::panels::cache::cache_rows(ui, &mut self.state);
                         crate::ui::field(ui, &format!("{} Language", icon::TRANSLATE), |ui| {
                             let now = crate::i18n::chosen();
                             let shown = if now == crate::i18n::Lang::Auto { format!("{} ({})", now.name(), if now.drawable() { now.resolved() } else { crate::i18n::Lang::English }.name()) } else { now.name().to_string() };

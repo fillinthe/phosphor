@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.11 (not released yet)
+
+- **Footage on a drive that isn't plugged in keeps its pictures.** Clips and media tiles show the thumbnail from
+  the last time the file was there, with a "Not connected" band across the top. Dimmed means it can't play right
+  now; not dimmed means a copy on this computer still plays it.
+- **Cache settings** (brightness (sun) menu): how much Phosphor keeps on this computer (copies of clips from other
+  drives, thumbnails), a **Clear** button, **Clean up after** (clip copies and thumbnails not used for that many
+  days are removed when Phosphor starts; 30 days unless you change it, 0 = never) and **Up to** (the most the clip
+  copies may take; 25 GB unless you change it).
+
 ## 0.5.10 (2026-11-17)
 
 - **A project on a drive that isn't plugged in still opens.** Phosphor keeps a copy of every project you open or

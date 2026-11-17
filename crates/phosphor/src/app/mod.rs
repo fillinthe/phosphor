@@ -115,6 +115,10 @@ const KEY_RECENT_PROJECTS: &str = "recent_projects";
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_AUTOSAVE: &str = "autosave";
+/// Cache settings: days unused before the clean-up removes a clip copy or thumbnail (0 = never), and the most the
+/// clip copies may take, in GB.
+const KEY_CACHE_DAYS: &str = "cache_days";
+const KEY_CACHE_GB: &str = "cache_gb";
 const KEY_PROJECTS_AT_START: &str = "projects_at_start";
 // (A new name: builds before 621 saved "off" without being asked, so their setting is left behind.)
 const KEY_HELP_ICONS: &str = "help_icons_chosen";

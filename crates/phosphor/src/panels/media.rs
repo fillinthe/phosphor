@@ -735,6 +735,9 @@ pub(crate) fn media_tile(
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
         }
     }
+    if crate::ui::file_away(&item.path) {
+        crate::ui::away_mark(p, thumb_rect, crate::ui::plays_away(&item.path));
+    }
     let on = targets.playing.get(&item.path);
     let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);

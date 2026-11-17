@@ -851,6 +851,46 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
 
 /// A destructive command (Delete, Remove, Stop watching…): red words, so it's plain before the click that
 /// something goes away (owner, 2026-11-16: these can hurt a running show).
+/// Over a picture whose file isn't there right now (its drive unplugged): the picture dimmed, with a plug and
+/// "Not connected" along its top. `plays` = a copy on this computer still plays it, so it's only marked, not dimmed.
+/// One look for every place footage is shown (clip cells, media tiles).
+pub(crate) fn away_mark(p: &egui::Painter, rect: egui::Rect, plays: bool) {
+    if !plays {
+        p.rect_filled(rect, 4.0, Color32::from_black_alpha(140));
+    }
+    let band = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), 14.0f32.min(rect.height())));
+    p.rect_filled(band, 4.0, Color32::from_black_alpha(190));
+    let words = if band.width() > 96.0 { format!("{} {}", egui_phosphor::regular::PLUG, crate::i18n::tr("Not connected")) } else { egui_phosphor::regular::PLUG.to_string() };
+    p.with_clip_rect(band).text(band.center(), egui::Align2::CENTER_CENTER, words, egui::FontId::proportional(10.0), crate::theme::WARN);
+}
+
+/// Is the file at `path` away (not there the last time the disk was looked at)? Never touches the disk itself
+/// (`media::present`); false in the browser and for web addresses.
+pub(crate) fn file_away(path: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        !path.starts_with("http") && crate::media::present::file_present(path) == Some(false)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// A copy of `path` on this computer still plays it (`media::clip_cache`).
+pub(crate) fn plays_away(path: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::media::clip_cache::has(path)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = path;
+        false
+    }
+}
+
 pub(crate) fn danger_button(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     command(ui, RichText::new(text.into()).color(crate::theme::DANGER))
 }

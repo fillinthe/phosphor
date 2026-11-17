@@ -57,6 +57,11 @@ impl PhosphorApp {
         storage.set_string(KEY_PROJECTS_AT_START, if self.state.projects.at_start { "1" } else { "0" }.into());
         storage.set_string(KEY_UPDATE_SKIP, self.state.updater.skipped.clone());
         storage.set_string(KEY_UPDATE_AUTO, if self.state.updater.auto { "1" } else { "0" }.into());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            storage.set_string(KEY_CACHE_DAYS, crate::cache_store::days().to_string());
+            storage.set_string(KEY_CACHE_GB, crate::media::clip_cache::cap_gb().to_string());
+        }
         storage.set_string(KEY_SEND_CRASHES, if self.state.bug.send_crashes { "1" } else { "0" }.into());
         #[cfg(not(target_arch = "wasm32"))]
         storage.set_string(KEY_SOUND_OUT, crate::media::video::sound::output_device().unwrap_or_default());
