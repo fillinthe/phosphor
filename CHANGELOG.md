@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.10 (not released yet)
+
+- **Starter pack** (File › New from Template): five ready-made looks, each a comp of its own, made only from what
+  ships in the app. Aurora (a turning kaleidoscope), Hyperspace (a tunnel with stars), Neon (mirrored glowing
+  lines), Sound (moves with whatever is playing) and Bloom (sparks feeding back on themselves, built in the
+  Designer). Change anything in them.
+- **Only** on a comp's band (Layers and Stack, when there's more than one comp): shows that comp and switches the
+  others off, so you can click through looks.
+
 ## 0.5.9 (2026-11-17)
 
 **Designer**

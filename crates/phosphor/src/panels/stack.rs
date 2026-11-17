@@ -39,6 +39,8 @@ pub(crate) enum CompBandAct {
     Later,
     Delete,
     BrowseEffects,
+    /// This comp on, every other off.
+    Only,
 }
 
 pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
@@ -571,6 +573,10 @@ pub(crate) fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::Tex
         let on = toggle(ui, &mut c.enabled, "ON").on_hover_text("On/off · right-click to Learn");
         mapped_badge(ui, &on, &ControlTarget::LayerEnabled(c.id));
         on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(c.id)));
+        if many && crate::ui::command(ui, "Only").on_hover_text("Show this comp and switch the others off: click through your looks").clicked() {
+            action = Some(CompBandAct::Only);
+            select = true;
+        }
         let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong();
         let name = if is_selected { name.color(accent()) } else { name };
         if crate::ui::command(ui, name).on_hover_text(format!("{members} layers on a canvas of its own · click to select")).clicked() {
@@ -673,6 +679,7 @@ pub(crate) fn apply_comp_band_act(st: &mut State, id: u64, a: CompBandAct) {
                 st.selected = None;
             }
         }
+        CompBandAct::Only => st.comp.show_only_comp(id),
         CompBandAct::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
     }
 }

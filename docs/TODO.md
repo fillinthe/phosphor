@@ -54,6 +54,11 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
       **2026-10-30 (later):** boxes size to what their settings drew (`ui::nodes` measures each body), Event boxes
       send OSC / MIDI / Arduino out (`Trigger.send`).
+- [~] **Starter pack** (owner, 2026-11-17: "a solid beginner pack that has some awesome generated stuff when opened
+      … 5 different comps to click through and I will test them on MacBook"). **Built** as the template "Starter
+      pack" (File › New from Template): 1 Aurora, 2 Hyperspace, 3 Neon, 4 Sound, 5 Bloom (Designer), plus **Only** on
+      a comp band. Bench `--quick starter` (+ `PHOSPHOR_STARTER_COMP=3`). Waiting for the owner to try it and say
+      what the pack should become (more looks? open it on first launch? clips and a control surface in it?).
 - [~] **Designer, more like TouchDesigner** (owner, 2026-11-16). **Built 2026-11-16** (seen on screen 11-17): number
       operators (canvas menu › Numbers: Math, Smooth, Range, Gate, Steps, Hold, Count, Envelope, Speed, Delay,
       Formula), a Feedback box (another box's last frame, picked in the box), Rename on every box, Switch off on Effect
