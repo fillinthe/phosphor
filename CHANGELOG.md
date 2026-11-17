@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.10 (2026-11-17)
 
+- **A project on a drive that isn't plugged in still opens.** Phosphor keeps a copy of every project you open or
+  save on this computer. Click the project in Recent with its drive away and that copy opens (clips on the drive
+  show as missing until it's back). Save keeps your work on this computer meanwhile, and writes it to the drive
+  the next time you save with the drive connected. Projects opened before this version need their drive once.
 - **Report a Bug › Save a snapshot…:** one text file with everything about Phosphor at that moment (graphics
   card, every layer and how its movie decodes, outputs, the run's log, the project) to attach to a report. Save it
   while the problem is on screen. Reports also say which graphics card is in use and how many movies decode on

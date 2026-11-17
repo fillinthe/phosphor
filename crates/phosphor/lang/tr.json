@@ -1149,6 +1149,7 @@
 "Draws points as a lit surface through a camera": "Noktaları bir kamera üzerinden ışıklı bir yüzey olarak çizer",
 "Draws points as lines between neighbors through a camera": "Noktaları bir kamera üzerinden komşular arası çizgiler olarak çizer",
 "Draws points as soft dots through a camera": "Noktaları bir kamera üzerinden yumuşak benekler olarak çizer",
+"Drive not connected: opens this computer's copy": "Sürücü bağlı değil: bu bilgisayardaki kopya açılır",
 "Drive not connected? Click to try": "Sürücü bağlı değil mi? Denemek için tıklayın",
 "Drive this control with": "Bu kontrolü şununla sür",
 "Drive this with audio or an LFO": "Bunu ses veya bir LFO ile sür",

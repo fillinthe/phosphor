@@ -326,6 +326,19 @@ impl PhosphorApp {
                 self.lock_now(String::new());
                 continue;
             }
+            // Opening a project the way the Projects window does (PHOSPHOR_OPEN=file), then saving it: for projects
+            // whose drive is away (this computer's copy opens, and Save goes to it).
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "open" || name == "save" {
+                if name == "save" {
+                    self.state.save_project();
+                    println!("SAVE {}", self.state.notice.clone().unwrap_or_default());
+                } else if let Ok(path) = std::env::var("PHOSPHOR_OPEN") {
+                    let ok = self.state.open_project_file(&path);
+                    println!("OPEN ok={ok} layers={} unsaved={} {}", self.state.comp.layers.len(), crate::app::hash_text(&self.state.comp.to_json()) != self.state.saved_hash, self.state.notice.clone().unwrap_or_default());
+                }
+                continue;
+            }
             // Report a Bug › Save a snapshot, without the dialog: the file goes to PHOSPHOR_SNAPSHOT_OUT.
             if name == "snapshot" {
                 if let Some(out) = std::env::var_os("PHOSPHOR_SNAPSHOT_OUT") {
