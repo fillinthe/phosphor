@@ -508,6 +508,41 @@ pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
 }
 
+/// A menu's search box: the field (it takes the keyboard when nothing else has it), then, while something is typed,
+/// the entries `find` gives for it as (what, label, tooltip); Enter picks the first. Returns the one picked and
+/// whether a search is on (the menu's own entries hide then). For any add menu with more entries than fit a glance.
+pub(crate) fn menu_search<T>(ui: &mut egui::Ui, key: impl std::hash::Hash + std::fmt::Debug, hint_text: &str, nothing: &str, find: impl FnOnce(&str) -> Vec<(T, String, String)>) -> (Option<T>, bool) {
+    let key = egui::Id::new(key);
+    let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+    let field = text_field(ui, &mut query, hint_text, Some(200.0));
+    if ui.memory(|m| m.focused().is_none()) {
+        field.request_focus();
+    }
+    let q = query.trim().to_lowercase();
+    let searching = !q.is_empty();
+    let mut picked = None;
+    if searching {
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let found = find(&q);
+        if found.is_empty() {
+            super::widgets::hint(ui, nothing);
+        }
+        for (i, (what, label, about)) in found.into_iter().enumerate() {
+            let r = command(ui, label);
+            let r = if about.is_empty() { r } else { r.on_hover_text(about) };
+            if (r.clicked() || (enter && i == 0)) && picked.is_none() {
+                picked = Some(what);
+            }
+        }
+        if picked.is_some() {
+            query.clear();
+            ui.close();
+        }
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(key, query));
+    (picked, searching)
+}
+
 /// A list edited as one line of text ("8000, 9001"; "Normal, Add, Screen"). What you type stays as typed while you
 /// type it (so "8000," doesn't snap back), but when the list changes elsewhere (a project opens, undo, another
 /// control) the field follows it instead of showing stale text. `show` = the list as text; `read` = text to list.

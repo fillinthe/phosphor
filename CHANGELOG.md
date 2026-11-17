@@ -15,6 +15,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
   wire the result into any setting.
 - **Feedback box**: shows another box's picture as it was a frame ago. Pick the box in it, wire it back in before
   that box (through an effect, into a Mix) and the picture feeds on itself: trails, tunnels, echoes.
+- **Switch box**: up to four pictures in, one out. Click which in the box, or wire a Number into Pick and it moves
+  through them (a Count box steps on the beat, an LFO sweeps), cutting or fading from one to the next (Fade).
+- **Type to find a box**: the add menu has a search box. Type a few letters of any box, number operator, effect or
+  generator and press Enter. Tab opens the menu too (as well as Space and right-click).
+- **Let a wire go on empty canvas** and pick the box it should go into: the menu lists the boxes that take that
+  wire, and the one you pick comes already wired. (The menu never appeared before; Space didn't open one either.)
 - **Rename a box** (right-click its title › Rename…); a box of boxes shows its name in the path at the top.
 - **Switch an Effect box off** (right-click its title › Switch off): the picture passes straight through.
 

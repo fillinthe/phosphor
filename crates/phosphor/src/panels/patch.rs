@@ -205,33 +205,15 @@ impl Graph for Patch {
 /// A search box, then the blocks that match (Enter adds the first), or the groups when it's empty: the block
 /// picked, if one was, and whether a search is on (the menu's other entries hide then). `keep` narrows the list.
 fn pick_block(ui: &mut egui::Ui, generator: bool, keep: impl Fn(&patch::Block) -> bool) -> (Option<&'static str>, bool) {
-    let key = egui::Id::new("patch_block_search");
-    let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-    let field = crate::ui::text_field(ui, &mut query, "Find a block…", Some(200.0));
-    if ui.memory(|m| m.focused().is_none()) {
-        field.request_focus();
-    }
-    let q = query.trim().to_lowercase();
-    let mut picked = None;
-    if !q.is_empty() {
-        let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && b.id != "note" && (b.id != "input" || !generator) && keep(b) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
-        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        for (i, b) in found.iter().enumerate() {
-            if crate::ui::command(ui, format!("{} · {}", b.name, b.group.name())).on_hover_text(b.about).clicked() || (enter && i == 0) {
-                picked = Some(b.id);
-                query.clear();
-                ui.close();
-            }
-        }
-        if found.is_empty() {
-            hint(ui, "No block matches");
-        }
-    } else {
-        picked = block_menu(ui, generator, &keep);
-    }
-    let searching = !q.is_empty();
-    ui.ctx().data_mut(|d| d.insert_temp(key, query));
-    (picked, searching)
+    let (picked, searching) = crate::ui::menu_search(ui, "patch_block_search", "Find a block…", "No block matches", |q| {
+        BLOCKS
+            .iter()
+            .filter(|b| b.id != "output" && b.id != "note" && (b.id != "input" || !generator) && keep(b) && (b.name.to_lowercase().contains(q) || b.about.to_lowercase().contains(q)))
+            .take(12)
+            .map(|b| (b.id, format!("{} · {}", b.name, b.group.name()), b.about.to_string()))
+            .collect()
+    });
+    if searching { (picked, true) } else { (block_menu(ui, generator, &keep), false) }
 }
 
 /// The block list by group (the add menu and a wire's menu): the block picked, if one was. `keep` narrows the

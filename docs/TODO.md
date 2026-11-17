@@ -54,13 +54,14 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
       **2026-10-30 (later):** boxes size to what their settings drew (`ui::nodes` measures each body), Event boxes
       send OSC / MIDI / Arduino out (`Trigger.send`).
-- [~] **Designer, more like TouchDesigner** (owner, 2026-11-16). **Built 2026-11-16** (tests pass; not seen on
-      screen: the Mac's screen was locked): number operators (canvas menu › Numbers: Math, Smooth, Range, Gate, Steps,
-      Hold, Count, Envelope, Speed, Delay, Formula), a Feedback box (another box's last frame, picked in the box),
-      Rename on every box, Switch off on Effect boxes. Bench `--quick loop`. **Next, in this order unless you say
-      otherwise:** a Switch box (many pictures in, a number picks which, with a crossfade); a live readout on each
-      box (size, cost); notes on the canvas; the Tab key for the add menu; a search box over every effect when adding
-      an Effect box; number boxes for MIDI / OSC in.
+- [~] **Designer, more like TouchDesigner** (owner, 2026-11-16). **Built 2026-11-16** (seen on screen 11-17): number
+      operators (canvas menu › Numbers: Math, Smooth, Range, Gate, Steps, Hold, Count, Envelope, Speed, Delay,
+      Formula), a Feedback box (another box's last frame, picked in the box), Rename on every box, Switch off on Effect
+      boxes. Bench `--quick loop`. **Built 2026-11-17** (seen on screen, not tried with a real mouse): a Switch box
+      (four pictures in, clicked or picked by a number, cut or fade; bench `--quick switch`); a search box in the add
+      menu over every box, operator, effect and generator; Tab opens the add menu; a wire let go on empty canvas opens
+      a menu of the boxes that take it (it never appeared before, nor did Space's). **Next:** a live readout on each
+      box (size, cost); notes on the canvas; number boxes for MIDI / OSC in; more than four pictures into a Switch.
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click

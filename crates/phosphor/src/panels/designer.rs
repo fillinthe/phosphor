@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use phosphor_engine::control::MAX_SHARED;
-use phosphor_engine::{ChainMode, Composition, DataFeed, DataKind, DesignerNode, ISS_READINGS, LiveText, MathMode, ModSource, Network, NodeKind, NumberOp, PortKind, QUAKE_READINGS, SavedBox, SourceSpec, Trigger, WEATHER_READINGS};
+use phosphor_engine::{ChainMode, Composition, DataFeed, DataKind, DesignerNode, ISS_READINGS, LiveText, MathMode, ModSource, Network, NodeKind, NumberOp, PortKind, QUAKE_READINGS, SWITCH_INPUTS, SavedBox, SourceSpec, Trigger, WEATHER_READINGS};
 use crate::ui::guarded;
 
 use super::*;
@@ -110,7 +110,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
             step = Some(1);
         }
         crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));
-        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · Numbers in the menu work on other numbers (math, smooth, count, envelope) · a Feedback box brings a box's last frame back around · double-click a box of boxes to build inside it");
+        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · Numbers in the menu work on other numbers (math, smooth, count, envelope) · a Switch box shows one of several pictures (a number picks) · a Feedback box brings a box's last frame back around · double-click a box of boxes to build inside it");
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id) && *id != cid).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
@@ -195,6 +195,32 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     if let Some(mid) = pick_table_now {
         st.dialogs.pick_file(crate::dialogs::Purpose::TableFile(mid), Some(("Table", &["csv", "tsv", "txt"])));
     }
+}
+
+/// What the add menu's search finds for `q` (lower case): (the box to add, the shader / preset it starts with or "",
+/// whether that's a generator), its label and tooltip. Box kinds first, then operators, data and points boxes, then
+/// every effect and generator by name (their descriptions too once nothing matches by name).
+fn find_boxes(q: &str, kinds: &[NodeKind]) -> Vec<((NodeKind, &'static str, bool), String, String)> {
+    let hit = |name: &str| name.to_lowercase().contains(q);
+    let mut v: Vec<((NodeKind, &'static str, bool), String, String)> = Vec::new();
+    v.extend(kinds.iter().filter(|k| hit(k.name())).map(|k| ((*k, "", false), k.name().to_string(), k.about().to_string())));
+    v.extend(NumberOp::all().iter().zip(OP_BOXES).filter(|(op, _)| hit(op.name())).map(|(op, preset)| ((NodeKind::Number, preset, false), format!("{} · Number", op.name()), op.about().to_string())));
+    v.extend(DATA_BOXES.iter().filter(|(name, _)| hit(name)).map(|(name, preset)| ((if *preset == "text" { NodeKind::Picture } else { NodeKind::Number }, *preset, *preset == "text"), format!("{name} · Data"), String::new())));
+    v.extend(POINTS_BOXES.iter().filter(|(name, ..)| hit(name)).map(|(name, shader, generator)| ((if *generator { NodeKind::Picture } else { NodeKind::Effect }, *shader, *generator), format!("{name} · Points"), shaders::info(shader).1.to_string())));
+    let listed: Vec<&str> = POINTS_BOXES.iter().map(|(_, shader, _)| *shader).collect();
+    let (effects, generators) = (shaders::all_effects(), shaders::all_generators());
+    let shaders_found = |by_about: bool| -> Vec<((NodeKind, &'static str, bool), String, String)> {
+        let pick = |d: &&&'static shaders::ShaderDesc| !listed.contains(&d.id) && if by_about { !hit(d.name) && shaders::info(d.id).1.to_lowercase().contains(q) } else { hit(d.name) };
+        let fx = effects.iter().filter(pick).map(|d| ((NodeKind::Effect, d.id, false), format!("{} · Effect", d.name), shaders::info(d.id).1.to_string()));
+        let made = generators.iter().filter(pick).map(|d| ((NodeKind::Picture, d.id, true), format!("{} · Generator", d.name), shaders::info(d.id).1.to_string()));
+        fx.chain(made).collect()
+    };
+    v.extend(shaders_found(false));
+    if v.len() < 6 {
+        v.extend(shaders_found(true));
+    }
+    v.truncate(14);
+    v
 }
 
 /// Every live reading's name.
@@ -508,7 +534,7 @@ impl Graph for View<'_> {
         match self.node(id).map(|n| n.kind) {
             Some(NodeKind::Layer | NodeKind::Picture | NodeKind::Input | NodeKind::Feedback) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
-            Some(NodeKind::Mix) => crate::theme::Hue::Live.color(),
+            Some(NodeKind::Mix | NodeKind::Switch) => crate::theme::Hue::Live.color(),
             Some(NodeKind::Number | NodeKind::NumberInput) => crate::theme::Hue::Control.color(),
             Some(NodeKind::Group) => crate::theme::Hue::Text.color(),
             _ => accent(),
@@ -546,7 +572,7 @@ impl Graph for View<'_> {
                 let mix = if fx.is_some_and(|e| e.effect == shaders::POINTS_LIGHT) { 0.0 } else { 1.0 };
                 pic + ROW_H + (params as f32 + mix) * PARAM_H
             }
-            NodeKind::Mix => pic + ROW_H + PARAM_H,
+            NodeKind::Mix | NodeKind::Switch => pic + ROW_H + PARAM_H,
             NodeKind::Number => {
                 let m = n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m));
                 let data = m.and_then(|m| m.data.as_ref().filter(|_| m.signal.source == ModSource::Hand)).map_or(0.0, |d| 1.0 + data_rows(&d.kind));
@@ -652,6 +678,29 @@ impl Graph for View<'_> {
                     Level::percent(&mut b.opacity, "B opacity").modulation(&mut b.opacity_mod).width(width).target(ControlTarget::LayerOpacity(b.id)).show(ui);
                 }
             }
+            // One of the pictures wired in: clicked here, or picked by the number wired into Pick.
+            NodeKind::Switch => {
+                self.preview(ui, n.parts.first().copied());
+                let wired = self.level().is_some_and(|l| l.source_of(id, SWITCH_INPUTS).is_some());
+                let options: Vec<(u32, String)> = (0..SWITCH_INPUTS as u32).map(|k| (k, (k + 1).to_string())).collect();
+                // A number picking: the buttons show which picture is on now.
+                let live = self.level().and_then(|l| l.source_of(id, SWITCH_INPUTS).and_then(|f| l.node(f)).and_then(|f| f.modulator()).map(|m| (m, l.switch_count(id))));
+                let now = live.map(|(m, count)| (self.shared.iter().find(|(k, _)| *k == m).map_or(0.0, |x| x.1) * (count - 1) as f32).round() as u32);
+                let (mut pick, mut fade) = (now.unwrap_or(n.target), n.fade);
+                ui.add_enabled_ui(!wired, |ui| {
+                    crate::ui::segmented(ui, &mut pick, &options, |_, r, _| {
+                        r.clone().on_hover_text("Show this picture").on_disabled_hover_text("The number wired into Pick chooses");
+                    });
+                });
+                Level::percent(&mut fade, "Fade").default(0.0).width(width).show(ui).on_hover_text("How much of each step is a fade when a number picks: 0% cuts, 100% is always fading from one picture to the next");
+                if !wired && pick != n.target || fade != n.fade {
+                    let pick = if wired { n.target } else { pick };
+                    if let Some(node) = self.level_mut().and_then(|x| x.node_mut(id)) {
+                        (node.target, node.fade) = (pick, fade);
+                    }
+                    return true;
+                }
+            }
             NodeKind::Number => return self.number_body(ui, &n, id),
             // Another box's last frame: pick which (a wire would be a loop, so it's picked, not wired).
             NodeKind::Feedback => {
@@ -748,7 +797,22 @@ impl Graph for View<'_> {
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
         let inside = !self.path.is_empty();
         let has_output = self.level().is_some_and(|l| l.nodes.iter().any(|n| n.kind == NodeKind::Output));
-        let kinds = NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output).chain(inside.then_some(NodeKind::Input)).chain(inside.then_some(NodeKind::NumberInput));
+        let kinds: Vec<NodeKind> = NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output).chain(inside.then_some(NodeKind::Input)).chain(inside.then_some(NodeKind::NumberInput)).collect();
+        // Type to find any box: a kind, a number operator, a data or points box, or any effect or generator by name.
+        let (found, searching) = crate::ui::menu_search(ui, "designer_box_search", "Find a box, effect or generator…", "Nothing by that name", |q| find_boxes(q, &kinds));
+        if let Some((kind, preset, generator)) = found {
+            if let Some(l) = self.level_mut() {
+                let id = l.add(kind, at);
+                if !preset.is_empty() {
+                    self.preset = Some((id, preset, generator));
+                }
+            }
+            self.resync = true;
+            return true;
+        }
+        if searching {
+            return false;
+        }
         for kind in kinds {
             if crate::ui::command(ui, kind.name()).on_hover_text(kind.about()).clicked() {
                 if let Some(l) = self.level_mut() {
@@ -819,6 +883,52 @@ impl Graph for View<'_> {
             }
         }
         false
+    }
+    /// A wire let go on empty canvas: the boxes that take what it carries; the one picked comes wired from `from`.
+    fn add_from_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2], from: u32, kind: PortKind) -> bool {
+        let has_output = self.level().is_some_and(|l| l.nodes.iter().any(|n| n.kind == NodeKind::Output));
+        let takes = |b: &(NodeKind, &'static str, bool)| match kind {
+            PortKind::Picture => match b.0 {
+                NodeKind::Effect => b.1 != shaders::POINTS_LIGHT && !shaders::points_in(b.1),
+                NodeKind::Output => !has_output,
+                k => matches!(k, NodeKind::Mix | NodeKind::Switch),
+            },
+            PortKind::Number => b.0 == NodeKind::Number && (b.1.is_empty() || b.1.starts_with("op:")),
+            PortKind::Points => b.0 == NodeKind::Effect && shaders::points_in(b.1),
+            PortKind::Light => false,
+        };
+        let kinds = NodeKind::ALL;
+        let (found, searching) = crate::ui::menu_search(ui, "designer_wire_search", "Find a box or effect…", "Nothing by that name takes this wire", |q| find_boxes(q, &kinds).into_iter().filter(|(b, ..)| takes(b)).collect());
+        let mut pick = found;
+        if !searching {
+            let listed: Vec<((NodeKind, &'static str, bool), String, String)> = match kind {
+                PortKind::Picture => [NodeKind::Effect, NodeKind::Mix, NodeKind::Switch, NodeKind::Output].into_iter().map(|k| ((k, "", false), k.name().to_string(), k.about().to_string())).collect(),
+                PortKind::Number => std::iter::once(((NodeKind::Number, "", false), "Number (chained)".to_string(), NodeKind::Number.about().to_string()))
+                    .chain(NumberOp::all().iter().zip(OP_BOXES).map(|(op, preset)| ((NodeKind::Number, preset, false), op.name().to_string(), op.about().to_string())))
+                    .collect(),
+                PortKind::Points => POINTS_BOXES.iter().map(|(name, shader, generator)| ((if *generator { NodeKind::Picture } else { NodeKind::Effect }, *shader, *generator), name.to_string(), shaders::info(shader).1.to_string())).collect(),
+                PortKind::Light => Vec::new(),
+            };
+            let listed: Vec<_> = listed.into_iter().filter(|(b, ..)| takes(b)).collect();
+            if listed.is_empty() {
+                hint(ui, "A light wires into the Light input of Points: Dots, Lines or Mesh");
+            }
+            for (b, name, about) in listed {
+                if crate::ui::command(ui, name).on_hover_text(about).clicked() {
+                    pick = Some(b);
+                }
+            }
+        }
+        let Some((box_kind, preset, generator)) = pick else { return false };
+        if let Some(l) = self.level_mut() {
+            let id = l.add(box_kind, at);
+            l.connect(from, id, 0);
+            if !preset.is_empty() {
+                self.preset = Some((id, preset, generator));
+            }
+        }
+        self.resync = true;
+        true
     }
     fn can_wrap_many(&self, ids: &[u32]) -> bool {
         self.level().is_none_or(|l| l.can_wrap_many(ids))
@@ -986,5 +1096,26 @@ fn light_ball(ui: &mut egui::Ui, values: &[f32], h: f32) {
     for i in 0..RINGS {
         let t = i as f32 / (RINGS - 1) as f32;
         p.circle_filled(centre + toward * t, r * (1.0 - 0.85 * t), light(0.15 + 0.85 * t));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_add_menu_search_finds_boxes_operators_effects_and_generators() {
+        let kinds = NodeKind::ALL;
+        let found = |q: &str| find_boxes(q, &kinds);
+        // A box kind by name, first.
+        assert_eq!(found("switch").first().map(|x| x.0), Some((NodeKind::Switch, "", false)));
+        // A number operator comes as a Number box with its preset.
+        assert!(found("smooth").iter().any(|x| x.0 == (NodeKind::Number, "op:1", false)));
+        // An effect by name is an Effect box that starts with it; a generator a Picture box.
+        assert!(found("kaleid").iter().any(|x| x.0.0 == NodeKind::Effect && x.1.ends_with("· Effect")));
+        assert!(found("plasma").iter().any(|x| x.0 == (NodeKind::Picture, "plasma", true)));
+        // Never a long list, and nothing for nonsense.
+        assert!(found("e").len() <= 14);
+        assert!(found("zzzqqq").is_empty());
     }
 }

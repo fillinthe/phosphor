@@ -42,6 +42,13 @@ fn right_click_claimed(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(egui::Id::new("phosphor_right_claimed"))) == Some(ctx.cumulative_pass_nr())
 }
 
+/// Opens a widget's right-click menu by code (a key, a wire let go on empty canvas): at the pointer, when the menu
+/// is next attached (this frame, if that comes after). Not `Popup::open_id`: a menu fixed where the pointer was
+/// needs that place stored, and only the open command stores it, so a menu opened by id was open but never drawn.
+pub(crate) fn open_right_menu(r: &egui::Response) {
+    r.ctx.data_mut(|d| d.insert_temp(right_menu_id(r).with("open_now"), true));
+}
+
 fn right_popup(r: &egui::Response) -> egui::Popup<'_> {
     use egui::SetOpenCommand;
     // The thing on top under the pointer opens its menu; a card behind it opens its own only when nothing on top
@@ -53,7 +60,8 @@ fn right_popup(r: &egui::Response) -> egui::Popup<'_> {
     if open {
         claim_right_click(&r.ctx);
     }
-    let cmd = if open {
+    let asked = r.ctx.data_mut(|d| d.remove_temp::<bool>(right_menu_id(r).with("open_now"))).is_some();
+    let cmd = if open || asked {
         Some(SetOpenCommand::Bool(true))
     } else if r.clicked() {
         Some(SetOpenCommand::Bool(false))
