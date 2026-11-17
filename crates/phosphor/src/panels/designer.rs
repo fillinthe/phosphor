@@ -48,6 +48,8 @@ const BOX_W: f32 = 230.0;
 const ROW_H: f32 = 26.0;
 const PARAM_H: f32 = 22.0;
 const METER_H: f32 = 12.0;
+/// A Note box's words: four lines.
+const NOTE_H: f32 = 74.0;
 
 pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let cid = st.comp.open_comp();
@@ -144,7 +146,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.ctx().data_mut(|d| d.insert_temp(path_id, path.clone()));
     // (A network from a file made by hand, or a box added elsewhere, may still be without its layers.)
-    let unmade = net.at(&path).is_some_and(|l| l.nodes.iter().any(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Group | NodeKind::Input) && n.parts.is_empty()));
+    let unmade = net.at(&path).is_some_and(|l| l.nodes.iter().any(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::Note) && n.parts.is_empty()));
     if changed || resync || unmade {
         if let Some(c) = comp.comp_mut(cid) {
             c.network = Some(net);
@@ -496,6 +498,9 @@ impl Graph for View<'_> {
     }
     fn title(&self, id: u32) -> String {
         let Some(n) = self.node(id) else { return String::new() };
+        if n.kind == NodeKind::Note {
+            return "Note".to_string();
+        }
         if !n.name.is_empty() {
             return n.name.clone();
         }
@@ -537,6 +542,7 @@ impl Graph for View<'_> {
             Some(NodeKind::Mix | NodeKind::Switch) => crate::theme::Hue::Live.color(),
             Some(NodeKind::Number | NodeKind::NumberInput) => crate::theme::Hue::Control.color(),
             Some(NodeKind::Group) => crate::theme::Hue::Text.color(),
+            Some(NodeKind::Note) => crate::theme::faint(),
             _ => accent(),
         }
     }
@@ -544,13 +550,13 @@ impl Graph for View<'_> {
         self.node(id).map_or_else(Vec::new, |n| self.comp.node_inputs(n))
     }
     fn has_output(&self, id: u32) -> bool {
-        self.node(id).is_some_and(|n| n.kind != NodeKind::Output)
+        self.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Note))
     }
     fn output_kind(&self, id: u32) -> PortKind {
         self.node(id).map_or(PortKind::Picture, |n| self.comp.node_output(n))
     }
     fn removable(&self, id: u32) -> bool {
-        self.has_output(id)
+        self.node(id).is_some_and(|n| n.kind != NodeKind::Output)
     }
     fn width(&self, _id: u32) -> f32 {
         BOX_W
@@ -560,6 +566,7 @@ impl Graph for View<'_> {
         let pic = self.preview_h() + 3.0;
         match n.kind {
             NodeKind::Layer | NodeKind::Feedback => pic + ROW_H,
+            NodeKind::Note => NOTE_H,
             NodeKind::Picture => {
                 let text = n.parts.first().and_then(|p| self.comp.layer(*p)).is_some_and(|l| matches!(l.source, SourceSpec::Text(_)));
                 pic + ROW_H + if text { PARAM_H } else { 0.0 }
@@ -678,6 +685,15 @@ impl Graph for View<'_> {
                     Level::percent(&mut b.opacity, "B opacity").modulation(&mut b.opacity_mod).width(width).target(ControlTarget::LayerOpacity(b.id)).show(ui);
                 }
             }
+            NodeKind::Note => {
+                let mut words = n.name.clone();
+                if crate::ui::note_field(ui, &mut words, "Write a note…", 4).changed() {
+                    if let Some(node) = self.level_mut().and_then(|x| x.node_mut(id)) {
+                        node.name = words;
+                    }
+                    return true;
+                }
+            }
             // One of the pictures wired in: clicked here, or picked by the number wired into Pick.
             NodeKind::Switch => {
                 self.preview(ui, n.parts.first().copied());
@@ -708,7 +724,7 @@ impl Graph for View<'_> {
                 let boxes: Vec<(u32, String)> = self.level().map_or_else(Vec::new, |l| {
                     l.nodes
                         .iter()
-                        .filter(|x| x.id != id && !matches!(x.kind, NodeKind::Output | NodeKind::Number | NodeKind::NumberInput | NodeKind::Feedback) && self.comp.node_output(x) == PortKind::Picture)
+                        .filter(|x| x.id != id && !matches!(x.kind, NodeKind::Output | NodeKind::Number | NodeKind::NumberInput | NodeKind::Feedback | NodeKind::Note) && self.comp.node_output(x) == PortKind::Picture)
                         .map(|x| (x.id, format!("{} · box {}", self.title(x.id), x.id)))
                         .collect()
                 });
@@ -942,6 +958,10 @@ impl Graph for View<'_> {
     }
     fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
         let Some(n) = self.node(id).cloned() else { return false };
+        // (A note's words are its name: nothing to rename.)
+        if n.kind == NodeKind::Note {
+            return false;
+        }
         let mut named: Option<String> = None;
         crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename…"), |ui| {
             if let Some(name) = crate::ui::new_name_menu(ui, ("rename_box", id), "A name for this box", "Rename") {

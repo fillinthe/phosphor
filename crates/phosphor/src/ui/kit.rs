@@ -508,6 +508,11 @@ pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
 }
 
+/// A few lines of your own words (a note on a canvas): as wide as there's room, `rows` tall to start with.
+pub(crate) fn note_field(ui: &mut egui::Ui, text: &mut String, hint: &str, rows: usize) -> egui::Response {
+    ui.add(egui::TextEdit::multiline(text).hint_text(hint).desired_rows(rows).desired_width(ui.available_width()).font(egui::FontId::proportional(12.0)))
+}
+
 /// A menu's search box: the field (it takes the keyboard when nothing else has it), then, while something is typed,
 /// the entries `find` gives for it as (what, label, tooltip); Enter picks the first. Returns the one picked and
 /// whether a search is on (the menu's own entries hide then). For any add menu with more entries than fit a glance.

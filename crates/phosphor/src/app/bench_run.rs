@@ -702,6 +702,8 @@ impl PhosphorApp {
                 let lfo = net.add(NodeKind::Number, [330.0, 520.0]);
                 net.node_mut(out).unwrap().pos = [620.0, 150.0];
                 net.node_mut(switch).unwrap().fade = 1.0;
+                let note = net.add(NodeKind::Note, [620.0, 440.0]);
+                net.node_mut(note).unwrap().name = "The LFO moves through the three pictures. Fade at 100% never cuts.".into();
                 for (k, p) in [pic, more[0], more[1]].into_iter().enumerate() {
                     net.connect(p, switch, k);
                 }

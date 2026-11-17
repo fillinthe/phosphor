@@ -60,8 +60,10 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       boxes. Bench `--quick loop`. **Built 2026-11-17** (seen on screen, not tried with a real mouse): a Switch box
       (four pictures in, clicked or picked by a number, cut or fade; bench `--quick switch`); a search box in the add
       menu over every box, operator, effect and generator; Tab opens the add menu; a wire let go on empty canvas opens
-      a menu of the boxes that take it (it never appeared before, nor did Space's). **Next:** a live readout on each
-      box (size, cost); notes on the canvas; number boxes for MIDI / OSC in; more than four pictures into a Switch.
+      a menu of the boxes that take it (it never appeared before, nor did Space's); a Note box (words on the
+      canvas). **Next:** a live readout on each box (size, cost: needs per-box timing from the engine first); number
+      boxes for MIDI / OSC in (a Number box set to Hand / MIDI knob can be mapped already); more than four pictures
+      into a Switch.
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click

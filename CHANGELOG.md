@@ -21,6 +21,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
   generator and press Enter. Tab opens the menu too (as well as Space and right-click).
 - **Let a wire go on empty canvas** and pick the box it should go into: the menu lists the boxes that take that
   wire, and the one you pick comes already wired. (The menu never appeared before; Space didn't open one either.)
+- **Note**: your own words on the canvas, wired to nothing (right-click the canvas › Note).
 - **Rename a box** (right-click its title › Rename…); a box of boxes shows its name in the path at the top.
 - **Switch an Effect box off** (right-click its title › Switch off): the picture passes straight through.
 
