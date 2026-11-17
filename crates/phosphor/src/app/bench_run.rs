@@ -506,8 +506,8 @@ impl PhosphorApp {
                 // Two shared modulators, the second gated by the first, and the first layer's generator speed following it.
                 use phosphor_engine::{ChainMode, ModChain, ModSource, Modulation, Modulator};
                 let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
-                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() });
-                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() });
+                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, ..Default::default() });
+                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, ..Default::default() });
                 if let Some(l) = self.state.comp.layers.first_mut() {
                     l.generator_mods.retain(|m| m.index != 0);
                     l.generator_mods.push(phosphor_engine::ParamMod { index: 0, m: Modulation { link: b, range: true, min: 0.0, max: 1.0, ..Default::default() } });
@@ -639,6 +639,51 @@ impl PhosphorApp {
                 comp.sync_network(cid);
                 let net = comp.comp(cid).unwrap().network.clone().unwrap();
                 println!("QUICK designer: {} boxes, shown={:?}, number wired={wired}", net.nodes.len(), net.shown());
+                self.switch_workspace(3);
+                continue;
+            }
+            if name == "loop" {
+                // A feedback loop and number operators: Plasma into a Mix; the Mix's last frame (Feedback) through an
+                // effect back into the Mix; an LFO → Smooth → the effect's first setting, and a Count beside it.
+                use phosphor_engine::{NodeKind, NumberOp};
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Loop");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+                net.disconnect(out, 0);
+                let mix = net.add(NodeKind::Mix, [560.0, 40.0]);
+                let back = net.add(NodeKind::Feedback, [40.0, 330.0]);
+                let fx = net.add(NodeKind::Effect, [300.0, 330.0]);
+                net.node_mut(back).unwrap().target = mix;
+                net.node_mut(out).unwrap().pos = [820.0, 40.0];
+                let (lfo, smooth, count) = (net.add(NodeKind::Number, [40.0, 600.0]), net.add(NodeKind::Number, [300.0, 640.0]), net.add(NodeKind::Number, [560.0, 420.0]));
+                net.node_mut(count).unwrap().name = "Step on the LFO".into();
+                net.connect(pic, mix, 0);
+                net.connect(back, fx, 0);
+                net.connect(fx, mix, 1);
+                net.connect(mix, out, 0);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let part = |n: u32, k: usize| net.node(n).unwrap().parts[k];
+                comp.layer_mut(part(pic, 0)).unwrap().set_generator("plasma");
+                let effect = comp.new_effect("kaleido").or_else(|| phosphor_engine::shaders::all_effects().first().and_then(|d| comp.new_effect(d.id)));
+                if let (Some(e), Some(l)) = (effect, comp.layer_mut(part(fx, 0))) {
+                    l.effects = vec![e];
+                }
+                if let Some(b) = comp.layer_mut(part(mix, 2)) {
+                    b.opacity = 0.6;
+                }
+                for (n, op) in [(smooth, NumberOp::Smooth { rise: 0.5, fall: 1.5 }), (count, NumberOp::Count { steps: 4 })] {
+                    if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == part(n, 0)) {
+                        m.op = Some(op);
+                    }
+                }
+                let wired = comp.connect_boxes(cid, &[], lfo, smooth, 0) && comp.connect_boxes(cid, &[], lfo, count, 0) && comp.connect_boxes(cid, &[], smooth, fx, 1);
+                comp.sync_network(cid);
+                let fed = matches!(comp.layer(part(back, 0)).map(|l| &l.source), Some(phosphor_engine::SourceSpec::Feed { .. }));
+                println!("QUICK loop: {} boxes, numbers wired={wired}, feedback fed={fed}", net.nodes.len());
                 self.switch_workspace(3);
                 continue;
             }

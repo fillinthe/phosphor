@@ -10,6 +10,10 @@
 //! - **Number**: a shared modulator (LFO, sound, beat, random, steps, knob). Its output wires into any setting of
 //!   another box (one number input per setting) as a linked modulation, and into another Number's "Chain" input
 //!   (scaled by / plus / min / max…: the maths).
+//!   With an operator (`Modulator::op`: Math, Smooth, Range, Gate, Steps, Hold, Count, Envelope, Speed, Delay,
+//!   Formula) it works on the numbers wired into it instead (its inputs are the operator's: A and B, In…).
+//! - **Feedback**: one layer showing another box's picture as it was a frame ago (`Node::target`, picked in the
+//!   box, not wired: a wire would be a loop). Wire it back in upstream of that box and the picture feeds on itself.
 //! - **Group**: a box made of boxes: its own network inside, whose **Input** boxes are the group's inputs and whose
 //!   Output is the group's picture. The boxes inside are backed like any others (in the same comp). A group can be
 //!   saved by name (`SavedBox`) and added again anywhere.
@@ -38,6 +42,8 @@ pub enum NodeKind {
     Input,
     /// Inside a Group: a number wired into the group (one number input per box, in id order, after the pictures).
     NumberInput,
+    /// Another box's picture, a frame late: what makes a loop possible (trails, tunnels, echoes).
+    Feedback,
 }
 
 /// What a wire carries: a picture, a number (0..1, changing over time), or points (a point picture: one point a
@@ -53,7 +59,7 @@ pub enum PortKind {
 
 impl NodeKind {
     /// The kinds you add from the menu (Input only inside a Group; Output comes with every network).
-    pub const ALL: [NodeKind; 7] = [NodeKind::Layer, NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Group, NodeKind::Output];
+    pub const ALL: [NodeKind; 8] = [NodeKind::Layer, NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Feedback, NodeKind::Number, NodeKind::Group, NodeKind::Output];
 
     /// What its output carries (a Picture or Effect box's may be points, by its shader: `Composition::node_output`).
     pub fn output(self) -> PortKind {
@@ -71,6 +77,7 @@ impl NodeKind {
             NodeKind::Group => "Box of boxes",
             NodeKind::Input => "Input",
             NodeKind::NumberInput => "Number input",
+            NodeKind::Feedback => "Feedback",
         }
     }
 
@@ -85,6 +92,7 @@ impl NodeKind {
             NodeKind::Group => "A box made of boxes: double-click to build inside it. Its Input boxes are its inputs, its Output its picture. Save it by name and add it again anywhere",
             NodeKind::Input => "What's wired into this input of the box (from outside)",
             NodeKind::NumberInput => "A number wired into the box (from outside): wire it into any setting in here",
+            NodeKind::Feedback => "Another box's picture as it was a frame ago: pick the box, then wire this back in before it (through a Blur or a Transform, into a Mix) and the picture feeds on itself: trails, tunnels, echoes",
         }
     }
 
@@ -95,7 +103,7 @@ impl NodeKind {
             NodeKind::Mix => &["A", "B"],
             NodeKind::Output => &["In"],
             NodeKind::Number => &["Chain"],
-            NodeKind::Layer | NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput => &[],
+            NodeKind::Layer | NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Feedback => &[],
         }
     }
 }
@@ -116,11 +124,15 @@ pub struct Node {
     pub shows: u64,
     /// A Layer box's layer (0 = none picked yet).
     pub layer: u64,
+    /// Your own name for the box (empty = named after what it is).
+    pub name: String,
+    /// A Feedback box's box (in the same network; 0 = none picked yet).
+    pub target: u32,
 }
 
 impl Default for Node {
     fn default() -> Self {
-        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new(), inner: None, shows: 0, layer: 0 }
+        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new(), inner: None, shows: 0, layer: 0, name: String::new(), target: 0 }
     }
 }
 
@@ -487,6 +499,12 @@ impl Composition {
                 }
             }
             NodeKind::Mix => v.push(("Opacity".to_string(), PortKind::Number)),
+            // An operator's inputs are its own (A and B, In and When…) in place of Chain.
+            NodeKind::Number => {
+                if let Some(op) = node.modulator().and_then(|m| self.modulators.iter().find(|x| x.id == m)).and_then(|m| m.op.as_ref()) {
+                    v = op.inputs().iter().map(|s| (s.to_string(), PortKind::Number)).collect();
+                }
+            }
             NodeKind::Group => {
                 if let Some(inner) = &node.inner {
                     v.extend(inner.input_boxes().iter().enumerate().map(|(k, _)| (format!("In {}", k + 1), PortKind::Picture)));
@@ -613,7 +631,7 @@ impl Composition {
             }
             let have = net.nodes[i].parts.len();
             let need = match kind {
-                NodeKind::Picture | NodeKind::Effect | NodeKind::Number => 1,
+                NodeKind::Picture | NodeKind::Effect | NodeKind::Number | NodeKind::Feedback => 1,
                 NodeKind::Mix => 3,
                 NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer => 0,
             };
@@ -623,7 +641,7 @@ impl Composition {
             self.remove_parts(&net.nodes[i].parts.clone());
             let name = |what: &str| format!("Box {id} {what}").trim().to_string();
             net.nodes[i].parts = match kind {
-                NodeKind::Picture | NodeKind::Effect => vec![self.add_part(comp_id, &name(""))],
+                NodeKind::Picture | NodeKind::Effect | NodeKind::Feedback => vec![self.add_part(comp_id, &name(""))],
                 NodeKind::Mix => {
                     let a = self.add_part(comp_id, &name("A"));
                     let b = self.add_part(comp_id, &name("B"));
@@ -667,7 +685,8 @@ impl Composition {
             let kind = net.nodes[i].kind;
             let parts = net.nodes[i].parts.clone();
             let pic = match kind {
-                NodeKind::Picture => {
+                // (A Feedback box's source is set below, once every box's picture is known.)
+                NodeKind::Picture | NodeKind::Feedback => {
                     found.layers.push(parts[0]);
                     parts[0]
                 }
@@ -746,6 +765,19 @@ impl Composition {
                 pictures.insert(id, pic);
             }
         }
+        // Feedback: the picked box's picture. Its layer draws before that box (nothing is wired into it), so what it
+        // shows is last frame's.
+        for n in net.nodes.iter().filter(|n| n.kind == NodeKind::Feedback) {
+            let s = match pictures.get(&n.target).copied().filter(|p| *p != 0 && n.target != n.id) {
+                Some(p) => SourceSpec::Feed { id: p, name: format!("Box {}", n.target), before_fx: false },
+                None => SourceSpec::None,
+            };
+            if let Some(l) = n.parts.first().and_then(|p| self.layers.iter_mut().find(|l| l.id == *p))
+                && l.source != s
+            {
+                l.source = s;
+            }
+        }
         // Numbers along the wires: each number input follows the Number box wired in (or stops following a box: a
         // link to a box's modulator, or to one that's gone, is dropped; a control's own modulation is left alone).
         let designer_mods: Vec<u64> = self.modulators.iter().filter(|m| m.designer).map(|m| m.id).collect();
@@ -763,6 +795,8 @@ impl Composition {
             {
                 let from = net.source_of(n.id, 0).and_then(|f| net.node(f)).and_then(|f| f.modulator());
                 if let Some(m) = self.modulators.iter_mut().find(|m| m.id == mid) {
+                    let second = net.source_of(n.id, 1).and_then(|f| net.node(f)).and_then(|f| f.modulator());
+                    m.second = second.filter(|_| m.op.as_ref().is_some_and(|o| o.inputs().len() > 1)).unwrap_or(0);
                     m.chain = match (from, m.chain) {
                         (Some(f), Some(c)) => Some(ModChain { from: f, ..c }),
                         (Some(f), None) => Some(ModChain { from: f, ..Default::default() }),
@@ -908,6 +942,11 @@ impl Composition {
         let level = net.at_mut(path)?;
         let n = level.node(id)?.clone();
         let copy = level.add(n.kind, [n.pos[0] + 24.0, n.pos[1] + 24.0]);
+        if let Some(c) = level.node_mut(copy) {
+            c.name = n.name.clone();
+            c.target = n.target;
+            c.layer = n.layer;
+        }
         if let (Some(inner), Some(c)) = (n.inner.clone(), level.node_mut(copy)) {
             let mut inner = inner;
             inner.clear_parts();
@@ -1127,6 +1166,73 @@ mod tests {
         assert!(comp.layer(fx_layer).unwrap().effects[0].mods.is_empty());
         assert!(!comp.modulators.iter().any(|m| m.id == m2));
         assert_eq!(comp.modulators.iter().find(|m| m.id == m1).unwrap().chain, None);
+    }
+
+    /// An operator box takes its own inputs (A and B) from the Number boxes wired in, and comes after them.
+    #[test]
+    fn an_operator_box_works_on_the_numbers_wired_in() {
+        let mut comp = Composition::default();
+        let cid = comp.add_comp("Designer");
+        comp.start_network(cid);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let math = net.add(NodeKind::Number, [200.0, 300.0]);
+        let (a, b) = (net.add(NodeKind::Number, [40.0, 300.0]), net.add(NodeKind::Number, [40.0, 400.0]));
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let id = |n: u32| net.node(n).unwrap().modulator().unwrap();
+        let (mm, ma, mb) = (id(math), id(a), id(b));
+        assert_eq!(comp.node_inputs(net.node(math).unwrap()).len(), 1, "a plain Number box: Chain");
+        comp.modulators.iter_mut().find(|m| m.id == mm).unwrap().op = Some(NumberOp::Math { mode: MathMode::Add, b: 0.0 });
+        for (m, v) in [(ma, 0.25), (mb, 0.5)] {
+            let m = comp.modulators.iter_mut().find(|x| x.id == m).unwrap();
+            m.signal.source = ModSource::Hand;
+            m.value = v;
+        }
+        let names: Vec<String> = comp.node_inputs(net.node(math).unwrap()).into_iter().map(|x| x.0).collect();
+        assert_eq!(names, ["A", "B"]);
+        assert!(comp.connect_boxes(cid, &[], a, math, 0) && comp.connect_boxes(cid, &[], b, math, 1));
+        comp.sync_network(cid);
+        let m = comp.modulators.iter().find(|m| m.id == mm).unwrap();
+        assert_eq!((m.chain.map(|c| c.from), m.second), (Some(ma), mb));
+        let out = evaluate(&comp.modulators, &Default::default(), &mut Default::default());
+        assert_eq!(out.iter().find(|x| x.0 == mm).unwrap().1, 0.75);
+        // B unwired: the number typed in the box stands in.
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        net.disconnect(math, 1);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!(comp.modulators.iter().find(|m| m.id == mm).unwrap().second, 0);
+        let out = evaluate(&comp.modulators, &Default::default(), &mut Default::default());
+        assert_eq!(out.iter().find(|x| x.0 == mm).unwrap().1, 0.25);
+    }
+
+    /// A Feedback box shows the picked box's picture and draws before it (so what it shows is a frame old).
+    #[test]
+    fn a_feedback_box_shows_the_picked_box_a_frame_late() {
+        let mut comp = Composition::default();
+        let cid = comp.add_comp("Designer");
+        comp.start_network(cid);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let out = net.nodes[1].id;
+        let fx = net.add(NodeKind::Effect, [200.0, 60.0]);
+        let back = net.add(NodeKind::Feedback, [40.0, 200.0]);
+        net.node_mut(back).unwrap().target = fx;
+        assert!(net.connect(back, fx, 0) && net.connect(fx, out, 0));
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let (fx_layer, back_layer) = (net.node(fx).unwrap().parts[0], net.node(back).unwrap().parts[0]);
+        assert_eq!(feed_of(&comp, back_layer), Some(fx_layer), "the loop's far end");
+        assert_eq!(feed_of(&comp, fx_layer), Some(back_layer));
+        let pos = |id: u64| comp.layers.iter().position(|l| l.id == id).unwrap();
+        assert!(pos(back_layer) < pos(fx_layer));
+        // The picked box gone: nothing to show, and no layer left pointing at it.
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        net.remove(fx);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!(comp.layer(back_layer).unwrap().source, SourceSpec::None);
     }
 
     /// Points boxes: a Picture box with a Points: Shape puts out points, a render takes points and a picture for

@@ -252,6 +252,37 @@ fn a_clips_effects_run_before_the_layers() {
     assert!((twice - 0.2).abs() < 0.03, "then the layer's: {twice}");
 }
 
+/// A Designer Feedback box closes a loop: a gray picture (20%) mixed half and half with the Mix's own last frame
+/// turned over. With the loop closed the picture settles at 40% (v = 0.1 + 0.5 * (1 - v)); without it, 20%.
+#[test]
+fn a_feedback_box_feeds_the_picture_back() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    let cid = comp.add_comp("Designer");
+    comp.start_network(cid);
+    let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+    let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+    let fx = net.add(crate::NodeKind::Effect, [200.0, 200.0]);
+    let mix = net.add(crate::NodeKind::Mix, [400.0, 60.0]);
+    let back = net.add(crate::NodeKind::Feedback, [40.0, 200.0]);
+    net.node_mut(back).unwrap().target = mix;
+    net.disconnect(out, 0);
+    assert!(net.connect(back, fx, 0) && net.connect(pic, mix, 0) && net.connect(fx, mix, 1) && net.connect(mix, out, 0));
+    comp.comp_mut(cid).unwrap().network = Some(net);
+    comp.sync_network(cid);
+    let net = comp.comp(cid).unwrap().network.clone().unwrap();
+    let part = |n: u32, k: usize| net.node(n).unwrap().parts[k];
+    let invert = comp.new_effect("invert").unwrap();
+    comp.layer_mut(part(fx, 0)).unwrap().effects = vec![invert];
+    let gray = comp.layer_mut(part(pic, 0)).unwrap();
+    gray.source = SourceSpec::Generator("solid".into());
+    gray.generator_values = vec![0.2, 0.2, 0.2];
+    comp.layer_mut(part(mix, 2)).unwrap().opacity = 0.5;
+    let frames: Vec<f32> = (0..14).map(|_| middle(&mut engine, &comp)[0] as f32 / 255.0).collect();
+    assert!((frames[13] - 0.4).abs() < 0.04, "settles where the loop says: {frames:?}");
+    assert!(frames[2] > 0.3, "the second frame already has the first in it: {frames:?}");
+}
+
 /// A layer can show another layer's picture before or after that layer's effects.
 #[test]
 fn feeds_before_and_after_effects() {

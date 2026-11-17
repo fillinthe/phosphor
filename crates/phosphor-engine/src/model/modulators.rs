@@ -89,6 +89,13 @@ pub struct Modulator {
     /// What the data last read (not saved).
     #[serde(skip)]
     pub live: super::DataLive,
+    /// A Designer number operator: its value is worked out from the number it takes (`chain.from`, and `second`)
+    /// instead of from its own signal.
+    #[serde(default)]
+    pub op: Option<super::NumberOp>,
+    /// An operator's second input (a modulator earlier in the list; 0 = nothing wired in).
+    #[serde(default)]
+    pub second: u64,
 }
 
 /// Samples per beat in a looper take.
@@ -238,7 +245,7 @@ impl Looper {
 
 impl Default for Modulator {
     fn default() -> Self {
-        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5, looper: Looper::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() }
+        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5, looper: Looper::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 }
     }
 }
 
@@ -247,6 +254,8 @@ impl Default for Modulator {
 #[derive(Clone, Debug, Default)]
 pub struct ModPhases {
     phases: Vec<(u64, f64)>,
+    /// What each number operator remembers (a smoothed value, a count, an envelope's clock).
+    ops: Vec<(u64, super::OpState)>,
     last_time: Option<f32>,
     last_beats: Option<f32>,
 }
@@ -271,9 +280,26 @@ pub fn evaluate(mods: &[Modulator], inputs: &ModInputs, phases: &mut ModPhases) 
     phases.last_time = Some(inputs.time);
     phases.last_beats = Some(inputs.beats);
     phases.phases.retain(|(id, _)| mods.iter().any(|m| m.id == *id));
+    phases.ops.retain(|(id, _)| mods.iter().any(|m| m.id == *id && m.op.is_some()));
     let mut out = [(0u64, 0.0f32); MAX_SHARED];
     let mut inp = *inputs;
     for (k, m) in mods.iter().take(MAX_SHARED).enumerate() {
+        // An operator: worked out from the numbers it takes (earlier in the list), nothing of its own.
+        if let Some(op) = &m.op {
+            let find = |id: u64| out[..k].iter().find(|(i, _)| *i == id && id != 0).map(|x| x.1);
+            let a = m.chain.and_then(|c| find(c.from)).unwrap_or(0.0);
+            let b = find(m.second);
+            let at = match phases.ops.iter().position(|(id, _)| *id == m.id) {
+                Some(at) => at,
+                None => {
+                    phases.ops.push((m.id, Default::default()));
+                    phases.ops.len() - 1
+                }
+            };
+            out[k] = (m.id, op.run(a, b, dt as f32, inputs.time, inputs.beats, &mut phases.ops[at].1));
+            inp.shared = out;
+            continue;
+        }
         let other = m.chain.and_then(|c| out[..k].iter().find(|(id, _)| *id == c.from).map(|x| (c, x.1)));
         // Speed: 0.25× … 4× around the set rate, by the other modulator (amount = how much of that range).
         let speed = match other {
@@ -330,8 +356,8 @@ mod tests {
 
     #[test]
     fn modulators_chain_in_order_and_controls_follow_them() {
-        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
-        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
+        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
         // t = 0.25 s: the square is on (1), the saw at 0.25: 0.25 × 1.
         let on = evaluate(&[square.clone(), saw.clone()], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(on[0], (1, 1.0));
@@ -348,8 +374,8 @@ mod tests {
 
     #[test]
     fn speed_chaining_changes_the_rate_without_jumps() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
-        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
         let mods = [knob, saw];
         let mut ph = ModPhases::default();
         let mut prev = evaluate(&mods, &ModInputs { time: 0.0, ..Default::default() }, &mut ph)[1].1;
@@ -363,8 +389,8 @@ mod tests {
 
     #[test]
     fn a_hand_modulator_feeds_the_chain() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
-        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
         let out = evaluate(&[knob, lfo], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(out[0], (1, 0.3));
         assert!((out[1].1 - 0.3).abs() < 1e-6, "{:?}", out[1]);
