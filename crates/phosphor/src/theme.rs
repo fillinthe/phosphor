@@ -422,8 +422,8 @@ fn ui_text_has_glyphs() {
             }
         }
     }
-    // The language packs that use the UI font (Japanese and Chinese bring their own).
-    for code in ["es", "de", "fr", "it", "pt-BR"] {
+    // The language packs that use the UI font (Japanese, Chinese and Korean bring their own).
+    for code in ["es", "de", "fr", "it", "pt-BR", "nl", "pl", "tr"] {
         let path = format!("{}/lang/{code}.json", env!("CARGO_MANIFEST_DIR"));
         let pack: std::collections::HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         for c in pack.values().flat_map(|t| t.chars()).filter(|c| !c.is_ascii() && !('\u{E000}'..='\u{F8FF}').contains(c)).collect::<std::collections::BTreeSet<char>>() {

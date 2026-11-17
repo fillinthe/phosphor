@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.10 (not released yet)
 
+- **Four more languages:** Nederlands, Polski, Türkçe and Korean (brightness (sun) menu › Language), so the app
+  speaks the same twelve languages as the website. Korean uses the font already on your Mac or PC. The other seven
+  languages are complete again: everything added since 0.4 was still in English.
 - **Starter pack** (File › New from Template): five ready-made looks, each a comp of its own, made only from what
   ships in the app. Aurora (a turning kaleidoscope), Hyperspace (a tunnel with stars), Neon (mirrored glowing
   lines), Sound (moves with whatever is playing) and Bloom (sparks feeding back on themselves, built in the

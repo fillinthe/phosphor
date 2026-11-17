@@ -5,7 +5,8 @@
 //! Lookup (`Catalog::translate`): the whole text; else without leading/trailing icons; else a template ("Used by {0}
 //! layers", from `format!` strings) with the numbers / names filled back in; else line by line and part by part
 //! (" · "). `scripts/i18n/extract.py` lists the app's text (`lang/strings.json`); `scripts/i18n/merge.py` checks a pack.
-//! Japanese and Chinese need a font with their characters: the system's (Hiragino on a Mac) is added while one is on.
+//! Japanese, Chinese and Korean need a font with their characters: the system's (Hiragino / Apple SD Gothic Neo on a
+//! Mac) is added while one is on.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,10 +26,28 @@ pub enum Lang {
     PortugueseBr,
     Japanese,
     ChineseSimplified,
+    Korean,
+    Dutch,
+    Polish,
+    Turkish,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 9] = [Lang::Auto, Lang::English, Lang::Spanish, Lang::German, Lang::French, Lang::Italian, Lang::PortugueseBr, Lang::Japanese, Lang::ChineseSimplified];
+    pub const ALL: [Lang; 13] = [
+        Lang::Auto,
+        Lang::English,
+        Lang::Spanish,
+        Lang::German,
+        Lang::French,
+        Lang::Italian,
+        Lang::PortugueseBr,
+        Lang::Dutch,
+        Lang::Polish,
+        Lang::Turkish,
+        Lang::Japanese,
+        Lang::ChineseSimplified,
+        Lang::Korean,
+    ];
 
     /// The code it's saved as (and its pack's file name).
     pub fn code(self) -> &'static str {
@@ -42,6 +61,10 @@ impl Lang {
             Lang::PortugueseBr => "pt-BR",
             Lang::Japanese => "ja",
             Lang::ChineseSimplified => "zh-CN",
+            Lang::Korean => "ko",
+            Lang::Dutch => "nl",
+            Lang::Polish => "pl",
+            Lang::Turkish => "tr",
         }
     }
 
@@ -63,6 +86,11 @@ impl Lang {
             Lang::Japanese => "Japanese",
             Lang::ChineseSimplified if cjk_font() => "\u{7b80}\u{4f53}\u{4e2d}\u{6587}",
             Lang::ChineseSimplified => "Chinese (Simplified)",
+            Lang::Korean if cjk_font() => "\u{d55c}\u{ad6d}\u{c5b4}",
+            Lang::Korean => "Korean",
+            Lang::Dutch => "Nederlands",
+            Lang::Polish => "Polski",
+            Lang::Turkish => "T\u{fc}rk\u{e7}e",
         }
     }
 
@@ -77,6 +105,10 @@ impl Lang {
             Lang::PortugueseBr => include_str!("../lang/pt-BR.json"),
             Lang::Japanese => include_str!("../lang/ja.json"),
             Lang::ChineseSimplified => include_str!("../lang/zh-CN.json"),
+            Lang::Korean => include_str!("../lang/ko.json"),
+            Lang::Dutch => include_str!("../lang/nl.json"),
+            Lang::Polish => include_str!("../lang/pl.json"),
+            Lang::Turkish => include_str!("../lang/tr.json"),
         })
     }
 
@@ -89,10 +121,10 @@ impl Lang {
     }
 
     fn is_cjk(self) -> bool {
-        matches!(self, Lang::Japanese | Lang::ChineseSimplified)
+        matches!(self, Lang::Japanese | Lang::ChineseSimplified | Lang::Korean)
     }
 
-    /// This computer has the font to draw it (Japanese and Chinese need one from the system; the browser app has none).
+    /// This computer has the font to draw it (Japanese, Chinese and Korean need one from the system; the browser app has none).
     pub fn drawable(self) -> bool {
         !self.resolved().is_cjk() || cjk_font_file(self.resolved()).is_some()
     }
@@ -111,6 +143,10 @@ fn pack_for(code: &str) -> Option<Lang> {
         // Portuguese from anywhere gets the Brazilian pack (the only one).
         "pt" => Lang::PortugueseBr,
         "ja" => Lang::Japanese,
+        "ko" => Lang::Korean,
+        "nl" => Lang::Dutch,
+        "pl" => Lang::Polish,
+        "tr" => Lang::Turkish,
         // Traditional Chinese readers get English rather than Simplified characters.
         "zh" if !(c.contains("hant") || c.ends_with("-tw") || c.ends_with("-hk") || c.ends_with("-mo")) => Lang::ChineseSimplified,
         _ => return None,
@@ -173,6 +209,12 @@ fn cjk_font_file(lang: Lang) -> Option<Arc<Vec<u8>>> {
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "C:\\Windows\\Fonts\\YuGothM.ttc",
             "C:\\Windows\\Fonts\\msgothic.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        ],
+        Lang::Korean => &[
+            "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+            "C:\\Windows\\Fonts\\malgun.ttf",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         ],
@@ -327,9 +369,11 @@ impl Template {
             rest = &rest[i + middle.len()..];
         }
         gaps.push(rest);
-        // A gap is a number, a name or a word or two: never empty, never a whole sentence of something else (another
+        // A gap is a number, a name or a word or two: never a whole sentence of something else (another
         // line, or the next " · " piece, which translates by itself).
-        if gaps.iter().any(|g| g.is_empty() || g.contains('\n') || g.contains(" \u{b7} ")) {
+        // An empty gap is fine only where the gap is a word's ending ("clip{1}": the plural "s" of one clip).
+        let ending = |i: usize| self.parts[i].chars().last().is_some_and(char::is_alphabetic);
+        if gaps.iter().enumerate().any(|(i, g)| (g.is_empty() && !ending(i)) || g.contains('\n') || g.contains(" \u{b7} ")) {
             return None;
         }
         Some(gaps)
@@ -359,7 +403,8 @@ mod tests {
             "Fade style": "Estilo de fundido",
             "Launch: {0}": "Lanzar: {0}",
             "Same": "Same",
-            "{0} Recently added": "{0} Añadido hace poco"
+            "{0} Recently added": "{0} Añadido hace poco",
+            "{0} clip{1} added": "Eklenen klip: {0}"
         }"#)
     }
 
@@ -379,6 +424,9 @@ mod tests {
         assert_eq!(c.translate("my_clip.mov"), None);
         assert_eq!(c.translate("Same"), None);
         assert_eq!(c.translate("Used by  layers and clips"), None, "an empty gap is no match");
+        // A plural ending is a gap a language may leave out, and one clip has none.
+        assert_eq!(c.translate("3 clips added").as_deref(), Some("Eklenen klip: 3"));
+        assert_eq!(c.translate("1 clip added").as_deref(), Some("Eklenen klip: 1"));
     }
 
     #[test]
@@ -388,12 +436,16 @@ mod tests {
         assert_eq!(pack_for("zh-Hans-CN"), Some(Lang::ChineseSimplified));
         assert_eq!(pack_for("zh-Hant-TW"), None);
         assert_eq!(pack_for("ja-JP"), Some(Lang::Japanese));
-        assert_eq!(pack_for("ko-KR"), None);
+        assert_eq!(pack_for("ko-KR"), Some(Lang::Korean));
+        assert_eq!(pack_for("nl_BE"), Some(Lang::Dutch));
+        assert_eq!(pack_for("pl-PL"), Some(Lang::Polish));
+        assert_eq!(pack_for("tr-TR"), Some(Lang::Turkish));
+        assert_eq!(pack_for("sv-SE"), None);
         assert_eq!(Lang::from_code("pt-br"), Lang::PortugueseBr);
         assert_eq!(Lang::from_code("xx"), Lang::Auto);
     }
 
-    /// Every pack is valid, keeps each text's {0} {1}…, and covers most of the app's text.
+    /// Every pack is valid, fills in only each text's own {0} {1}…, and covers most of the app's text.
     #[test]
     fn language_packs_are_whole() {
         let strings: Vec<String> = serde_json::from_str(include_str!("../lang/strings.json")).unwrap();
@@ -404,8 +456,10 @@ mod tests {
                 g.sort();
                 g
             };
+            // A translation fills in what the English does (it may leave a plural ending out), nothing else.
             for (from, to) in &map {
-                assert_eq!(gaps(from), gaps(to), "{}: {from:?} -> {to:?}", lang.code());
+                let (have, want) = (gaps(from), gaps(to));
+                assert!(want.iter().all(|g| have.contains(g)), "{}: {from:?} -> {to:?}", lang.code());
             }
             let covered = strings.iter().filter(|s| map.contains_key(*s)).count();
             assert!(covered * 10 >= strings.len() * 9, "{}: only {covered} of {} texts", lang.code(), strings.len());
