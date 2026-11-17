@@ -117,11 +117,14 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         guarded!(ui, play.rest_secs, egui::DragValue::new(&mut play.rest_secs).range(0..=600).suffix(" s")).on_hover_text("How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.");
         ui.label("Players at once");
         guarded!(ui, play.players, egui::DragValue::new(&mut play.players).range(1..=8)).on_hover_text("More than one: each player gets their own Surface page (page 1, 2, …) unless you pick one page for all");
-        crate::ui::toggle(ui, &mut play.columns, "Clip columns");
-        crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
+    // What the play page offers, in one row: a switch off takes it off the page and its presses are refused.
     // The game pad: presses are controls here (Learn, then press on the phone) and OSC to a 3D project.
-    crate::ui::toggle(ui, &mut play.pad.on, "Game pad").on_hover_text("Up / down / left / right, A and B on the play page, held like a real pad. Map a button to anything: right-click a control › Learn, then press it on the phone. Each press also goes out as OSC (/pad/1/up 1 or 0, /pad/1/stick x y) to fly a camera in Unreal or Unity");
+    crate::ui::field(ui, "Guests get", |ui| {
+        crate::ui::toggle(ui, &mut play.columns, "Clip columns").on_hover_text("Off: no clip buttons on the play page, and guests can't launch clips");
+        crate::ui::toggle(ui, &mut play.surprise, "Surprise button").on_hover_text("Off: no \"Surprise me\" on the play page, and guests can't change every layer's look");
+        crate::ui::toggle(ui, &mut play.pad.on, "Game pad").on_hover_text("Up / down / left / right, A and B on the play page, held like a real pad. Map a button to anything: right-click a control › Learn, then press it on the phone. Each press also goes out as OSC (/pad/1/up 1 or 0, /pad/1/stick x y) to fly a camera in Unreal or Unity");
+    });
     if play.pad.on {
         crate::ui::field(ui, "Send pad to", |ui| {
             crate::ui::text_field(ui, &mut play.pad.host, "the 3D computer's address", Some(150.0)).on_hover_text("The computer running the Unreal / Unity project (127.0.0.1 = this one). Empty = nowhere");
