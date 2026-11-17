@@ -101,6 +101,17 @@ impl Composition {
         id
     }
 
+    /// Shows comp `id` alone: it goes on (and opens), every other comp off. For clicking through looks.
+    pub fn show_only_comp(&mut self, id: u64) {
+        if self.comp(id).is_none() {
+            return;
+        }
+        for c in &mut self.comps {
+            c.enabled = c.id == id;
+        }
+        self.open_comp = Some(id);
+    }
+
     /// Removes a comp; its layers move to the first remaining comp (nothing is lost). The last comp stays.
     pub fn remove_comp(&mut self, id: u64) {
         if self.comps.len() <= 1 || self.comp(id).is_none() {

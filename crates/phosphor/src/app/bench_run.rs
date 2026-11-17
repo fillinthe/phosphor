@@ -594,6 +594,18 @@ impl PhosphorApp {
                 crate::ui::ask_rename(ctx, "bench_rename", "Layout 1");
                 continue;
             }
+            if name == "starter" {
+                // The Starter pack template; PHOSPHOR_STARTER_COMP=3 shows its third comp alone.
+                let mut comp = (phosphor_engine::TEMPLATES.iter().find(|t| t.0 == "Starter pack").expect("the template").2)();
+                if let Some(n) = std::env::var("PHOSPHOR_STARTER_COMP").ok().and_then(|v| v.parse::<usize>().ok())
+                    && let Some(id) = comp.comps.get(n.saturating_sub(1)).map(|c| c.id)
+                {
+                    comp.show_only_comp(id);
+                }
+                println!("QUICK starter: {} comps, {} layers", comp.comps.len(), comp.layers.len());
+                self.state.load_composition(comp);
+                continue;
+            }
             if name == "welcome" {
                 self.welcome_open = true;
                 continue;
