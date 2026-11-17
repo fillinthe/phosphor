@@ -219,6 +219,19 @@ impl PhosphorApp {
                         });
                     }
                 }
+                Purpose::ReportSnapshot => {
+                    if let Some(p) = paths.first() {
+                        let p = p.with_extension("txt");
+                        let text = crate::support::snapshot_text(st);
+                        st.notice = Some(match std::fs::write(&p, text) {
+                            Ok(()) => {
+                                crate::os::reveal(&p);
+                                format!("Snapshot saved: {} (attach it to your report)", p.display())
+                            }
+                            Err(e) => format!("Couldn't save the snapshot: {e}"),
+                        });
+                    }
+                }
                 Purpose::ImportResolume => {
                     if let Some(p) = paths.first() {
                         st.begin_import(&p.to_string_lossy());

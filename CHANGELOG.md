@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.10 (not released yet)
 
+- **Report a Bug › Save a snapshot…:** one text file with everything about Phosphor at that moment (graphics
+  card, every layer and how its movie decodes, outputs, the run's log, the project) to attach to a report. Save it
+  while the problem is on screen. Reports also say which graphics card is in use and how many movies decode on
+  the card or on the processor.
 - **Windows: movies decode on the graphics card** (H.264, HEVC and VP9, any card). Many movie layers at once no
   longer pin the processor while the card sits idle. A movie the card can't take still plays, on the processor.
 - **Audience play: what guests get is its own row** (Session › Audience play › Guests get): Clip columns, Surprise
