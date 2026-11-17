@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Merges translated chunks (DIR/NN.json, each {english: translation}) into crates/phosphor/lang/CODE.json, keeping
-only strings the app has (strings.json) and checking that each translation keeps the same {0} {1}… placeholders.
+only strings the app has (strings.json) and checking that each translation uses only the English text's {0} {1}… placeholders (it may leave one out: a plural
+ending).
 Usage: merge.py CODE DIR"""
 import json, os, re, sys
 
@@ -15,7 +16,7 @@ for f in sorted(os.listdir(folder)):
         for en, tr in json.load(open(os.path.join(folder, f), encoding="utf-8")).items():
             if en not in keys or not isinstance(tr, str):
                 continue
-            if sorted(re.findall(r"\{\d+\}", en)) != sorted(re.findall(r"\{\d+\}", tr)):
+            if not set(re.findall(r"\{\d+\}", tr)) <= set(re.findall(r"\{\d+\}", en)):
                 bad.append(en)
                 continue
             merged[en] = tr
