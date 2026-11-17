@@ -6,6 +6,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.11 (not released yet)
 
+- **LED / DMX: send out of a chosen network adapter** (Send out of): a rig on its own network (an Ethernet cable)
+  while the Wi-Fi stays on. sACN multicast and Art-Net broadcast go out of that adapter. A warning says so when the
+  controllers are on a network this computer isn't on.
+- **Find PixLites:** Advatek PixLite controllers on the network are found and their setup read (Phosphor only
+  asks; nothing on them changes). **Add** makes one LED strip per output, patched exactly as the boxes are.
+- **Flash and Chase** on every LED strip: light just that string (everything else dark), or run one pixel along it
+  from its first pixel, to find which string is where and which way it runs.
+- **DMX in** listens on every network adapter, to as many sACN universes as you set (32 unless you change it; it
+  was 16 on the default network only).
 - **Footage on a drive that isn't plugged in keeps its pictures.** Clips and media tiles show the thumbnail from
   the last time the file was there, with a "Not connected" band across the top. Dimmed means it can't play right
   now; not dimmed means a copy on this computer still plays it.

@@ -340,6 +340,10 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 led_scan: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                led_identify: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                pixlites: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 milkdrop: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 gdrop: Default::default(),

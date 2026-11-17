@@ -24,6 +24,8 @@ pub(crate) mod clip_bar;
 mod clip_grid;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod cache;
+#[cfg(not(target_arch = "wasm32"))]
+mod led_network;
 mod stack;
 mod control;
 mod links;

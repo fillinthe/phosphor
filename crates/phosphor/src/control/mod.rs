@@ -253,6 +253,8 @@ pub struct ControlHub {
     /// DMX in (Art-Net / sACN) while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     dmx_listener: Option<crate::dmx::DmxListener>,
+    /// sACN universes DMX in listens to (1 to this); a change restarts the listener (`set_dmx_in_universes`).
+    pub dmx_in_universes: u16,
     /// An Arduino board (Firmata) while one is chosen.
     #[cfg(not(target_arch = "wasm32"))]
     arduino: Option<crate::arduino::Arduino>,
@@ -260,6 +262,9 @@ pub struct ControlHub {
     #[cfg(not(target_arch = "wasm32"))]
     stream_deck: Option<crate::streamdeck::Decks>,
 }
+
+/// The most sACN universes DMX in listens to.
+pub const DMX_IN_MAX_UNIVERSES: u16 = 256;
 
 /// Controller settings kept between launches.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -279,6 +284,8 @@ pub struct ControlSettings {
     pub ltc_out_pair: Option<u8>,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
+    /// sACN universes DMX in listens to: 1 to this.
+    pub dmx_in_universes: u16,
     /// An Arduino board's USB port ("" = none).
     pub arduino_port: String,
     /// Use an Elgato Stream Deck (keys as input, key pictures as feedback).
@@ -289,7 +296,7 @@ pub struct ControlSettings {
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new(), stream_deck: false, send_all: String::new() }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, dmx_in_universes: 32, arduino_port: String::new(), stream_deck: false, send_all: String::new() }
     }
 }
 
@@ -343,6 +350,7 @@ impl ControlHub {
         hub.ltc_out_pair = s.ltc_out_pair;
         hub.send_all = s.send_all;
         hub.reconnect();
+        hub.dmx_in_universes = s.dmx_in_universes.clamp(1, DMX_IN_MAX_UNIVERSES);
         hub.set_dmx_in(s.dmx_in);
         hub.set_arduino(&s.arduino_port);
         hub.set_stream_deck(s.stream_deck);
@@ -350,7 +358,7 @@ impl ControlHub {
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port(), stream_deck: self.stream_deck_on(), send_all: self.send_all.clone() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), dmx_in_universes: self.dmx_in_universes, arduino_port: self.arduino_port(), stream_deck: self.stream_deck_on(), send_all: self.send_all.clone() }
     }
 
     /// Connects to an Arduino board on this USB port ("" = none); its pins become controller input.
@@ -416,10 +424,23 @@ impl ControlHub {
     pub fn set_dmx_in(&mut self, on: bool) {
         #[cfg(not(target_arch = "wasm32"))]
         if on != self.dmx_listener.is_some() {
-            self.dmx_listener = on.then(|| crate::dmx::DmxListener::start(self.tx.clone()));
+            self.dmx_listener = on.then(|| crate::dmx::DmxListener::start(self.tx.clone(), self.dmx_in_universes));
         }
         #[cfg(target_arch = "wasm32")]
         let _ = on;
+    }
+
+    /// Listen to sACN universes 1 to `last` (listening again now when on).
+    pub fn set_dmx_in_universes(&mut self, last: u16) {
+        let last = last.clamp(1, DMX_IN_MAX_UNIVERSES);
+        if last == self.dmx_in_universes {
+            return;
+        }
+        self.dmx_in_universes = last;
+        if self.dmx_in() {
+            self.set_dmx_in(false);
+            self.set_dmx_in(true);
+        }
     }
 
     pub fn dmx_in(&self) -> bool {
@@ -517,6 +538,7 @@ impl ControlHub {
             delayed: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             dmx_listener: None,
+            dmx_in_universes: 32,
             #[cfg(not(target_arch = "wasm32"))]
             arduino: None,
             #[cfg(not(target_arch = "wasm32"))]

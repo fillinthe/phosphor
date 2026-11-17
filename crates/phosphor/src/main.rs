@@ -117,6 +117,12 @@ mod scanner;
 #[cfg(not(target_arch = "wasm32"))]
 mod led_scan;
 #[cfg(not(target_arch = "wasm32"))]
+mod led_identify;
+#[cfg(not(target_arch = "wasm32"))]
+mod advatek;
+#[cfg(not(target_arch = "wasm32"))]
+mod net_adapters;
+#[cfg(not(target_arch = "wasm32"))]
 mod streamdeck;
 #[cfg(not(target_arch = "wasm32"))]
 mod milkdrop;
