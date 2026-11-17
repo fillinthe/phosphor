@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.5.9 (not released yet)
+## 0.5.9 (2026-11-17)
 
 **Designer**
 - **Numbers that work on other numbers** (right-click the canvas › Numbers): Math (two numbers into one), Smooth
