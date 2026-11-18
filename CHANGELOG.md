@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.5.11 (not released yet)
+## 0.5.11 (2026-11-18)
 
 - **Record DMX from another program or a desk** (LED / DMX › Record DMX › what comes in): LightJams, a console,
   anything sending Art-Net or sACN to this computer; play it back here (the first step to a Raspberry Pi that runs
