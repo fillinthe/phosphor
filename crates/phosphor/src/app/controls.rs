@@ -117,7 +117,8 @@ impl PhosphorApp {
         }
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::FOLLOWS), std::sync::Arc::new(st.comp.follows.clone())));
         if ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new(panels::WANT_TARGETS))).unwrap_or(false) {
-            ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::ALL_TARGETS), std::sync::Arc::new(crate::control::all_targets(&st.comp))));
+            let all = st.targets();
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::ALL_TARGETS), all));
         }
         // Keys act as controller buttons (ignored while typing in a text field).
         if ctx.memory(|m| m.focused().is_some()) {

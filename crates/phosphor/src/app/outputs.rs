@@ -298,6 +298,11 @@ impl State {
                 self.selected_clip = None;
             }
             self.also_clips.retain(|k| has_clip(&self.comp, *k));
+            // A slice, mask or slice group made after this step.
+            let has_slice = |c: &phosphor_engine::Composition, id: u64| c.outputs.iter().any(|o| o.mapping.surfaces.iter().any(|s| s.id == id) || o.mapping.masks.iter().any(|m| m.id == id) || o.mapping.groups.iter().any(|g| g.id == id));
+            if self.selected_surface.is_some_and(|id| !has_slice(&self.comp, id)) {
+                self.selected_surface = None;
+            }
             self.pending_triggers.clear();
             self.notice = Some(if step < 0 { "Undone".into() } else { "Redone".into() });
         } else {

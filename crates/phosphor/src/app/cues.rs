@@ -44,6 +44,9 @@ impl CueRun {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+type CalendarLook = (String, Option<web_time::SystemTime>, Option<Vec<crate::calendar::Event>>);
+
 /// The cue list while the show runs.
 #[derive(Default)]
 pub struct CueRun {
@@ -64,6 +67,10 @@ pub struct CueRun {
     /// checked (local wall-clock seconds).
     #[cfg(not(target_arch = "wasm32"))]
     calendar: Option<(String, Option<web_time::SystemTime>, Vec<crate::calendar::Event>)>,
+    /// The look at the calendar file under way (on its own thread: the file can be on a share that's slow to
+    /// answer): which file, when it changed, and its events when they were read again.
+    #[cfg(not(target_arch = "wasm32"))]
+    calendar_look: Option<std::sync::mpsc::Receiver<CalendarLook>>,
     calendar_prev: i64,
     calendar_checked: f64,
     pub clock: ShowClock,
@@ -148,16 +155,41 @@ impl State {
             self.cue_run.calendar = None;
             return;
         }
+        match self.cue_run.calendar_look.as_ref().map(|rx| rx.try_recv()) {
+            Some(Ok(look)) => {
+                self.cue_run.calendar_look = None;
+                if let (p, changed, Some(events)) = look {
+                    self.cue_run.calendar = Some((p, changed, events));
+                    self.cue_run.calendar_prev = crate::calendar::local_now().0;
+                    return;
+                }
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => self.cue_run.calendar_look = None,
+            _ => {}
+        }
         if now - self.cue_run.calendar_checked < 1.0 {
             return;
         }
         self.cue_run.calendar_checked = now;
         let (local, offset) = crate::calendar::local_now();
-        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-        if self.cue_run.calendar.as_ref().is_none_or(|(p, m, _)| *p != path || *m != changed) {
-            let events = std::fs::read_to_string(&path).map(|t| crate::calendar::parse(&t, offset)).unwrap_or_default();
-            self.cue_run.calendar = Some((path, changed, events));
-            self.cue_run.calendar_prev = local;
+        // Has the file changed? Asked off the UI thread; read again only when it has.
+        if self.cue_run.calendar_look.is_none() {
+            let known = self.cue_run.calendar.as_ref().filter(|(p, _, _)| *p == path).map(|(_, m, _)| *m);
+            let (tx, rx) = std::sync::mpsc::channel();
+            let file = path.clone();
+            if std::thread::Builder::new()
+                .name("calendar-file".into())
+                .spawn(move || {
+                    let changed = std::fs::metadata(&file).and_then(|m| m.modified()).ok();
+                    let events = (known != Some(changed)).then(|| std::fs::read_to_string(&file).map(|t| crate::calendar::parse(&t, offset)).unwrap_or_default());
+                    let _ = tx.send((file, changed, events));
+                })
+                .is_ok()
+            {
+                self.cue_run.calendar_look = Some(rx);
+            }
+        }
+        if self.cue_run.calendar.as_ref().is_none_or(|(p, _, _)| *p != path) {
             return;
         }
         let prev = std::mem::replace(&mut self.cue_run.calendar_prev, local);

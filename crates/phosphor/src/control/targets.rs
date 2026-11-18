@@ -538,6 +538,61 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
 }
 
 /// Every bindable target in the composition, with a readable name.
+/// `all_targets`, worked out at most a few times a second (it walks the whole project and names every setting)
+/// and at once when something is added or removed: every panel and menu that lists targets shares one copy.
+#[derive(Default)]
+pub struct TargetsCache {
+    key: u64,
+    at: Option<web_time::Instant>,
+    list: std::sync::Arc<Vec<(ControlTarget, String)>>,
+    names: Option<std::sync::Arc<std::collections::HashMap<ControlTarget, String>>>,
+}
+
+/// How long a list is used while nothing was added or removed (a rename shows within this).
+const TARGETS_KEEP: f64 = 0.5;
+
+impl TargetsCache {
+    pub fn get(&mut self, comp: &Composition) -> std::sync::Arc<Vec<(ControlTarget, String)>> {
+        let key = targets_shape(comp);
+        let fresh = self.at.is_some_and(|at| at.elapsed().as_secs_f64() < TARGETS_KEEP);
+        if key != self.key || !fresh {
+            self.key = key;
+            self.at = Some(web_time::Instant::now());
+            self.list = std::sync::Arc::new(all_targets(comp));
+            self.names = None;
+        }
+        self.list.clone()
+    }
+
+    /// The same, by target (name lookups).
+    pub fn names(&mut self, comp: &Composition) -> std::sync::Arc<std::collections::HashMap<ControlTarget, String>> {
+        let list = self.get(comp);
+        self.names.get_or_insert_with(|| std::sync::Arc::new(list.iter().cloned().collect())).clone()
+    }
+}
+
+/// What `all_targets` depends on, counted (cheap): a change in any count = the list is out of date.
+fn targets_shape(comp: &Composition) -> u64 {
+    let slices: usize = comp.outputs.iter().map(|o| o.mapping.surfaces.len() + o.mapping.masks.len() + o.mapping.groups.len()).sum();
+    let clips: usize = comp.layers.iter().map(|l| l.clips.len()).sum();
+    let counts = [
+        comp.layers.len(),
+        comp.groups.len(),
+        comp.comps.len(),
+        comp.outputs.len(),
+        slices,
+        clips,
+        comp.all_effects().count(),
+        comp.surface.widgets.len(),
+        comp.modulators.len(),
+        comp.clip_columns,
+        comp.lasers.projectors.len(),
+        comp.cues.cues.len(),
+    ];
+    let bytes: Vec<u8> = counts.iter().flat_map(|n| (*n as u64).to_le_bytes()).collect();
+    phosphor_engine::stable_hash(&[&bytes])
+}
+
 pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     let mut out = vec![(ControlTarget::MasterFade, "Master fade".to_string())];
     out.extend(AppControl::ALL.iter().map(|a| (ControlTarget::App(*a), a.name().to_string())));

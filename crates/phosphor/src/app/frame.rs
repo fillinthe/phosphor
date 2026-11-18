@@ -447,7 +447,10 @@ impl PhosphorApp {
                 if let Some(out) = map.get_mut(&o.id)
                     && !out.mapping_changed
                 {
-                    out.mapping = o.mapping.clone();
+                    // (Copied only when it changed: comparing reads it, a copy allocates every slice, mesh and mask.)
+                    if out.mapping != o.mapping {
+                        out.mapping = o.mapping.clone();
+                    }
                     out.selected_surface = self.state.selected_surface;
                 }
             }

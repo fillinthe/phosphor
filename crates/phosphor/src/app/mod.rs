@@ -269,6 +269,10 @@ pub struct State {
     /// A MadMapper project read and waiting for "new project" or "add to this one".
     #[cfg(not(target_arch = "wasm32"))]
     pub mad_import: Option<crate::import::madmapper::MadFile>,
+    /// Its pictures' sizes and whether each is on this Mac (visual id → (aspect, missing)), found on a thread of
+    /// their own (a movie on a slow drive takes a while to open); the window waits for them.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub mad_probe: import::MadProbe,
     /// A missing-media search running in the background.
     #[cfg(not(target_arch = "wasm32"))]
     pub relink: Option<std::sync::mpsc::Receiver<import::Relinked>>,
@@ -448,6 +452,8 @@ pub struct State {
     pub dial_seen: std::collections::HashMap<(u64, usize), f32>,
     /// Modulators open in a window of their own (`panels::modulator_windows`), by id.
     pub mod_windows: Vec<u64>,
+    /// Every control by name, shared by the panels and menus that list them (`State::targets`).
+    pub targets_cache: crate::control::TargetsCache,
     pub fx_browser: Option<crate::explorer::FxBrowser>,
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).
@@ -552,8 +558,18 @@ impl State {
         self.recent.truncate(12);
     }
 
+    /// Every control by name (`control::all_targets`), worked out a few times a second at most.
+    pub fn targets(&mut self) -> std::sync::Arc<Vec<(phosphor_engine::ControlTarget, String)>> {
+        self.targets_cache.get(&self.comp)
+    }
+
     /// Writes the project to its file, or asks where when it has none yet (browser: downloads it).
     pub fn save_project(&mut self) {
+        self.save_project_kind(false);
+    }
+
+    /// `auto` = an autosave (its backup is kept with the other autosaves').
+    fn save_project_kind(&mut self, #[allow(unused)] auto: bool) {
         #[cfg(target_arch = "wasm32")]
         {
             let name = format!("{}.phosphor", self.cloud_project.as_ref().map_or("My show", |(_, n)| n.as_str()));
@@ -1119,6 +1135,9 @@ pub struct PhosphorApp {
     /// Layouts from the account were applied this session; next upload check (seconds).
     cloud_layouts_applied: bool,
     cloud_layouts_check: f64,
+    /// Named saves read from disk on a thread of their own for the account (`sync_layouts`).
+    #[cfg(not(target_arch = "wasm32"))]
+    saves_export: Option<std::sync::mpsc::Receiver<String>>,
     /// Save Layout window: (name, open at startup).
     layout_draft: Option<(String, bool)>,
     /// When the last UI frame ran (wall clock) and its egui time: `logic` keeps the show going
@@ -1359,6 +1378,19 @@ impl PhosphorApp {
     /// Uploads your layouts and named saves when signed in and they changed (checked every 30 s; the account skips
     /// unchanged text).
     fn sync_layouts(&mut self, ctx: &egui::Context) {
+        // Named saves ride along (the account skips unchanged text); they're read off the UI thread (every preset
+        // file), and sent when ready.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(answer) = self.saves_export.as_ref().map(|rx| rx.try_recv()) {
+            match answer {
+                Ok(text) => {
+                    self.saves_export = None;
+                    self.state.account.push_doc(ctx, crate::account::DocKind::Saves, &text);
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.saves_export = None,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
         let now = ctx.input(|i| i.time);
         if now < self.cloud_layouts_check || !self.state.account.signed_in() {
             return;
@@ -1368,9 +1400,13 @@ impl PhosphorApp {
         if let Some(text) = layout::to_text(&layout::AccountLayouts { layouts: self.layouts.clone(), current: Some(current) }) {
             self.state.account.push_layouts(ctx, &text);
         }
-        // Named saves ride along (the account skips unchanged text).
         #[cfg(not(target_arch = "wasm32"))]
-        self.state.account.push_doc(ctx, crate::account::DocKind::Saves, &crate::presets::export_all());
+        if self.saves_export.is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            if std::thread::Builder::new().name("saves-export".into()).spawn(move || drop(tx.send(crate::presets::export_all()))).is_ok() {
+                self.saves_export = Some(rx);
+            }
+        }
     }
 }
 

@@ -356,17 +356,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         ),
     };
     if source != MediaSource::Recent {
-        match view.sort {
-            MediaSort::Name => shown.sort_by_cached_key(|i| bin[*i].name.to_lowercase()),
-            MediaSort::Newest => shown.sort_by_key(|i| std::cmp::Reverse(*i)),
-            MediaSort::Type => shown.sort_by_cached_key(|i| {
-                (
-                    !crate::media::is_movie(&bin[*i].name),
-                    bin[*i].name.to_lowercase(),
-                )
-            }),
-            MediaSort::Length => shown.sort_by_key(|i| super::media::length_key(&bin[*i])),
-        }
+        super::media::sort_items(&mut shown, bin, view.sort);
     }
     let tile_w = view.tile;
 

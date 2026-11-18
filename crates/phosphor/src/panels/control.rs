@@ -297,7 +297,7 @@ pub(super) fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarg
 fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     use crate::app::ListenFor;
     let mut show: Option<(Tab, Option<u64>, Option<u64>)> = None;
-    let State { control, comp, listen_for, row_learn, map_draft, map_search, mapping_presets, mapping_preset_name, notice, selected, selected_surface, open_tab, .. } = st;
+    let State { control, comp, listen_for, row_learn, map_draft, map_search, mapping_presets, mapping_preset_name, notice, selected, selected_surface, open_tab, targets_cache, .. } = st;
     // A heard input lands where the Listen was for.
     if let Some(src) = control.heard.take() {
         match listen_for.take() {
@@ -377,7 +377,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     if comp.control_maps.len() > 6 || !map_search.is_empty() {
         crate::ui::text_field(ui, map_search, "Search mappings", None);
     }
-    let targets = crate::control::all_targets(comp);
+    let targets = targets_cache.get(comp);
     // The mapping being made: input heard (or typed) → pick a target → Add.
     let mut finish: Option<bool> = None;
     if let Some((src, target)) = map_draft.as_mut() {
