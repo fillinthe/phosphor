@@ -2,7 +2,8 @@
 //! it really is (a center screen, two wings, an LED wall…), dragged into place and sized by its corner, edges snapping
 //! to each other, a picture of the venue behind them if you like; pan and zoom like the Mapping Studio. **Tiles**:
 //! every output side by side, as big as fits. Click an output to pick it in the Mapping Studio. Only for seeing and
-//! planning: nothing here changes what an output shows.
+//! planning: nothing here changes what an output shows. LED / DMX fixtures show here too, each light in the color
+//! it's being sent (so a recording playing back, Flash / Chase, or the picture), placed like the outputs.
 
 use super::*;
 use eframe::egui::UiBuilder;
@@ -40,12 +41,12 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command(ui, label(icon::CORNERS_OUT, "Fit all")).on_hover_text("Show every output").clicked() {
             view.fit = true;
         }
-        if crate::ui::command(ui, label(icon::ROWS, "Line up")).on_hover_text("Every output back in one row, in order (sizes kept)").clicked() {
+        if crate::ui::command(ui, label(icon::ROWS, "Line up")).on_hover_text("Every output back in one row, in order (sizes kept), and the LED fixtures in a row under them").clicked() {
             st.comp.line_up_stage();
             view.fit = true;
         }
         venue_menu(ui, st);
-        help(ui, "Drag an output to where it is in the venue; its corner sizes it, edges snap to the others. Scroll or drag the black to move around, pinch or Cmd-scroll to zoom. Click one to pick it in the Mapping Studio.");
+        help(ui, "Drag an output (or an LED fixture, shown lit with what it's sent) to where it is in the venue; its corner sizes it, edges snap to the others. Scroll or drag the black to move around, pinch or Cmd-scroll to zoom. Click one to pick it in the Mapping Studio.");
     });
     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(TILES), tiles));
     if tiles {
@@ -99,7 +100,12 @@ fn layout_view(ui: &mut egui::Ui, st: &mut State, view: &mut View) {
         })
         .collect();
     // The venue picture: as placed, else around the outputs with room to spare.
-    let bounds = items.iter().fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |b, (_, r, ..)| [b[0].min(r[0]), b[1].min(r[1]), b[2].max(r[0] + r[2]), b[3].max(r[1] + r[3])]);
+    let lights = fixture_items(st);
+    let bounds = items
+        .iter()
+        .map(|(_, r, ..)| *r)
+        .chain(lights.iter().map(|l| l.rect))
+        .fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |b, r| [b[0].min(r[0]), b[1].min(r[1]), b[2].max(r[0] + r[2]), b[3].max(r[1] + r[3])]);
     let backdrop = (!st.comp.stage.backdrop.is_empty()).then(|| st.thumbs.get_sized(&st.comp.stage.backdrop, 2048)).flatten();
     let backdrop_aspect = st.thumbs.aspect_sized(&st.comp.stage.backdrop, 2048).unwrap_or(16.0 / 9.0);
     let backdrop_place = st.comp.stage.backdrop_place.unwrap_or_else(|| {
@@ -211,7 +217,85 @@ fn layout_view(ui: &mut egui::Ui, st: &mut State, view: &mut View) {
     if let Some(id) = pick {
         st.mapping_output = id;
     }
+    draw_fixtures(&child, st, &lights, &rect_of, view.scale);
     ui.allocate_rect(area, Sense::hover());
+}
+
+/// One LED / DMX fixture on the stage: its rect, its lights (place in the box, 0..1) and what they are sent.
+struct Light {
+    id: u64,
+    name: String,
+    place: StagePlace,
+    rect: [f32; 4],
+    dots: Vec<[f32; 2]>,
+    on: bool,
+}
+
+fn fixture_items(st: &State) -> Vec<Light> {
+    let aspect = st.comp.width.max(1) as f32 / st.comp.height.max(1) as f32;
+    st.comp
+        .dmx
+        .fixtures
+        .iter()
+        .zip(st.comp.fixture_places())
+        .map(|(f, (_, place))| {
+            let (dots, shape) = phosphor_engine::fixture_dots(f, aspect);
+            Light { id: f.id, name: f.name.clone(), place, rect: [place.x, place.y, place.w, place.w / shape.max(0.01)], dots, on: f.enabled && st.comp.dmx.enabled }
+        })
+        .collect()
+}
+
+/// The fixtures, each light in the color it's being sent (dark gray while LED / DMX is off), dragged and sized like
+/// the outputs. The first one moved pins the others where they show.
+fn draw_fixtures(ui: &egui::Ui, st: &mut State, lights: &[Light], rect_of: &dyn Fn([f32; 4]) -> egui::Rect, scale: f32) {
+    if lights.is_empty() {
+        return;
+    }
+    // What goes out is copied for us only while something watches it.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        st.dmx.watching = true;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let sent = st.dmx.sent.clone();
+    #[cfg(target_arch = "wasm32")]
+    let sent = std::collections::BTreeMap::new();
+    let p = ui.painter();
+    let snaps: Vec<(u64, [f32; 4])> = lights.iter().map(|l| (l.id, l.rect)).collect();
+    let mut moved_to = None;
+    for l in lights {
+        let screen = rect_of(l.rect);
+        if !ui.clip_rect().intersects(screen) {
+            continue;
+        }
+        let colors = st.comp.dmx.fixtures.iter().find(|f| f.id == l.id).map(|f| f.read(&sent)).unwrap_or_default();
+        let r = (screen.width().min(screen.height()) * 0.35).clamp(1.0, 6.0);
+        let step = (l.dots.len() / 2000).max(1);
+        for (i, d) in l.dots.iter().enumerate().step_by(step) {
+            let at = egui::pos2(screen.left() + d[0] * screen.width(), screen.top() + d[1] * screen.height());
+            let c = colors.get(i).filter(|_| l.on).map_or(crate::theme::PICTURE_GRID, |c| crate::theme::show_color(*c));
+            p.circle_filled(at, r, c);
+        }
+        let resp = ui.interact(screen, ui.id().with(("stage_fix", l.id)), Sense::click_and_drag());
+        let others: Vec<[f32; 4]> = snaps.iter().filter(|(o, _)| *o != l.id).map(|(_, r)| *r).collect();
+        if let Some(m) = placed_item(ui, ("stage_fix_drag", l.id), screen, l.place, scale, &others, Some(&resp)) {
+            moved_to = Some((l.id, m));
+        }
+        if resp.hovered() || resp.dragged() {
+            p.rect_stroke(screen, 2.0, Stroke::new(1.0, crate::theme::faint()), StrokeKind::Outside);
+        }
+        let color = crate::theme::faint();
+        let mut job = egui::text::LayoutJob::single_section(format!("{} {}", icon::LIGHTBULB, l.name), egui::TextFormat::simple(egui::FontId::proportional(11.0), color));
+        job.wrap = egui::text::TextWrapping::truncate_at_width(screen.width().max(120.0));
+        let galley = p.layout_job(job);
+        p.galley(screen.left_bottom() + egui::vec2(0.0, 3.0), galley, color);
+        resp.on_hover_text(format!("{}: drag it to where it is, its corner sizes it. Lit with what it's being sent.", l.name));
+    }
+    if let Some((id, m)) = moved_to {
+        for (f, l) in st.comp.dmx.fixtures.iter_mut().zip(lights) {
+            f.stage = Some(if f.id == id { m } else { f.stage.unwrap_or(l.place) });
+        }
+    }
 }
 
 /// Something on the stage that moves (drag it) and sizes (drag its bottom-right corner, shape kept). `resp` = its own

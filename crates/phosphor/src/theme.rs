@@ -107,6 +107,11 @@ pub fn accent_index() -> usize {
     ACCENT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// A color that comes from the show itself (a light's sent color, a picked swatch), not from the design: drawn as it is.
+pub fn show_color([r, g, b]: [u8; 3]) -> Color32 {
+    Color32::from_rgb(r, g, b)
+}
+
 /// `base` nudged toward the accent (selected cards, the playing clip): works on any brightness.
 pub fn tint(base: Color32, amount: f32) -> Color32 {
     base.lerp_to_gamma(accent(), amount)

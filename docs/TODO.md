@@ -22,8 +22,9 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
   the computer, the Pi loops it with mpv; a Phosphor renderer on the Pi only later).
   Needs: recording DMX that comes in (another program's output, too), the Pi player (Linux ARM: CI builds that
   already), the card writer, discovery, the hand-over when the main computer stops.
-- **Stage layout, next steps:** the LED / DMX fixtures on the Stage canvas too (lit with what they send); a 3D
-  preview of the stage (screens and projector beams) much later.
+- **Stage layout, next steps:** *(LED / DMX fixtures on the canvas, lit with what they send: built 2026-11-18)*
+  moving heads drawn as a beam (their color isn't read back yet); a 3D preview of the stage (screens and projector
+  beams) much later.
 
 ## Owner's answers (2026-11-15, after the show)
 

@@ -77,6 +77,19 @@ impl PixelOrder {
             PixelOrder::Mono => out[0] = ((r as u32 * 54 + g as u32 * 183 + b as u32 * 19) >> 8) as u8,
         }
     }
+
+    /// The color a pixel's channel values light (the inverse of `write`; white adds to all three).
+    fn read(self, v: &[u8]) -> [u8; 3] {
+        let add = |a: u8, w: u8| a.saturating_add(w);
+        match self {
+            PixelOrder::Rgb => [v[0], v[1], v[2]],
+            PixelOrder::Grb => [v[1], v[0], v[2]],
+            PixelOrder::Brg => [v[1], v[2], v[0]],
+            PixelOrder::Rgbw => [add(v[0], v[3]), add(v[1], v[3]), add(v[2], v[3])],
+            PixelOrder::Grbw => [add(v[1], v[3]), add(v[0], v[3]), add(v[2], v[3])],
+            PixelOrder::Mono => [v[0]; 3],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -286,6 +299,8 @@ pub struct Fixture {
     pub positions: Vec<[f32; 2]>,
     /// `HeadLayout::Custom`: what each of its channels carries, in order.
     pub roles: Vec<Role>,
+    /// Where it is on the Stage layout (None = not placed yet: in a row under the outputs).
+    pub stage: Option<crate::StagePlace>,
 }
 
 impl Default for Fixture {
@@ -316,6 +331,7 @@ impl Default for Fixture {
             average: false,
             positions: Vec::new(),
             roles: Vec::new(),
+            stage: None,
         }
     }
 }
@@ -558,6 +574,28 @@ impl Fixture {
                 Role::Yellow => 255 - b,
                 Role::Amber | Role::Uv | Role::Zero => 0,
                 Role::Extra(i) => extra(*i),
+            })
+            .collect()
+    }
+
+    /// The color of each pixel in `universes` (what was sent), walking pixels exactly like `write`. A moving head's
+    /// color isn't read back (its channels vary by layout): empty.
+    pub fn read(&self, universes: &BTreeMap<u16, [u8; 512]>) -> Vec<[u8; 3]> {
+        if self.shape == FixtureShape::MovingHead {
+            return Vec::new();
+        }
+        let per = self.channels_per_pixel();
+        let mut uni = self.universe;
+        let mut ch = (self.channel.clamp(1, 512) - 1) as usize;
+        (0..self.pixel_count())
+            .map(|_| {
+                if ch + per > 512 {
+                    uni = uni.saturating_add(1);
+                    ch = 0;
+                }
+                let c = universes.get(&uni).map_or([0; 3], |d| self.order.read(&d[ch..ch + per]));
+                ch += per;
+                c
             })
             .collect()
     }
