@@ -110,8 +110,15 @@ impl Hub {
     }
 
     /// Answers a browser's WHEP offer (SDP text): sets up its connection on its own thread and returns the answer
-    /// (SDP text). `host` = this Mac's address on the network the browser reached it on.
-    pub fn answer(&self, offer: &str, host: std::net::IpAddr) -> Result<String, String> {
+    /// (SDP text). `host` = this Mac's address on the network the browser reached it on. The viewer watches while
+    /// `stay` says so (the session runs and nobody disconnected it), at most `MAX_VIEWERS` at once.
+    pub fn answer(&self, offer: &str, host: std::net::IpAddr, stay: impl Fn() -> bool + Send + 'static) -> Result<String, String> {
+        // A place is taken first (several offers at once can't pass the limit together) and given back on any failure.
+        if self.viewers.fetch_add(1, Ordering::Relaxed) >= MAX_VIEWERS {
+            self.viewers.fetch_sub(1, Ordering::Relaxed);
+            return Err("too many viewers: the picture stream (MJPEG) still works".into());
+        }
+        let place = Place(self.viewers.clone());
         static CRYPTO: std::sync::Once = std::sync::Once::new();
         CRYPTO.call_once(|| str0m::crypto::from_feature_flags().install_process_default());
         let offer = SdpOffer::from_sdp_string(offer).map_err(|e| format!("bad offer: {e}"))?;
@@ -123,16 +130,26 @@ impl Hub {
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| format!("can't answer: {e}"))?;
         let (tx, rx) = channel();
         self.inner.lock().unwrap().viewers.push(tx);
-        self.viewers.fetch_add(1, Ordering::Relaxed);
-        let count = self.viewers.clone();
         std::thread::Builder::new()
             .name("webrtc viewer".into())
             .spawn(move || {
-                run_viewer(rtc, socket, rx);
-                count.fetch_sub(1, Ordering::Relaxed);
+                let _place = place;
+                run_viewer(rtc, socket, rx, stay);
             })
             .map_err(|e| e.to_string())?;
         Ok(answer.to_sdp_string())
+    }
+}
+
+/// Most WebRTC viewers at once (each has its own thread and connection; more watch the MJPEG stream).
+pub const MAX_VIEWERS: usize = 16;
+
+/// A viewer's place in the count, given back when it goes.
+struct Place(Arc<AtomicUsize>);
+
+impl Drop for Place {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -194,7 +211,7 @@ fn start_encoder(inner: Arc<Mutex<Inner>>, size: (u32, u32), fps: u32) -> Option
 
 /// One viewer's connection: UDP in and out, pictures from the encoder (from the first keyframe on), until the
 /// browser goes away.
-fn run_viewer(mut rtc: Rtc, socket: UdpSocket, pictures: Receiver<Picture>) {
+fn run_viewer(mut rtc: Rtc, socket: UdpSocket, pictures: Receiver<Picture>, stay: impl Fn() -> bool) {
     let local = match socket.local_addr() {
         Ok(a) => a,
         Err(_) => return,
@@ -203,7 +220,15 @@ fn run_viewer(mut rtc: Rtc, socket: UdpSocket, pictures: Receiver<Picture>) {
     let mut mid: Option<Mid> = None;
     let mut started = false;
     let since = Instant::now();
+    let mut checked = Instant::now();
     loop {
+        // Disconnected from the Devices panel, or the session stopped (asked a few times a second).
+        if checked.elapsed() > Duration::from_millis(250) {
+            checked = Instant::now();
+            if !stay() {
+                return;
+            }
+        }
         // Everything str0m wants to send, until it says when it next needs time.
         let deadline = loop {
             match rtc.poll_output() {
@@ -275,7 +300,12 @@ mod tests {
     fn an_offer_from_a_browser_gets_an_answer_with_h264() {
         let offer = "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 102\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:abcd\r\na=ice-pwd:abcdefghijklmnopqrstuvwx\r\na=ice-options:trickle\r\na=fingerprint:sha-256 6B:8B:F0:65:5F:78:E2:51:3B:AC:6F:F3:3F:46:1B:35:DC:B8:5F:64:1A:24:C2:43:F0:A1:58:D0:A1:2C:19:08\r\na=setup:actpass\r\na=mid:0\r\na=recvonly\r\na=rtcp-mux\r\na=rtcp-rsize\r\na=rtpmap:102 H264/90000\r\na=rtcp-fb:102 nack\r\na=rtcp-fb:102 nack pli\r\na=fmtp:102 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\n";
         let hub = Hub::default();
-        let answer = hub.answer(offer, "127.0.0.1".parse().unwrap()).expect("answer");
+        let answer = hub.answer(offer, "127.0.0.1".parse().unwrap(), || false).expect("answer");
         assert!(answer.contains("H264/90000") && answer.contains("a=candidate"), "{answer}");
+        // A full house: the next one is turned away (and the count stays right).
+        let full = Hub::default();
+        full.viewers.store(MAX_VIEWERS, Ordering::Relaxed);
+        assert!(full.answer(offer, "127.0.0.1".parse().unwrap(), || false).is_err());
+        assert_eq!(full.viewers.load(Ordering::Relaxed), MAX_VIEWERS);
     }
 }

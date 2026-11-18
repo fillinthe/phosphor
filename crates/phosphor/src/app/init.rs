@@ -335,6 +335,7 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 internet: None,
                 follow_at_launch: if bench.is_some() { String::new() } else { stored(KEY_FOLLOW_AT_LAUNCH).unwrap_or_default() },
+                follow_password: if bench.is_some() { String::new() } else { stored(KEY_FOLLOW_PASSWORD).unwrap_or_default() },
                 #[cfg(not(target_arch = "wasm32"))]
                 leader: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
@@ -524,11 +525,13 @@ impl PhosphorApp {
         // A player follows its leader from the start (its outputs open on their screens as usual).
         #[cfg(not(target_arch = "wasm32"))]
         if !app.state.follow_at_launch.trim().is_empty() {
-            app.state.following = Some(crate::follow::Link::connect(&app.state.follow_at_launch.clone()));
+            app.state.following = Some(crate::follow::Link::connect(&app.state.follow_at_launch.clone(), &app.state.follow_password.clone()));
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(addr) = app.bench.as_ref().and_then(|b| b.cfg.follow.clone()) {
-            app.state.following = Some(crate::follow::Link::connect(&addr));
+            // (`--remote-password` doubles as the leader's password for a bench that follows.)
+            let password = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()).unwrap_or_default();
+            app.state.following = Some(crate::follow::Link::connect(&addr, &password));
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
             if let Err(e) = app.state.net.start() {

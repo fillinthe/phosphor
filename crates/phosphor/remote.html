@@ -491,9 +491,7 @@ $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwgo').cl
 
 // Guests: who this phone is (a remembered id) and what to call them.
 function hello() {
-  let tok = localStorage.getItem('phosphor-seat');
-  if (!tok) { tok = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('phosphor-seat', tok); }
-  send({ t: 'hello', token: tok, name: localStorage.getItem('phosphor-name') || '' });
+  send({ t: 'hello', token: localStorage.getItem('phosphor-seat') || '', name: localStorage.getItem('phosphor-name') || '' });
 }
 if (guest) {
   const n = $('#playname'); n.value = localStorage.getItem('phosphor-name') || '';
@@ -508,7 +506,8 @@ function connect() {
   };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.you !== undefined) { me = m.you; if (state) render(); return; }
+    // (The Mac gives each phone its id: kept so a reload or a dropped Wi-Fi keeps its place in line.)
+    if (m.you !== undefined) { me = m.you; if (m.token) localStorage.setItem('phosphor-seat', m.token); if (state) render(); return; }
     if (m.auth !== undefined) return auth(m.auth);
     state = m; render();
   };

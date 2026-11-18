@@ -64,7 +64,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::heading_help(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE), "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways. On the phone, Share › Add to Home Screen keeps it as an app with Phosphor's icon, full screen.");
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
-                .on_hover_text("Without it, people who open the link can only watch the output");
+                .on_hover_text("Without it, people who open the link can only watch the output. Another Phosphor that follows this show needs it too");
             ui.add_enabled_ui(*require_password, |ui| crate::ui::password_field(ui, remote_password, "password", 140.0));
         });
         if *require_password && remote_password.is_empty() {
@@ -331,10 +331,12 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
             ui.horizontal(|ui| {
-                let w = (ui.available_width() - 90.0).clamp(100.0, 260.0);
+                let w = (ui.available_width() - 360.0).clamp(100.0, 260.0);
                 crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
+                crate::ui::password_field(ui, &mut st.follow_password, "its password, if any", 130.0)
+                    .on_hover_text("The leader's \"Password to control\" (Session panel), when it has one");
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {
-                    st.following = Some(crate::follow::Link::connect(&addr));
+                    st.following = Some(crate::follow::Link::connect(&addr, &st.follow_password));
                 }
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::MONITOR_PLAY, "Show its picture"))
                     .on_hover_text("A new layer with the other Phosphor's output, live (it needs nothing else here: no project, no media). Works across the internet when that one is set to Reach from the internet")
@@ -348,7 +350,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
                     st.selected = Some(layer);
                     st.launch_source(layer, source, Vec::new(), addr.trim().to_string(), now);
                 }
-                help(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
+                help(ui, "On the leading Mac, start its Session below. Then type its address here (and its password to control, if it has one): both play the same show in sync, each on its own projectors.");
             });
             ui.ctx().data_mut(|d| d.insert_temp(key, addr));
         }
