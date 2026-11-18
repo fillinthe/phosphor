@@ -18,6 +18,8 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
      to its HDMI) to the Pi, which keeps it on its card.
   5. **It runs on its own:** at power-on, and whenever the computer running the show goes quiet (no frames for a
      few seconds), it takes over and plays what it was sent, looping, until the computer is back.
+  **Video too** (owner): research and the recommended way in `docs/PI-PLAYER.md` (bake each output to a video on
+  the computer, the Pi loops it with mpv; a Phosphor renderer on the Pi only later).
   Needs: recording DMX that comes in (another program's output, too), the Pi player (Linux ARM: CI builds that
   already), the card writer, discovery, the hand-over when the main computer stops.
 - **Stage layout, next steps:** the LED / DMX fixtures on the Stage canvas too (lit with what they send); a 3D
