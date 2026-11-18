@@ -300,7 +300,7 @@ impl Composition {
 
     /// Effect and generator ids in use (for packing shaders with a show).
     pub fn used_shader_ids(&self) -> Vec<String> {
-        let effects = self.all_effects().map(|e| e.effect.clone());
+        let effects = self.all_effects().chain(self.stored_effects()).map(|e| e.effect.clone());
         let generators = self.sources().filter_map(|s| if let SourceSpec::Generator(g) = s { Some(g.clone()) } else { None });
         // Blend shaders and mixer plugins too.
         let mixers = self.layers.iter().filter_map(|l| l.mixer.clone());

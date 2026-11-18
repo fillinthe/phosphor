@@ -42,6 +42,12 @@ impl Composition {
             mods(&mut e.mods);
             effects.push(e.id);
         }
+        // The chains kept in clips and media files too (a playing clip's live chain is above; its saved one is here).
+        for e in self.stored_effects_mut().filter(|e| e.effect == id) {
+            e.values = values(&e.values);
+            mods(&mut e.mods);
+            effects.push(e.id);
+        }
         let mut layers: Vec<u64> = Vec::new();
         for l in &mut self.layers {
             if matches!(&l.source, SourceSpec::Generator(g) if g == id) {
@@ -90,6 +96,20 @@ mod tests {
         assert_eq!(e.mods.iter().map(|m| m.index).collect::<Vec<_>>(), vec![1], "Hue Spin's modulation moved, Blur Size's went");
         assert_eq!(c.control_maps.len(), 1);
         assert_eq!(c.control_maps[0].target, ControlTarget::EffectParam { effect: 50, index: 1 });
+    }
+
+    /// Effects kept in a clip (not playing) and in a media file follow a shader edit too, and count as used.
+    #[test]
+    fn clip_and_file_effects_follow_and_count() {
+        let mut c = Composition::default();
+        let fx = |id| EffectState { id, effect: "custom:p".into(), enabled: true, values: vec![0.1, 0.2], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 };
+        let l = c.add_layer();
+        l.clips.push(crate::Clip { effects: vec![fx(60)], ..Default::default() });
+        c.media_bin.push(crate::MediaItem { path: "/a.mov".into(), effects: vec![fx(61)], ..Default::default() });
+        assert!(c.used_shader_ids().contains(&"custom:p".to_string()), "a packed show takes the clip's shader");
+        c.remap_params("custom:p", &["A", "B"], &[("B", 0.0), ("A", 0.0)]);
+        assert_eq!(c.layers[0].clips[0].effects[0].values, vec![0.2, 0.1]);
+        assert_eq!(c.media_bin[0].effects[0].values, vec![0.2, 0.1]);
     }
 }
 
