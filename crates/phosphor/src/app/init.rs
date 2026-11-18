@@ -332,6 +332,8 @@ impl PhosphorApp {
                 ffgl: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 following: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                internet: None,
                 follow_at_launch: if bench.is_some() { String::new() } else { stored(KEY_FOLLOW_AT_LAUNCH).unwrap_or_default() },
                 #[cfg(not(target_arch = "wasm32"))]
                 leader: Default::default(),

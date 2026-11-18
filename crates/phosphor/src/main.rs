@@ -123,6 +123,8 @@ mod advatek;
 #[cfg(not(target_arch = "wasm32"))]
 mod net_adapters;
 #[cfg(not(target_arch = "wasm32"))]
+mod internet;
+#[cfg(not(target_arch = "wasm32"))]
 mod streamdeck;
 #[cfg(not(target_arch = "wasm32"))]
 mod milkdrop;
