@@ -919,7 +919,7 @@ fn compile(st: &mut State, index: usize, save: bool) {
     let sh = &mut st.editor.shaders[index];
     let new_id = id_for(&sh.slug, &sh.source);
     if new_id != sh.id {
-        shaders::unregister_custom(&sh.id);
+        engine.remove_custom(&sh.id);
         sh.id = new_id;
     }
     // Its parameters before, so whatever already uses it keeps its settings by name (`Composition::remap_params`).
@@ -1188,7 +1188,10 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(i) = delete {
         let sh = st.editor.shaders.remove(i);
-        shaders::unregister_custom(&sh.id);
+        match st.engine.as_mut() {
+            Some(engine) => engine.remove_custom(&sh.id),
+            None => shaders::unregister_custom(&sh.id),
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(dir) = effects_dir() {
             let _ = std::fs::remove_file(dir.join(format!("{}.wgsl", sh.slug)));
