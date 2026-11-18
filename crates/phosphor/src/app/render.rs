@@ -2,6 +2,13 @@
 
 use super::*;
 
+/// Who a captured program frame is for (bits of its tag): only they get a copy when it comes back.
+const TO_STREAM: u64 = 1;
+const TO_NET: u64 = 2;
+const TO_NDI: u64 = 4;
+const TO_SPOUT: u64 = 8;
+const TO_VCAM: u64 = 16;
+
 impl State {
     /// Is an engine frame due now, at the chosen render rate?
     pub(crate) fn render_due(&mut self, now: f64) -> bool {
@@ -185,7 +192,7 @@ impl PhosphorApp {
                 for l in layers {
                     l.active_clip.hash(&mut h);
                     l.enabled.hash(&mut h);
-                    format!("{:?}", l.source).hash(&mut h);
+                    super::stills::hash_debug(&l.source, &mut h);
                     layer_textures.contains_key(&l.id).hash(&mut h);
                 }
                 h.finish()
@@ -454,7 +461,13 @@ impl PhosphorApp {
         let vcam_due = vcam.frame_due(now);
         #[cfg(not(target_os = "macos"))]
         let vcam_due = false;
-        let captured = (stream_due || net_due || ndi_due || spout_due || vcam_due) && engine.capture_frame();
+        // Who asked for this frame: it goes only to them when it comes back (a frame copied for every running output,
+        // due or not, was wasted work).
+        let wants = [(stream_due, TO_STREAM), (net_due, TO_NET), (ndi_due, TO_NDI), (spout_due, TO_SPOUT), (vcam_due, TO_VCAM)]
+            .iter()
+            .filter(|(due, _)| *due)
+            .fold(0, |m, (_, bit)| m | bit);
+        let captured = wants != 0 && engine.capture_frame(wants);
         match offline {
             Some(o) if stream_due && captured => o.done += 1,
             None if stream_due && !captured => stream.repeat_last(),
@@ -471,22 +484,23 @@ impl PhosphorApp {
             }
         }
         for f in engine.poll_captures() {
+            let wants = |bit: u64| f.tag & bit != 0;
             #[cfg(any(target_os = "macos", windows))]
-            if ndi.connections() > 0 {
+            if wants(TO_NDI) && ndi.connections() > 0 {
                 ndi.push(f.width, f.height, f.rgba.clone(), comp.ndi.fps);
             }
             #[cfg(windows)]
-            if spout.running() {
+            if wants(TO_SPOUT) && spout.running() {
                 spout.push(f.width, f.height, f.rgba.clone());
             }
             #[cfg(target_os = "macos")]
-            if vcam.connected() {
+            if wants(TO_VCAM) && vcam.connected() {
                 vcam.push(f.width, f.height, &f.rgba);
             }
-            if net.running() {
+            if wants(TO_NET) && net.running() {
                 net.push_frame(f.width, f.height, f.rgba.clone());
             }
-            if stream.running() && rec_src.is_none() {
+            if wants(TO_STREAM) && stream.running() && rec_src.is_none() {
                 stream.push(f.width, f.height, f.rgba);
             }
         }

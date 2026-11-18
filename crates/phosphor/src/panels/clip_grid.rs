@@ -485,8 +485,8 @@ fn hash_values(values: &[f32]) -> u64 {
 }
 
 fn hash_text(style: &phosphor_engine::TextStyle) -> u64 {
-    use std::hash::{Hash, Hasher};
+    use std::hash::Hasher;
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    format!("{style:?}").hash(&mut h);
+    crate::app::stills::hash_debug(style, &mut h);
     h.finish()
 }

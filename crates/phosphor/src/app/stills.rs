@@ -4,6 +4,20 @@
 //! made from changes (another layer selected, a clip launched on it, its picture arriving), every still is taken
 //! again once, a moment later so a movie that was still opening has a frame.
 
+/// Adds a value's debug text to a hash without making the text (for settings that hold floats, so no `Hash`):
+/// asked for every frame while tiles show, a `format!` allocated each time.
+pub(crate) fn hash_debug(value: &impl std::fmt::Debug, h: &mut impl std::hash::Hasher) {
+    struct Feed<'a, H: std::hash::Hasher>(&'a mut H);
+    impl<H: std::hash::Hasher> std::fmt::Write for Feed<'_, H> {
+        fn write_str(&mut self, s: &str) -> std::fmt::Result {
+            self.0.write(s.as_bytes());
+            Ok(())
+        }
+    }
+    use std::fmt::Write;
+    let _ = write!(Feed(h), "{value:?}");
+}
+
 /// Seconds after the source picture changes that every still is taken again.
 const AFTER_SOURCE_CHANGE: f64 = 1.0;
 
