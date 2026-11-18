@@ -203,18 +203,33 @@ impl ControlHub {
 }
 
 /// Followed controls whose value changed since `seen` was last filled: what each follower gets now. A control seen
-/// for the first time (a project just opened) pushes nothing.
+/// for the first time (a project just opened) pushes nothing. A change goes down the whole chain in one go (A → B → C),
+/// and each control is set at most once per change, so two controls following each other (or any loop) settle
+/// instead of chasing each other forever.
 pub fn follow_sends(comp: &Composition, seen: &mut HashMap<ControlTarget, f32>) -> Vec<(ControlTarget, f32)> {
-    let mut sends = Vec::new();
+    let mut sends: Vec<(ControlTarget, f32)> = Vec::new();
+    let mut queue: Vec<(ControlTarget, f32)> = Vec::new();
     for f in &comp.follows {
         let Some(v) = get_target(comp, &f.source) else { continue };
-        if seen.get(&f.source).is_some_and(|old| (old - v).abs() > 1e-4) {
-            sends.push((f.to.target.clone(), f.to.value(v)));
+        let moved = seen.insert(f.source.clone(), v).is_some_and(|old| (old - v).abs() > 1e-4);
+        if moved && !queue.iter().any(|(t, _)| *t == f.source) {
+            queue.push((f.source.clone(), v));
         }
     }
-    for f in &comp.follows {
-        if let Some(v) = get_target(comp, &f.source) {
-            seen.insert(f.source.clone(), v);
+    let mut touched: Vec<ControlTarget> = queue.iter().map(|(t, _)| t.clone()).collect();
+    while let Some((source, v)) = queue.pop() {
+        for f in comp.follows.iter().filter(|f| f.source == source) {
+            if touched.contains(&f.to.target) {
+                continue;
+            }
+            let nv = f.to.value(v);
+            touched.push(f.to.target.clone());
+            sends.push((f.to.target.clone(), nv));
+            // A follower that others follow: they get its new value now, and it doesn't count as moved next frame.
+            if comp.follows.iter().any(|g| g.source == f.to.target) {
+                seen.insert(f.to.target.clone(), nv);
+                queue.push((f.to.target.clone(), nv));
+            }
         }
     }
     sends
