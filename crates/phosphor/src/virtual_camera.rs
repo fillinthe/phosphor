@@ -245,12 +245,17 @@ impl Sender {
         Some(Sender { device, stream, queue, scaler: None, size: (0, 0) })
     }
 
+    /// The camera's queue is full: it isn't taking frames (behind, or its extension stopped).
+    fn queue_full(&self) -> bool {
+        // SAFETY: the queue stays valid while the Sender lives.
+        unsafe { CMSimpleQueueGetCount(self.queue) >= CMSimpleQueueGetCapacity(self.queue) }
+    }
+
     /// One frame of the program (RGBA, any size): scaled to the camera's 1920×1080 BGRA and queued, unless the
     /// queue is full (the camera's consumer is behind: this frame is skipped).
     pub fn send(&mut self, width: u32, height: u32, rgba: &[u8]) {
         use ffmpeg_next::format::Pixel;
-        // SAFETY: the queue stays valid while the Sender lives.
-        if unsafe { CMSimpleQueueGetCount(self.queue) >= CMSimpleQueueGetCapacity(self.queue) } {
+        if self.queue_full() {
             return;
         }
         if self.size != (width, height) || self.scaler.is_none() {
@@ -318,20 +323,39 @@ pub struct VirtualCamera {
     sender: Option<Sender>,
     pacer: crate::pacing::FramePacer,
     retry_at: f64,
+    /// Since when the camera's queue has been full (nothing taken).
+    full_since: Option<f64>,
 }
+
+/// A queue full this long: the camera extension stopped or restarted (its old queue is never emptied): connect again.
+const STUCK_SECS: f64 = 3.0;
 
 impl VirtualCamera {
     /// A frame is wanted now (connects first when it can).
     pub fn frame_due(&mut self, now: f64) -> bool {
         if !self.on {
             self.sender = None;
+            self.full_since = None;
             return false;
         }
         if self.sender.is_none() && now >= self.retry_at {
             self.retry_at = now + 2.0;
             self.sender = Sender::connect();
         }
-        self.sender.is_some() && self.pacer.due(now, FPS)
+        let Some(sender) = self.sender.as_ref() else { return false };
+        // The camera isn't taking frames: no program copy for it until it does (the copy used to be made and then
+        // thrown away), and a queue stuck full means its extension went away: connect again.
+        if sender.queue_full() {
+            let since = *self.full_since.get_or_insert(now);
+            if now - since > STUCK_SECS {
+                self.sender = None;
+                self.full_since = None;
+                self.retry_at = now;
+            }
+            return false;
+        }
+        self.full_since = None;
+        self.pacer.due(now, FPS)
     }
 
     pub fn push(&mut self, width: u32, height: u32, rgba: &[u8]) {
