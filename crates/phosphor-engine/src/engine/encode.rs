@@ -189,11 +189,11 @@ impl Engine {
         }
     }
 
-    /// Queues a non-blocking copy of the current output for streaming/recording.
-    /// Returns false if the readback ring is full (the caller should repeat its last frame).
-    pub fn capture_frame(&mut self) -> bool {
+    /// Queues a non-blocking copy of the current output for streaming/recording; `tag` comes back on the frame (who
+    /// asked for it). Returns false if the readback ring is full (the caller should repeat its last frame).
+    pub fn capture_frame(&mut self, tag: u64) -> bool {
         match &self.output {
-            Some(out) => self.capture.enqueue(&self.gpu.device, &self.gpu.queue, out),
+            Some(out) => self.capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, out, tag),
             None => false,
         }
     }

@@ -76,7 +76,7 @@ pub(crate) use web_control::web_badge;
 #[cfg(not(target_arch = "wasm32"))]
 mod convert_window;
 mod status;
-mod stills;
+pub(crate) mod stills;
 mod show;
 
 #[allow(unused_imports)]
