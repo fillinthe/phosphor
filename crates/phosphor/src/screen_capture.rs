@@ -72,20 +72,49 @@ fn list() -> Result<Vec<Target>, String> {
     Ok(out)
 }
 
+/// A ScreenCaptureKit stream started on a thread. Its owner going away stops it, also while it's still starting
+/// (then the starting thread stops it as soon as it's up: before, it kept capturing and the recording dot stayed).
+#[derive(Clone, Default)]
+struct StreamSlot(Arc<Mutex<(Option<SCStream>, bool)>>);
+
+impl StreamSlot {
+    /// The starting thread: the stream is up (stopped at once if its owner has gone meanwhile).
+    fn started(&self, stream: SCStream) {
+        let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.1 {
+            drop(slot);
+            let _ = stream.stop_capture();
+        } else {
+            slot.0 = Some(stream);
+        }
+    }
+
+    /// The owner is gone: stop it now (on a thread: stopping waits for ScreenCaptureKit), or once it has started.
+    fn stop(&self) {
+        let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        slot.1 = true;
+        if let Some(s) = slot.0.take() {
+            std::thread::spawn(move || {
+                let _ = s.stop_capture();
+            });
+        }
+    }
+}
+
 /// A running capture: the newest frame, or why it couldn't start.
 pub struct ScreenCapture {
     latest: Arc<Mutex<Option<PixelBuffer>>>,
     error: Arc<Mutex<Option<String>>>,
-    stream: Arc<Mutex<Option<SCStream>>>,
+    stream: StreamSlot,
 }
 
 impl ScreenCapture {
     /// Starts capturing `url` ("display:<id>" / "window:<id>") on a thread; frames follow as they come.
     pub fn start(url: &str) -> Self {
-        let cap = Self { latest: Arc::default(), error: Arc::default(), stream: Arc::default() };
+        let cap = Self { latest: Arc::default(), error: Arc::default(), stream: StreamSlot::default() };
         let (latest, error, stream, url) = (cap.latest.clone(), cap.error.clone(), cap.stream.clone(), url.to_string());
         std::thread::spawn(move || match open(&url, latest) {
-            Ok(s) => *stream.lock().unwrap_or_else(|e| e.into_inner()) = Some(s),
+            Ok(s) => stream.started(s),
             Err(e) => *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(e),
         });
         cap
@@ -103,12 +132,7 @@ impl ScreenCapture {
 
 impl Drop for ScreenCapture {
     fn drop(&mut self) {
-        if let Some(s) = self.stream.lock().ok().and_then(|mut s| s.take()) {
-            // Stopping waits for ScreenCaptureKit; don't hold up the UI for it.
-            std::thread::spawn(move || {
-                let _ = s.stop_capture();
-            });
-        }
+        self.stream.stop();
     }
 }
 
@@ -163,7 +187,7 @@ fn open(url: &str, latest: Arc<Mutex<Option<PixelBuffer>>>) -> Result<SCStream, 
 /// This Mac's sound, every app but Phosphor (ScreenCaptureKit audio): for the beat detector and the meters, with no
 /// loopback driver. Needs the same Screen & System Audio Recording permission as screen capture.
 pub struct SystemSound {
-    stream: Arc<Mutex<Option<SCStream>>>,
+    stream: StreamSlot,
     error: Arc<Mutex<Option<String>>>,
 }
 
@@ -173,10 +197,10 @@ pub const SYSTEM_SOUND_RATE: u32 = 48_000;
 impl SystemSound {
     /// Starts on a thread; each block of sound (left, right) goes to `push`.
     pub fn start(push: impl Fn(&[[f32; 2]]) + Send + Sync + 'static) -> Self {
-        let s = Self { stream: Arc::default(), error: Arc::default() };
+        let s = Self { stream: StreamSlot::default(), error: Arc::default() };
         let (stream, error) = (s.stream.clone(), s.error.clone());
         std::thread::spawn(move || match open_sound(push) {
-            Ok(st) => *stream.lock().unwrap_or_else(|e| e.into_inner()) = Some(st),
+            Ok(st) => stream.started(st),
             Err(e) => *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(e),
         });
         s
@@ -189,11 +213,7 @@ impl SystemSound {
 
 impl Drop for SystemSound {
     fn drop(&mut self) {
-        if let Some(s) = self.stream.lock().ok().and_then(|mut s| s.take()) {
-            std::thread::spawn(move || {
-                let _ = s.stop_capture();
-            });
-        }
+        self.stream.stop();
     }
 }
 
