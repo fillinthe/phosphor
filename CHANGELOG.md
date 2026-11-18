@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.11 (not released yet)
 
+- **Record DMX from another program or a desk** (LED / DMX › Record DMX › what comes in): LightJams, a console,
+  anything sending Art-Net or sACN to this computer; play it back here (the first step to a Raspberry Pi that runs
+  a show on its own).
 - **Stage layout** (Outputs › Stage): a big black canvas of the venue with every output live where it really
   is: drag an output into place, size it by its corner, edges snap to each other; scroll or drag the black to move
   around, pinch to zoom; a picture of the venue behind them if you like (Venue picture). Saved with the project.

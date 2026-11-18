@@ -459,6 +459,12 @@ impl ControlHub {
     }
 
     /// What the DMX listener has heard ("Art-Net on udp/6454 · 2 universes"), or why it can't listen.
+    /// Every DMX universe heard (DMX in), as it is now: what the DMX recorder keeps when it records what comes in.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn dmx_in_frame(&self) -> Option<std::collections::BTreeMap<u16, [u8; 512]>> {
+        self.dmx_listener.as_ref().and_then(|l| l.frame())
+    }
+
     pub fn dmx_status(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
         return self.dmx_listener.as_ref().map_or_else(String::new, |l| l.status());
