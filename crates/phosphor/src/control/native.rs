@@ -16,6 +16,8 @@ pub struct Backend {
     midi_out: Vec<midir::MidiOutputConnection>,
     /// Socket feedback goes out from.
     osc_out: Option<UdpSocket>,
+    /// Recipients given by name: looked up off the UI thread, kept a minute.
+    hosts: crate::net_util::HostCache,
     osc_stop: Option<Arc<AtomicBool>>,
     mdns: Option<mdns_sd::ServiceDaemon>,
 }
@@ -79,7 +81,10 @@ impl Backend {
         let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args });
         let Ok(bytes) = rosc::encoder::encode(&msg) else { return };
         for ip in ips {
-            let _ = sock.send_to(&bytes, (ip.as_str(), port));
+            // (A name not found yet, or not at all, is skipped: never a lookup per message on the UI thread.)
+            if let Some(to) = self.hosts.addr(ip, port).filter(|a| a.is_ipv4()) {
+                let _ = sock.send_to(&bytes, to);
+            }
         }
     }
 
@@ -127,7 +132,8 @@ fn parse_midi(msg: &[u8]) -> Option<Incoming> {
 
 /// One OSC port's listener thread: every message is counted per sender (unless blocked) and delivered.
 fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, ask_tx: mpsc::Sender<super::ask::OscAsk>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
-    let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| e.to_string())?;
+    // (The listener being replaced lets go of the port within its read timeout.)
+    let socket = crate::net_util::bind_retrying(|| UdpSocket::bind(("0.0.0.0", port))).map_err(|e| e.to_string())?;
     socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
     std::thread::Builder::new()
         .name(format!("phosphor-osc {port}"))
