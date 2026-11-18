@@ -201,6 +201,31 @@ fn keep_copy_at(path: &Path, json: &str, ahead: bool) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Keeps a fresh copy of every project in `paths` whose file is there now (Recent: a drive plugged in gives each of its
+/// projects a copy, so they open when it's away later, opened lately or not). A copy saved while its drive was away
+/// is newer than the file and is left alone. On a thread of its own (they may be on a slow drive).
+pub fn refresh_copies(paths: Vec<String>) {
+    let _ = std::thread::Builder::new().name("project-copies".into()).spawn(move || {
+        for p in paths {
+            let Some(copy) = kept_copy_path(&p) else { return };
+            refresh_copy_at(Path::new(&p), &copy);
+        }
+    });
+}
+
+fn refresh_copy_at(project: &Path, copy: &Path) {
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let Some(file_time) = modified(project) else { return };
+    if ahead_mark(copy).exists() || modified(copy).is_some_and(|c| c >= file_time) {
+        return;
+    }
+    if let Ok(json) = std::fs::read_to_string(project)
+        && phosphor_engine::Composition::from_json(&json).is_ok()
+    {
+        let _ = keep_copy_at(copy, &json, false);
+    }
+}
+
 /// This computer's copy of `project`, and whether it is newer than the project's own file.
 pub fn kept_copy(project: &str) -> Option<(String, bool)> {
     kept_copy_at(&kept_copy_path(project)?)
@@ -226,6 +251,28 @@ mod kept_copy_tests {
         // A save that reached the drive again: level.
         super::keep_copy_at(&path, "three", false).unwrap();
         assert_eq!(super::kept_copy_at(&path), Some(("three".to_string(), false)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn projects_whose_drive_is_there_get_a_copy() {
+        let dir = std::env::temp_dir().join(format!("phosphor-refresh-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (project, copy) = (dir.join("show.phosphor"), dir.join("copies").join("a.phosphor"));
+        let json = phosphor_engine::Composition::default().to_json();
+        std::fs::write(&project, &json).unwrap();
+        super::refresh_copy_at(&project, &copy);
+        assert_eq!(super::kept_copy_at(&copy), Some((json.clone(), false)));
+        // A copy saved with the drive away is newer: never overwritten by the older file.
+        super::keep_copy_at(&copy, "work done away", true).unwrap();
+        super::refresh_copy_at(&project, &copy);
+        assert_eq!(super::kept_copy_at(&copy).map(|c| c.0), Some("work done away".into()));
+        // Not a project (half-written, another file): no copy made.
+        let (bad, bad_copy) = (dir.join("bad.phosphor"), dir.join("copies").join("b.phosphor"));
+        std::fs::write(&bad, "{not json").unwrap();
+        super::refresh_copy_at(&bad, &bad_copy);
+        assert!(!bad_copy.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

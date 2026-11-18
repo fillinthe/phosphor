@@ -648,7 +648,7 @@ impl State {
         if !there {
             // No copy either (never opened on this computer): said plainly, and it stays in Recent for when the
             // drive is back. (It used to be dropped from Recent on the first failed click.)
-            self.notice = Some(format!("Couldn't open \"{name}\": its file isn't there right now ({asked}). Plug in its drive and click it again, or use Open a file… to find it."));
+            self.notice = Some(format!("Couldn't open \"{name}\": its drive isn't connected ({asked}), and this computer has no copy of it yet. Plug the drive in once: from then on Phosphor keeps a copy here, so it opens without the drive."));
             return false;
         }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map(|c| (c, j)).map_err(|e| e.to_string())) {
