@@ -243,6 +243,12 @@ impl Gpu {
         self.pipelines.retain(|(e, _), _| *e != entry);
     }
 
+    /// Is anything kept for this entry (its module or a pipeline)?
+    #[cfg(test)]
+    pub(crate) fn keeps(&self, entry: &str) -> bool {
+        self.custom_modules.contains_key(entry) || self.pipelines.keys().any(|(e, _)| *e == entry)
+    }
+
     /// Installs a module + pipeline built elsewhere (background shader compilation).
     pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipeline: wgpu::RenderPipeline) {
         self.custom_modules.insert(entry, module);

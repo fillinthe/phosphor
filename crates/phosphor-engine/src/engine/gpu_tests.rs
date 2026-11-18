@@ -1251,3 +1251,50 @@ fn transform_on_master_moves_the_whole_output() {
     assert!(at(30) < 30, "left side empty: {}", at(30));
     assert!(at(120) > 200, "picture right of the middle: {}", at(120));
 }
+
+/// Compiling a Shader Editor shader again frees the previous compile's module, pipelines and pass plan (each compile
+/// used to leave them behind), and a layer using it keeps drawing; deleting it frees the last one.
+#[test]
+fn recompiling_a_user_shader_frees_the_old_one() {
+    let Some(mut engine) = test_engine() else { return };
+    let source = crate::custom::TEMPLATES.iter().find(|t| t.source.contains("// @feedback")).expect("a feedback template").source;
+    let id = "custom:recompile_leak_test";
+    let first = engine.compile_custom(id, source).expect("compiles").entry;
+    assert!(crate::shaders::pass_plan(first).is_some(), "a feedback shader has a plan");
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() };
+    layer.effects.push(comp.new_effect(id).expect("listed as an effect"));
+    comp.layers.push(layer);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let second = engine.compile_custom(id, source).expect("compiles again").entry;
+    assert_ne!(first, second);
+    assert!(!engine.gpu.keeps(first), "the old module and pipelines are gone");
+    assert!(crate::shaders::pass_plan(first).is_none(), "the old pass plan is gone");
+    assert!(engine.gpu.keeps(second));
+    let px = middle(&mut engine, &comp);
+    assert!(px[0] > 200, "still draws after the recompile: {px:?}");
+    engine.remove_custom(id);
+    assert!(!engine.gpu.keeps(second) && crate::shaders::pass_plan(second).is_none(), "deleted: nothing kept");
+    assert!(crate::shaders::effect(id).is_none());
+}
+
+/// A removed effect's history (trails) and multi-pass buffers are freed while its layer stays; a switched-off one
+/// keeps them.
+#[test]
+fn a_removed_effects_buffers_are_freed() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() };
+    let trails = comp.new_effect("trails").expect("trails");
+    let trails_id = trails.id;
+    layer.effects.push(trails);
+    comp.layers.push(layer);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].history.contains_key(&trails_id), "trails keep their last picture");
+    comp.layers[0].effects[0].enabled = false;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].history.contains_key(&trails_id), "switched off: kept");
+    comp.layers[0].effects.clear();
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].history.is_empty(), "removed: freed");
+}

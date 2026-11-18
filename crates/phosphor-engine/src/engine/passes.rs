@@ -335,6 +335,19 @@ impl Engine {
         result
     }
 
+    /// History (trails) and multi-pass buffers of effects no longer in this chain (removed, or a clip that stopped):
+    /// freed. A switched-off effect keeps its buffers, so it picks up where it was when switched back on.
+    fn drop_removed_effect_buffers(&mut self, res_id: u64, effects: &[&EffectState]) {
+        let Some(res) = self.layers.get_mut(&res_id) else { return };
+        let in_chain = |id: u64| effects.iter().any(|e| e.id == id);
+        if !res.history.is_empty() {
+            res.history.retain(|id, _| in_chain(*id));
+        }
+        if !res.multipass.is_empty() {
+            res.multipass.retain(|key, _| *key == GENERATOR_KEY || *key == GENERATOR_OUT_KEY || in_chain(*key));
+        }
+    }
+
     /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
     pub(super) fn apply_effects<'a>(
         &mut self,
@@ -346,6 +359,8 @@ impl Engine {
         all_layers: &[LayerState],
         passes: &mut Vec<Pass>,
     ) -> Frame {
+        let effects: Vec<&EffectState> = effects.into_iter().collect();
+        self.drop_removed_effect_buffers(res_id, &effects);
         let chain: Vec<_> = effects
             .into_iter()
             .filter(|e| e.enabled)

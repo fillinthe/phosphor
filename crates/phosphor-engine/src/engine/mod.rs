@@ -531,8 +531,29 @@ impl Engine {
         if let Some(plan) = crate::custom::plan_for(&header) {
             crate::shaders::set_pass_plan(entry, plan);
         }
+        // The previous compile of this shader: nothing draws it once the new one is registered, so its module,
+        // pipelines and pass plan go (every compile used to leave them behind).
+        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| *e != entry && e.starts_with("custom_"));
         crate::shaders::register_custom(desc);
+        if let Some(old) = old {
+            self.forget_custom_entry(old);
+        }
         Ok(desc)
+    }
+
+    /// A user shader deleted (or renamed): unlisted, and its compiled module and pipelines dropped.
+    pub fn remove_custom(&mut self, id: &str) {
+        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| e.starts_with("custom_"));
+        crate::shaders::unregister_custom(id);
+        if let Some(old) = old {
+            self.forget_custom_entry(old);
+        }
+    }
+
+    /// Drops everything kept for a user shader's entry that nothing draws any more (an older compile).
+    fn forget_custom_entry(&mut self, entry: &'static str) {
+        self.gpu.forget_custom(entry);
+        crate::shaders::forget_entry(entry);
     }
 
     /// Asks for previews of effects (applied to `source`: a layer id or `MASTER_ID`) and

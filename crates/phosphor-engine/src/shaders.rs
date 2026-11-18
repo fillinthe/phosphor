@@ -805,6 +805,27 @@ fn custom(id: &str) -> Option<&'static ShaderDesc> {
     CUSTOM.read().unwrap().iter().find(|d| d.id == id).copied()
 }
 
+/// The user / imported shader registered under `id`, whatever its kind.
+pub fn custom_desc(id: &str) -> Option<&'static ShaderDesc> {
+    custom(id)
+}
+
+/// Forgets what's kept per entry point (pass plan, audio slots, vertex stage, instances): the entry is gone.
+pub fn forget_entry(entry: &str) {
+    if let Ok(mut p) = PLANS.write() {
+        p.retain(|(e, _)| *e != entry);
+    }
+    if let Ok(mut a) = AUDIO_SLOTS.write() {
+        a.retain(|(e, _)| *e != entry);
+    }
+    if let Ok(mut v) = VERTEX_ENTRIES.write() {
+        v.retain(|(e, _)| *e != entry);
+    }
+    if let Ok(mut v) = INSTANCES.write() {
+        v.retain(|(e, _)| *e != entry);
+    }
+}
+
 /// Built-in effects followed by the user's.
 pub fn all_effects() -> Vec<&'static ShaderDesc> {
     let user = CUSTOM.read().unwrap();
