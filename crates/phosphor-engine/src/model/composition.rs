@@ -475,7 +475,9 @@ impl Composition {
     }
 
     /// Recalls a saved venue: replaces the outputs. Outputs keep this project's ids in order (open projector
-    /// windows stay where they are); extra outputs, surfaces and masks get fresh ids so nothing clashes.
+    /// windows stay where they are); extra outputs, slices, masks, slice groups and slice effects get fresh ids so
+    /// nothing clashes, and everything that points at them (a mask attached to a slice, a slice in a group, a group
+    /// in a group, the "show only" sets) follows.
     pub fn apply_venue(&mut self, json: &str) -> Result<(), String> {
         let mut outputs: Vec<OutputConfig> = serde_json::from_str(json).map_err(|e| format!("not a venue ({e})"))?;
         if outputs.is_empty() {
@@ -487,11 +489,36 @@ impl Composition {
                 Some(id) => *id,
                 None => self.new_id(),
             };
-            for s in &mut o.mapping.surfaces {
-                s.id = self.new_id();
+            let m = &mut o.mapping;
+            let mut fresh = std::collections::HashMap::new();
+            let old: Vec<u64> = m.surfaces.iter().map(|s| s.id).chain(m.masks.iter().map(|k| k.id)).chain(m.groups.iter().map(|g| g.id)).collect();
+            for id in old {
+                fresh.insert(id, self.new_id());
             }
-            for m in &mut o.mapping.masks {
-                m.id = self.new_id();
+            let renew = |id: &mut u64| *id = fresh.get(id).copied().unwrap_or(*id);
+            let renew_opt = |id: &mut Option<u64>| {
+                if let Some(i) = id {
+                    *i = fresh.get(i).copied().unwrap_or(*i);
+                }
+            };
+            for s in &mut m.surfaces {
+                renew(&mut s.id);
+                renew_opt(&mut s.group);
+            }
+            for k in &mut m.masks {
+                renew(&mut k.id);
+                renew_opt(&mut k.group);
+                renew_opt(&mut k.attached);
+            }
+            for g in &mut m.groups {
+                renew(&mut g.id);
+                renew_opt(&mut g.parent);
+            }
+            for (_, set) in &mut m.solo_sets {
+                set.iter_mut().for_each(renew);
+            }
+            for s in &mut m.surfaces {
+                s.effects = self.adopt_effects(std::mem::take(&mut s.effects));
             }
         }
         self.outputs = outputs;
@@ -976,6 +1003,41 @@ mod venue_tests {
         c.apply_venue(&json).unwrap();
         assert_eq!(c.outputs[0].id, before);
         assert!(b.apply_venue("{}").is_err());
+    }
+
+    /// A mask attached to a slice, slices in a group (in a group) and a "show only" set still point at the right
+    /// things after the recall renumbers them.
+    #[test]
+    fn a_venue_keeps_what_points_at_its_slices() {
+        let mut a = Composition::default();
+        a.ensure_outputs();
+        let sid = a.new_id();
+        let mid = a.new_id();
+        let (outer, inner) = (a.new_id(), a.new_id());
+        let m = &mut a.outputs[0].mapping;
+        m.add_surface(sid).group = Some(inner);
+        let mask = m.add_mask(mid);
+        mask.attached = Some(sid);
+        mask.group = Some(inner);
+        m.groups.push(crate::mapping::SliceGroup { id: outer, ..Default::default() });
+        m.groups.push(crate::mapping::SliceGroup { id: inner, parent: Some(outer), ..Default::default() });
+        m.solo_sets.push(("Front".into(), vec![sid, mid]));
+        let json = a.venue_json();
+        let mut b = Composition::default();
+        for _ in 0..50 {
+            b.new_id();
+        }
+        b.apply_venue(&json).unwrap();
+        let m = &b.outputs[0].mapping;
+        let (s, k) = (&m.surfaces[0], &m.masks[0]);
+        assert!(s.id >= 50 && k.id >= 50);
+        assert_eq!(k.attached, Some(s.id), "the mask stays on its slice");
+        let inner = m.groups.iter().find(|g| g.parent.is_some()).unwrap();
+        let outer = m.groups.iter().find(|g| g.parent.is_none()).unwrap();
+        assert_eq!(inner.parent, Some(outer.id));
+        assert!(inner.id >= 50 && outer.id >= 50);
+        assert_eq!((s.group, k.group), (Some(inner.id), Some(inner.id)));
+        assert_eq!(m.solo_sets[0].1, vec![s.id, k.id]);
     }
 }
 
