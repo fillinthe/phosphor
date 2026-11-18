@@ -39,7 +39,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 "An Enttec DMX USB Pro or a compatible (DMXking ultraDMX…): one universe, the first your fixtures use"
             });
         } else {
-            ui.add(egui::TextEdit::singleline(&mut d.target).desired_width(120.0).hint_text(hint_text))
+            crate::ui::text_field(ui, &mut d.target, hint_text, Some(120.0))
                 .on_hover_text("The controller's IP address (e.g. 2.0.0.10), or leave empty to send to the whole network");
         }
         guarded!(ui, d.fps, egui::DragValue::new(&mut d.fps).range(1.0..=60.0).speed(0.2).suffix(" fps"));
@@ -189,7 +189,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     toggle(ui, &mut f.enabled, "ON");
-                    ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(120.0));
+                    crate::ui::text_field(ui, &mut f.name, "", Some(120.0));
                     hint(ui, f.span());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete").clicked() {

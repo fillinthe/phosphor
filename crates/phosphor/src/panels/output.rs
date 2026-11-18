@@ -38,8 +38,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     ui.separator();
     outputs_list(ui, st);
     ui.separator();
-    egui::Grid::new("output_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-        ui.label("Canvas");
+    crate::ui::field(ui, "Canvas", |ui| {
         let current = format!("{}×{}", st.comp.width, st.comp.height);
         crate::ui::dropdown(ui, "resolution", 140.0).selected_text(current).show_ui(ui, |ui| {
             for (w, h, label) in RESOLUTIONS {
@@ -49,42 +48,29 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         });
-        ui.end_row();
-
-        ui.label("Master");
-        ui.horizontal(|ui| {
-            // The same master fade as under the Preview: the same right-click menu (Learn, Modulate, Lock…).
-            Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).show(ui);
-            crate::ui::toggle_mapped(ui, &mut st.comp.blackout_on, "Blackout", ControlTarget::App(phosphor_engine::AppControl::Blackout)).on_hover_text("Every output fades to black (and back when it's off)");
-            guarded!(ui, st.comp.blackout_secs, egui::DragValue::new(&mut st.comp.blackout_secs).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Blackout fade time (0 = at once)");
-        });
-        ui.end_row();
-
-        ui.label("Render at");
-        crate::ui::toolbar(ui, |ui| {
-            crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
-            crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
-        });
-        ui.end_row();
-
-        ui.label("Color depth");
-        crate::ui::toolbar(ui, |ui| {
-            if st.comp.deep_color && !phosphor_engine::deep_colour() {
-                crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
-            }
-            crate::ui::toggle(ui, &mut st.comp.deep_color, "Deep color").on_hover_text("Layers mixed and effects worked out at 16 bits a channel instead of 8: no banding in dark gradients, feedback or long effect chains. Uses more GPU memory. Outputs stay 8-bit.");
-        });
-        ui.end_row();
-
-        ui.label("All output windows");
+    });
+    crate::ui::field(ui, "Master", |ui| {
+        // The same master fade as under the Preview: the same right-click menu (Learn, Modulate, Lock…).
+        Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).show(ui);
+        crate::ui::toggle_mapped(ui, &mut st.comp.blackout_on, "Blackout", ControlTarget::App(phosphor_engine::AppControl::Blackout)).on_hover_text("Every output fades to black (and back when it's off)");
+        guarded!(ui, st.comp.blackout_secs, egui::DragValue::new(&mut st.comp.blackout_secs).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Blackout fade time (0 = at once)");
+    });
+    crate::ui::field(ui, "Render at", |ui| {
+        crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
+        crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
+    });
+    crate::ui::field(ui, "Color depth", |ui| {
+        if st.comp.deep_color && !phosphor_engine::deep_colour() {
+            crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
+        }
+        crate::ui::toggle(ui, &mut st.comp.deep_color, "Deep color").on_hover_text("Layers mixed and effects worked out at 16 bits a channel instead of 8: no banding in dark gradients, feedback or long effect chains. Uses more GPU memory. Outputs stay 8-bit.");
+    });
+    crate::ui::field(ui, "All output windows", |ui| {
         let text = if st.output_open() { "Close" } else { "Open" };
-        ui.horizontal(|ui| {
-            if steady_button(ui, text, &["Close", "Open"]).clicked() {
-                st.toggle_output();
-            }
-            help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
-        });
-        ui.end_row();
+        if steady_button(ui, text, &["Close", "Open"]).clicked() {
+            st.toggle_output();
+        }
+        help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
     });
     ui.separator();
 
@@ -228,7 +214,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 ui.vertical(|ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
-                        ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
+                        crate::ui::text_field(ui, &mut o.name, "", Some(110.0));
                         crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
                         grid_toggle(ui, &mut o.grid);
                         program_picker(ui, o, &comps);
@@ -404,7 +390,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
         };
         let hover = format!("Send the composition over the network as NDI (MadMapper, Resolume, OBS, vMix, other computers)\nNDI library: {}", lib.display());
         output_toggle(ui, &mut st.comp.ndi.enabled, icon::BROADCAST, "NDI", &hover, phosphor_engine::AppControl::Ndi);
-        ui.add(egui::TextEdit::singleline(&mut st.comp.ndi.name).desired_width(90.0)).on_hover_text("Name receivers see");
+        crate::ui::text_field(ui, &mut st.comp.ndi.name, "", Some(90.0)).on_hover_text("Name receivers see");
         crate::ui::dropdown(ui, "ndi_fps", 60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
             for f in [25, 30, 50, 60] {
                 crate::ui::pick_value(ui, &mut st.comp.ndi.fps, f, format!("{f} fps"));

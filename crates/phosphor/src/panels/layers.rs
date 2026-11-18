@@ -583,14 +583,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         let shown = crate::ui::cut_to_width(ui, &whole, (width - ui.spacing().icon_width - 2.0 * ui.spacing().button_padding.x - 4.0).max(20.0));
         let list = crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(shown).show_ui(ui, |ui| {
             // Search: every generator (built in and imported) by name; typing goes straight here.
-            let id = ui.id().with(("source_search", layer.id));
-            let mut q = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_default();
-            let r = crate::ui::text_field(ui, &mut q, "Search generators…", Some(220.0));
-            if ui.memory(|m| m.focused().is_none()) {
-                r.request_focus();
-            }
-            ui.data_mut(|d| d.insert_temp(id, q.clone()));
-            let q = q.trim().to_lowercase();
+            let (q, _) = crate::ui::search_field(ui, ("source_search", layer.id), "Search generators…", 220.0);
             if !q.is_empty() {
                 let found: Vec<_> = shaders::all_generators().into_iter().filter(|g| g.name.to_lowercase().contains(&q) || g.id.to_lowercase().contains(&q)).collect();
                 if found.is_empty() {
@@ -795,7 +788,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         let url_id = egui::Id::new(("live_url", layer));
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut url).hint_text("rtsp://… srt://… https://….m3u8").desired_width(190.0));
+            crate::ui::text_field(ui, &mut url, "rtsp://… srt://… https://….m3u8", Some(190.0));
             if crate::ui::command_if(ui, url.contains("://"), "Play").clicked() {
                 picked = Some(crate::media::live::stream_source(&url));
                 ui.close();

@@ -234,7 +234,8 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
                     crate::ui::pick_value(ui, &mut o.fps, f, f.to_string());
                 }
             });
-            ui.label("Length");
+        });
+        crate::ui::field(ui, "Length", |ui| {
             let mut secs = if o.secs > 0.0 { o.secs } else { length };
             if guarded!(ui, secs, egui::DragValue::new(&mut secs).range(0.1..=36_000.0).speed(0.5).suffix(" s").max_decimals(1)).changed() {
                 o.secs = secs;

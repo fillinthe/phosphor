@@ -508,22 +508,42 @@ pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
 }
 
+/// A one-line secret (a password, a stream key): dots instead of the letters; `hint` shows while it's empty.
+pub(crate) fn password_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32) -> egui::Response {
+    ui.add(egui::TextEdit::singleline(text).password(true).hint_text(hint).desired_width(width))
+}
+
 /// A few lines of your own words (a note on a canvas): as wide as there's room, `rows` tall to start with.
 pub(crate) fn note_field(ui: &mut egui::Ui, text: &mut String, hint: &str, rows: usize) -> egui::Response {
     ui.add(egui::TextEdit::multiline(text).hint_text(hint).desired_rows(rows).desired_width(ui.available_width()).font(egui::FontId::proportional(12.0)))
+}
+
+/// The search box at the top of a drop-down or menu: returns what's typed (trimmed, lowercase) and the field. Starts
+/// empty each time the list opens (it used to keep the last search), and takes the keyboard when it opens or when
+/// nothing else has it (never every frame: that kept the field from letting go). Use it for any searchable list.
+pub(crate) fn search_field(ui: &mut egui::Ui, key: impl std::hash::Hash + std::fmt::Debug, hint: &str, width: f32) -> (String, egui::Response) {
+    let key = egui::Id::new(("search_field", key));
+    let pass = ui.ctx().cumulative_pass_nr();
+    let (mut query, seen): (String, u64) = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+    // Not drawn last pass: the list was closed and has just opened again.
+    let fresh = seen + 1 < pass;
+    if fresh {
+        query.clear();
+    }
+    let field = text_field(ui, &mut query, hint, Some(width));
+    if fresh || ui.memory(|m| m.focused().is_none()) {
+        field.request_focus();
+    }
+    let q = query.trim().to_lowercase();
+    ui.ctx().data_mut(|d| d.insert_temp(key, (query, pass)));
+    (q, field)
 }
 
 /// A menu's search box: the field (it takes the keyboard when nothing else has it), then, while something is typed,
 /// the entries `find` gives for it as (what, label, tooltip); Enter picks the first. Returns the one picked and
 /// whether a search is on (the menu's own entries hide then). For any add menu with more entries than fit a glance.
 pub(crate) fn menu_search<T>(ui: &mut egui::Ui, key: impl std::hash::Hash + std::fmt::Debug, hint_text: &str, nothing: &str, find: impl FnOnce(&str) -> Vec<(T, String, String)>) -> (Option<T>, bool) {
-    let key = egui::Id::new(key);
-    let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-    let field = text_field(ui, &mut query, hint_text, Some(200.0));
-    if ui.memory(|m| m.focused().is_none()) {
-        field.request_focus();
-    }
-    let q = query.trim().to_lowercase();
+    let (q, field) = search_field(ui, key, hint_text, 200.0);
     let searching = !q.is_empty();
     let mut picked = None;
     if searching {
@@ -540,11 +560,9 @@ pub(crate) fn menu_search<T>(ui: &mut egui::Ui, key: impl std::hash::Hash + std:
             }
         }
         if picked.is_some() {
-            query.clear();
             ui.close();
         }
     }
-    ui.ctx().data_mut(|d| d.insert_temp(key, query));
     (picked, searching)
 }
 

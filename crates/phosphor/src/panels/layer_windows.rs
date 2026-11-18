@@ -49,7 +49,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         ui.horizontal(|ui| {
                             super::layers::show_button(ui, layer);
                             super::layers::solo_button(ui, &mut layer.solo);
-                            ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
+                            crate::ui::text_field(ui, &mut layer.name, "", Some(f32::INFINITY));
                         });
                         let w = ui.available_width();
                         let r = thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled && !muted).on_hover_text("Click to select · double-click to toggle");

@@ -625,7 +625,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                     todo.push(Do::Window(id));
                 }
                 r.on_hover_text(format!("{} · {ow}×{oh}\nClick to edit its mapping · double-click to open / close its window · right-click for more", o.name)).right_field_menu(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(160.0));
+                    crate::ui::text_field(ui, &mut o.name, "", Some(160.0));
                     if crate::ui::command(ui, label(if open { icon::STOP } else { icon::PLAY }, if open { "Close window" } else { "Open window" })).clicked() {
                         todo.push(Do::Window(id));
                         ui.close();
@@ -812,7 +812,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
-                    ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
+                    crate::ui::text_field(ui, &mut s.name, "", Some(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete surface").clicked() {
                             remove = Some(i);
@@ -853,7 +853,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                     toggle(ui, &mut m.enabled, "ON");
-                    ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
+                    crate::ui::text_field(ui, &mut m.name, "", Some(120.0));
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete mask").clicked() {

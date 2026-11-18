@@ -64,7 +64,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
             .unwrap_or_else(|| "My show".into());
     }
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(&mut f.name).hint_text("Project name").desired_width(180.0));
+        crate::ui::text_field(ui, &mut f.name, "Project name", Some(180.0));
         let name = f.name.trim().to_string();
         match cloud_project.clone() {
             Some((id, _)) => {
@@ -133,25 +133,17 @@ fn sign_in_form(ui: &mut egui::Ui, ctx: &egui::Context, a: &mut Account, f: &mut
         return;
     }
     ui.label("Optional: sign in to keep your projects and layouts in your phosphorfx.com account (free).");
-    egui::Grid::new("signin").num_columns(2).show(ui, |ui| {
-        ui.label("Email");
-        ui.add(egui::TextEdit::singleline(&mut f.email).desired_width(220.0));
-        ui.end_row();
-        ui.label("Password");
-        let pw = ui.add(egui::TextEdit::singleline(&mut f.password).password(true).desired_width(220.0));
-        ui.end_row();
-        if a.need_code {
-            ui.label("Code");
-            ui.add(egui::TextEdit::singleline(&mut f.code).hint_text("from your authenticator").desired_width(220.0));
-            ui.end_row();
-        }
-        let enter = pw.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        ui.label("");
+    crate::ui::field(ui, "Email", |ui| crate::ui::text_field(ui, &mut f.email, "", Some(220.0)));
+    let pw = crate::ui::field(ui, "Password", |ui| crate::ui::password_field(ui, &mut f.password, "", 220.0));
+    if a.need_code {
+        crate::ui::field(ui, "Code", |ui| crate::ui::text_field(ui, &mut f.code, "from your authenticator", Some(220.0)));
+    }
+    let enter = pw.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+    crate::ui::field(ui, "", |ui| {
         if (crate::ui::command(ui, "Sign in").clicked() || enter) && !f.email.trim().is_empty() && !f.password.is_empty() {
             a.sign_in(ctx, &f.email, &f.password, &f.code);
             f.password.clear();
         }
-        ui.end_row();
     });
     crate::ui::toolbar(ui, |ui| {
         if ui.link("Create a free account").clicked() {

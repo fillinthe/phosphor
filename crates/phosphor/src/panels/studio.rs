@@ -873,7 +873,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
                 toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
-                ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
+                crate::ui::text_field(ui, &mut s.name, "", Some(f32::INFINITY));
             });
             if crate::ui::small_command(ui, label(icon::CORNERS_OUT, "Corners to the full output")).clicked() {
                 s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
@@ -897,7 +897,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                 crate::ui::toggle_mapped(ui, &mut m.enabled, "ON", ControlTarget::MaskEnabled(m.id));
-                ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
+                crate::ui::text_field(ui, &mut m.name, "", Some(f32::INFINITY));
             });
             help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
             mask_settings(ui, m);
@@ -906,7 +906,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
         } else {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
-                ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
+                crate::ui::text_field(ui, &mut o.name, "", Some(f32::INFINITY));
             });
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
             super::program_picker(ui, o, &comps);

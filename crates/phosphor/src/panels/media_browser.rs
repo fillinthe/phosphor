@@ -156,11 +156,7 @@ fn following_poll(st: &mut State) {
 fn tools(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
-        ui.add(
-            egui::TextEdit::singleline(&mut st.media_view.search)
-                .hint_text("Search here")
-                .desired_width(ui.available_width()),
-        );
+        crate::ui::text_field(ui, &mut st.media_view.search, "Search here", None);
     });
     ui.horizontal_wrapped(|ui| {
         let kinds = [

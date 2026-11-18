@@ -77,7 +77,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(100.0));
+                    crate::ui::text_field(ui, &mut m.name, "", Some(100.0));
                     ui.add(crate::ui::meter(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
                         moves = Some((i, i - 1));
