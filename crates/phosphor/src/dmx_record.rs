@@ -64,9 +64,21 @@ impl Take {
     }
 }
 
+/// What a recording keeps: what Phosphor sends to the lights, or what comes in (another program or a desk: DMX in).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RecordFrom {
+    #[default]
+    Out,
+    In,
+}
+
+/// Frames a second kept from what comes in (a frame is kept only when something changed).
+const IN_FPS: f64 = 44.0;
+
 /// Recording, playing back, or neither.
 #[derive(Default)]
 pub struct DmxRecorder {
+    pub from: RecordFrom,
     /// Recording since this app time.
     recording: Option<(f64, Take)>,
     /// Playing this take since this app time.
@@ -107,10 +119,32 @@ impl DmxRecorder {
         self.recording.as_ref().or(self.playing.as_ref()).map_or(0.0, |(s, _)| now - s)
     }
 
-    /// A frame that just went out live (kept while recording).
+    /// A frame that just went out live (kept while recording what goes out).
     pub fn sent(&mut self, now: f64, unis: &Universes) {
+        if self.from != RecordFrom::Out {
+            return;
+        }
         if let Some((start, take)) = &mut self.recording {
             take.frames.push((now - *start, unis.clone()));
+        }
+    }
+
+    /// Recording what comes in?
+    pub fn records_input(&self) -> bool {
+        self.from == RecordFrom::In && self.recording.is_some()
+    }
+
+    /// What's coming in now (`RecordFrom::In`): kept when it changed, at most `IN_FPS` times a second.
+    pub fn heard(&mut self, now: f64, unis: &Universes) {
+        if self.from != RecordFrom::In {
+            return;
+        }
+        if let Some((start, take)) = &mut self.recording {
+            let t = now - *start;
+            let fresh = take.frames.last().is_none_or(|(at, last)| t - at >= 1.0 / IN_FPS && last != unis);
+            if fresh {
+                take.frames.push((t, unis.clone()));
+            }
         }
     }
 
@@ -158,5 +192,22 @@ mod tests {
         assert_eq!(Take::from_bytes(&take.to_bytes()), Ok(take));
         assert!(Take::from_bytes(b"nope").is_err());
         assert!(Take::from_bytes(b"PHDMX1\x00\x00").is_err(), "cut short");
+    }
+
+    #[test]
+    fn records_what_comes_in_when_it_changes() {
+        let mut r = DmxRecorder { from: RecordFrom::In, ..Default::default() };
+        r.start_recording(0.0);
+        assert!(r.records_input());
+        r.sent(0.0, &frame(9));
+        r.heard(0.0, &frame(1));
+        r.heard(0.01, &frame(2)); // too soon after the last: waits
+        r.heard(0.1, &frame(2));
+        r.heard(0.2, &frame(2)); // nothing changed: not kept
+        r.heard(0.3, &frame(3));
+        r.stop();
+        let t = r.take.unwrap();
+        let kept: Vec<(f64, u8)> = t.frames.iter().map(|(at, u)| (*at, u[&0][0])).collect();
+        assert_eq!(kept, [(0.0, 1), (0.1, 2), (0.3, 3)], "what goes out isn't kept while recording what comes in");
     }
 }

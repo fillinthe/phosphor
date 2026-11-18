@@ -17,6 +17,13 @@ impl PhosphorApp {
     pub(crate) fn render(&mut self, now: f64) {
         #[cfg(target_os = "macos")]
         crate::menu_test::RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // Recording what comes in (another program, a desk): what DMX in hears now.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.state.dmx_rec.records_input()
+            && let Some(f) = self.state.control.dmx_in_frame()
+        {
+            self.state.dmx_rec.heard(now, &f);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if !self.bench_session {
             self.heartbeat.beat(now);

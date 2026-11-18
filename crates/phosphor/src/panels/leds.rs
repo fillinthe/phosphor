@@ -397,8 +397,21 @@ fn dmx_recorder(ui: &mut egui::Ui, st: &mut State) {
             if action_button(ui, Act::Record, label(icon::STOP, &format!("Stop ({:.0} s)", r.elapsed(now)))).clicked() {
                 r.stop();
             }
-        } else if crate::ui::command(ui, label(icon::RECORD, "Record DMX")).on_hover_text("Keep everything the lights are sent from now on (Stop ends the take)").clicked() {
-            r.start_recording(now);
+        } else {
+            if crate::ui::command(ui, label(icon::RECORD, "Record DMX")).on_hover_text("Keep everything from now on (Stop ends the take)").clicked() {
+                if r.from == crate::dmx_record::RecordFrom::In && !st.control.dmx_in() {
+                    // What comes in is heard by DMX in: switched on for the recording.
+                    st.control.set_dmx_in(true);
+                }
+                r.start_recording(now);
+            }
+            segmented(ui, &mut r.from, &[(crate::dmx_record::RecordFrom::Out, "what goes out".to_string()), (crate::dmx_record::RecordFrom::In, "what comes in".to_string())], |_, resp, f| {
+                resp.clone().on_hover_text(if *f == crate::dmx_record::RecordFrom::In {
+                    "Another program or a lighting desk sending Art-Net / sACN to this computer (LightJams, a console): record its show to play back here or on a Pi"
+                } else {
+                    "What Phosphor sends to the lights"
+                });
+            });
         }
         let has_take = r.take.as_ref().is_some_and(|t| !t.frames.is_empty());
         if r.is_playing() {

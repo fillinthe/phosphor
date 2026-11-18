@@ -212,6 +212,8 @@ pub struct DmxListener {
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     status: std::sync::Arc<std::sync::Mutex<String>>,
     packets: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// Every universe heard, as it is now (what the DMX recorder keeps when it records what comes in).
+    frame: std::sync::Arc<std::sync::Mutex<BTreeMap<u16, [u8; 512]>>>,
 }
 
 impl DmxListener {
@@ -220,6 +222,7 @@ impl DmxListener {
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let status = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         let packets = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let frame: std::sync::Arc<std::sync::Mutex<BTreeMap<u16, [u8; 512]>>> = Default::default();
         let mut sockets = Vec::new();
         let mut open = Vec::new();
         for (port, name) in [(6454u16, "Art-Net"), (5568, "sACN")] {
@@ -238,7 +241,7 @@ impl DmxListener {
         }
         *status.lock().unwrap() = open.join(" · ");
         for sock in sockets {
-            let (stop, tx, status, packets) = (stop.clone(), tx.clone(), status.clone(), packets.clone());
+            let (stop, tx, status, packets, frame) = (stop.clone(), tx.clone(), status.clone(), packets.clone(), frame.clone());
             let _ = std::thread::Builder::new().name("phosphor-dmx-in".into()).spawn(move || {
                 let mut last: BTreeMap<u16, [u8; 512]> = BTreeMap::new();
                 let mut buf = [0u8; 700];
@@ -249,6 +252,10 @@ impl DmxListener {
                     }
                     let Some((universe, slots)) = parse_dmx(&buf[..n]) else { continue };
                     packets.fetch_add(1, Ordering::Relaxed);
+                    if let Ok(mut f) = frame.lock() {
+                        let u = f.entry(universe).or_insert([0; 512]);
+                        u[..slots.len()].copy_from_slice(slots);
+                    }
                     let fresh = !last.contains_key(&universe);
                     let prev = last.entry(universe).or_insert([0; 512]);
                     for (i, v) in slots.iter().enumerate() {
@@ -268,7 +275,12 @@ impl DmxListener {
                 }
             });
         }
-        Self { stop, status, packets }
+        Self { stop, status, packets, frame }
+    }
+
+    /// Every universe heard so far, as it is now (None before anything was heard).
+    pub fn frame(&self) -> Option<BTreeMap<u16, [u8; 512]>> {
+        self.frame.lock().ok().filter(|f| !f.is_empty()).map(|f| f.clone())
     }
 
     /// DMX packets heard so far.
@@ -290,7 +302,7 @@ impl Drop for DmxListener {
 /// Joins sACN universes 1..=`last` on every IPv4 adapter (a rig on its own network as well as the Wi-Fi), or on the
 /// default one when there are none listed. Says what it joined (a system may refuse some: Linux allows 20 groups a
 /// socket unless raised).
-fn join_sacn(s: &UdpSocket, last: u16) -> String {
+pub(crate) fn join_sacn(s: &UdpSocket, last: u16) -> String {
     let last = last.clamp(1, crate::control::DMX_IN_MAX_UNIVERSES);
     let adapters: Vec<Ipv4Addr> = crate::net_adapters::ipv4().into_iter().map(|a| a.ip).collect();
     let on = if adapters.is_empty() { vec![Ipv4Addr::UNSPECIFIED] } else { adapters };
