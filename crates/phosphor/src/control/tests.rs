@@ -1263,3 +1263,25 @@ fn a_control_follows_another_control() {
     assert_eq!(serde_json::from_str::<Composition>(&text).unwrap().follows, comp.follows);
     assert!(!serde_json::to_string(&Composition::default()).unwrap().contains("follows"));
 }
+
+/// A `"?"` on a pattern that reaches every layer answers a bounded number of controls, not one packet each.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_wildcard_question_gets_a_bounded_answer() {
+    let listener = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    listener.set_read_timeout(Some(std::time::Duration::from_millis(300))).unwrap();
+    let mut hub = ControlHub::new();
+    hub.feedback_port = listener.local_addr().unwrap().port();
+    let mut comp = Composition::default();
+    for _ in 0..(ask::MAX_ANSWERS_PER_ASK + 30) {
+        comp.add_layer();
+    }
+    let _ = hub.ask_tx.send(ask::OscAsk { address: "/phosphor/layer/*/opacity".into(), from: "127.0.0.1".into(), kind: ask::AskKind::Query });
+    hub.apply(&mut comp, 0.0);
+    let mut buf = [0u8; 1024];
+    let mut got = 0;
+    while listener.recv(&mut buf).is_ok() {
+        got += 1;
+    }
+    assert_eq!(got, ask::MAX_ANSWERS_PER_ASK);
+}

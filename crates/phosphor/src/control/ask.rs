@@ -3,6 +3,10 @@
 
 use super::*;
 
+/// Most answers one `"?"` sends back (a pattern can reach every control), and all asks in one frame together.
+pub const MAX_ANSWERS_PER_ASK: usize = 64;
+pub const MAX_ANSWERS_PER_FRAME: usize = 256;
+
 /// What a message on a `/phosphor/…` address asks for besides setting a 0..1 value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AskKind {
@@ -137,17 +141,26 @@ impl ControlHub {
             return;
         }
         let builtin = Builtin::new(comp);
+        // Answers are bounded: a pattern asks about many controls at once and the answers go to whatever address
+        // the message said it came from, so one small packet must not send back thousands.
+        let mut answers_left = MAX_ANSWERS_PER_FRAME;
         for ask in asks {
             let address = placed_address(comp, self.selected_layer, &ask.address).unwrap_or_else(|| ask.address.clone());
             let hits: Vec<(ControlTarget, String)> = builtin.hits(&address).into_iter().map(|(t, a)| (t.clone(), a.to_string())).collect();
             let one = hits.len() == 1;
+            let mut answered = 0;
             for (t, by_id) in hits {
                 let options = target_options(comp, &t);
                 let current = get_target(comp, &t);
                 let item_now = |v: f32| options.as_ref().and_then(|o| (0..o.len()).min_by(|a, b| (o[*a].1 - v).abs().total_cmp(&(o[*b].1 - v).abs())));
                 let set = match &ask.kind {
                     AskKind::Query => {
+                        if answered >= MAX_ANSWERS_PER_ASK || answers_left == 0 {
+                            break;
+                        }
                         if let Some(v) = current {
+                            answered += 1;
+                            answers_left -= 1;
                             let name = item_now(v).and_then(|i| options.as_ref().map(|o| o[i].0.clone()));
                             // Asked by place or by name: the answer comes back on the address that was asked.
                             self.answer(&ask.from, if one { &ask.address } else { &by_id }, v, name);
