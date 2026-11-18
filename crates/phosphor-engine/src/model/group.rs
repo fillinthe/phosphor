@@ -26,6 +26,9 @@ pub struct LayerGroup {
     pub designer: bool,
     /// Members hidden in the Layers panel.
     pub collapsed: bool,
+    /// Its named dials (each drives settings anywhere).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dials: Vec<MacroDial>,
 }
 
 /// A layer's or group's mix controls, borrowed (see `Composition::mix_controls_mut`).
@@ -37,7 +40,7 @@ pub struct MixControls<'a> {
 
 impl Default for LayerGroup {
     fn default() -> Self {
-        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false, designer: false }
+        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false, designer: false, dials: Vec::new() }
     }
 }
 

@@ -347,6 +347,8 @@ pub struct State {
     pub control: ControlHub,
     /// Mappings editor: what the next heard input is for, the new mapping being made, and search.
     pub listen_for: Option<ListenFor>,
+    /// Learning a row (MIDI / OSC › Learn a row): which row, how many, and the first input once heard.
+    pub row_learn: Option<(phosphor_engine::Row, usize, Option<phosphor_engine::ControlSource>)>,
     pub map_draft: Option<(phosphor_engine::ControlSource, Option<phosphor_engine::ControlTarget>)>,
     pub map_search: String,
     pub stream: Streamer,
@@ -442,6 +444,10 @@ pub struct State {
     pub maps_clipboard: Vec<phosphor_engine::ControlMap>,
     /// Each followed control's value last frame (`run_follows` hands on changes only).
     pub follow_seen: std::collections::HashMap<phosphor_engine::ControlTarget, f32>,
+    /// Each dial's value last frame (`run_dials` hands on changes only).
+    pub dial_seen: std::collections::HashMap<(u64, usize), f32>,
+    /// Modulators open in a window of their own (`panels::modulator_windows`), by id.
+    pub mod_windows: Vec<u64>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).
@@ -1044,6 +1050,8 @@ struct BenchRun {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ListenFor {
     NewMapping,
+    /// The first, then the last input of a row (`State::row_learn`).
+    Row,
     /// Re-capture the input of mapping `i`.
     Replace(usize),
 }

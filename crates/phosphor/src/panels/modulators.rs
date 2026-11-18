@@ -6,6 +6,14 @@ use phosphor_engine::{ChainMode, ModChain, Modulator};
 use super::*;
 
 pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
+    // First frame. Bench pictures: PHOSPHOR_MOD_WINDOW=<id> opens that modulator's window.
+    let first = egui::Id::new("modulators_seen");
+    if !ui.ctx().data(|d| d.get_temp::<bool>(first)).unwrap_or(false) {
+        ui.ctx().data_mut(|d| d.insert_temp(first, true));
+        if let Some(id) = std::env::var("PHOSPHOR_MOD_WINDOW").ok().and_then(|v| v.trim().parse().ok()) {
+            super::open_modulator_window(st, id);
+        }
+    }
     let beats = st.mod_inputs.beats;
     let inputs = st.mod_inputs;
     crate::ui::toolbar(ui, |ui| {
@@ -47,7 +55,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
             None => {}
         }
-        help(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
+        help(ui, "One source drives many controls: drag its link handle onto any slider (or right-click a slider, Modulate, then pick it). Chain one into the next.");
     });
     #[cfg(not(target_arch = "wasm32"))]
     super::tracking::tracking_section(ui, st);
@@ -55,6 +63,8 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     super::live_data::live_data_section(ui, st);
     let mut remove = None;
     let mut moves: Option<(usize, usize)> = None;
+    let mut scrub: Option<(u64, f32)> = None;
+    let mut open_window = None;
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
     // What gate tracks can fire (only worked out when there's a gate track to show).
     let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { crate::control::all_targets(&st.comp) } else { Vec::new() };
@@ -77,6 +87,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
+                    crate::ui::link_handle(ui, m.id, crate::ui::LinkSource::Modulator { id: m.id, name: m.name.clone() }, "Drag onto any slider: it follows this modulator");
                     crate::ui::text_field(ui, &mut m.name, "", Some(100.0));
                     ui.add(crate::ui::meter(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
@@ -84,6 +95,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     }
                     if i + 1 < n && crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() {
                         moves = Some((i, i + 1));
+                    }
+                    if crate::ui::small_command(ui, icon::ARROW_SQUARE_OUT).on_hover_text("Open in its own window: a big wave, pause, reverse, retrigger, and how much each control follows it").clicked() {
+                        open_window = Some(m.id);
                     }
                     if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete (controls following it stop moving)").clicked() {
                         remove = Some(i);
@@ -128,7 +142,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::ui::MOD_CYCLE), at));
                     }
                     let mut sig = Some(m.signal);
-                    ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig));
+                    if let Some(at) = ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig, 64.0)).inner {
+                        scrub = Some((m.id, at));
+                    }
                     if let Some(s) = sig {
                         m.signal = s;
                     }
@@ -176,6 +192,12 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     });
     if let Some((a, b)) = moves {
         st.comp.modulators.swap(a, b);
+    }
+    if let Some((id, at)) = scrub {
+        st.mod_phases.set_cycle(id, at);
+    }
+    if let Some(id) = open_window {
+        super::open_modulator_window(st, id);
     }
     if let Some(i) = remove {
         let id = st.comp.modulators.remove(i).id;

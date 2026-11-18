@@ -222,7 +222,8 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
                 for (at, source, value) in &control.recent {
                     let ago = now.saturating_duration_since(*at).as_secs_f32();
                     ui.monospace(RichText::new(if ago < 60.0 { format!("{ago:4.1}s") } else { format!("{:3.0}m", ago / 60.0) }).small());
-                    ui.monospace(RichText::new(source.label()).small());
+                    let text = RichText::new(source.label()).small().monospace();
+                    crate::ui::link_drag_text(ui, ("monitor", format!("{source:?}")), crate::ui::LinkSource::Input(source.clone()), text, "Drag onto any slider to map this input to it");
                     ui.monospace(RichText::new(format!("{value:.3}")).small());
                     let mapped: Vec<String> = comp.control_maps.iter().filter(|m| m.source == *source).map(|m| crate::control::target_label(comp, &m.target)).collect();
                     if mapped.is_empty() {
@@ -283,6 +284,8 @@ pub(super) fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarg
         T::Color { owner, .. } => Some((Tab::Mapping, None, Some(*owner))),
         T::Surface(_) | T::SurfaceY(_) | T::SurfaceBar { .. } => Some((Tab::Surface, None, None)),
         T::Modulator(_) => Some((Tab::Modulators, None, None)),
+        // A clip's dial: the layer holding the clip.
+        T::Macro { owner, .. } => item(comp.layers.iter().find(|l| l.clips.iter().any(|c| c.id == *owner)).map_or(*owner, |l| l.id)),
         T::Fixture { .. } => Some((Tab::Leds, None, None)),
         T::LaserShape { .. } | T::LaserBrightness(_) | T::LaserLook { .. } => Some((Tab::Lasers, None, None)),
         T::App(_) => None,
@@ -294,13 +297,33 @@ pub(super) fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarg
 fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     use crate::app::ListenFor;
     let mut show: Option<(Tab, Option<u64>, Option<u64>)> = None;
-    let State { control, comp, listen_for, map_draft, map_search, mapping_presets, mapping_preset_name, notice, selected, selected_surface, open_tab, .. } = st;
+    let State { control, comp, listen_for, row_learn, map_draft, map_search, mapping_presets, mapping_preset_name, notice, selected, selected_surface, open_tab, .. } = st;
     // A heard input lands where the Listen was for.
     if let Some(src) = control.heard.take() {
         match listen_for.take() {
             Some(ListenFor::Replace(i)) => {
                 if let Some(m) = comp.control_maps.get_mut(i) {
                     m.source = src;
+                }
+            }
+            Some(ListenFor::Row) => {
+                if let Some((row, n, first)) = row_learn.as_mut() {
+                    match first.clone() {
+                        // The first of the row, or the same knob still moving: listen on for the last.
+                        None => *first = Some(src),
+                        Some(f) if f == src => {}
+                        Some(f) => {
+                            *notice = Some(match comp.learn_row(*row, *n, &f, &src) {
+                                Ok(k) => format!("Mapped a row of {k}: {} to {}", f.label(), src.label()),
+                                Err(e) => e,
+                            });
+                            *row_learn = None;
+                        }
+                    }
+                    if row_learn.is_some() {
+                        control.listen_source = true;
+                        *listen_for = Some(ListenFor::Row);
+                    }
                 }
             }
             _ => *map_draft = Some((src, None)),
@@ -325,11 +348,17 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
             None => {}
         }
         if listening {
-            ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(crate::theme::MAPPED));
+            let what = match (*listen_for, row_learn.as_ref()) {
+                (Some(ListenFor::Row), Some((_, _, None))) => "Learning a row: move the first knob (or press the first pad, send the first OSC address)",
+                (Some(ListenFor::Row), Some((_, _, Some(_)))) => "Now the last of the row",
+                _ => "Listening… touch a knob, pad or key, or send OSC",
+            };
+            ui.label(RichText::new(format!("{} {what}", icon::EAR)).color(crate::theme::MAPPED));
             ui.ctx().request_repaint();
             if crate::ui::command(ui, "Cancel").clicked() {
                 control.listen_source = false;
                 *listen_for = None;
+                *row_learn = None;
             }
         } else if crate::ui::command(ui, label(icon::EAR, "Listen")).on_hover_text("Waits for the next input (MIDI knob/pad, OSC message or key), then lets you pick what it controls").clicked() {
             control.listen_source = true;
@@ -337,6 +366,11 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         }
         if crate::ui::command(ui, label(icon::PLUS, "Add by hand")).clicked() {
             *map_draft = Some((phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 }, None));
+        }
+        if !listening && let Some(row) = learn_row_menu(ui, comp, *selected) {
+            *row_learn = Some((row.0, row.1, None));
+            control.listen_source = true;
+            *listen_for = Some(ListenFor::Row);
         }
     });
     // Worth a search box only once the list is longer than a glance; on its own row so it's never cut short.
@@ -443,6 +477,49 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         }
         *open_tab = Some(tab);
     }
+}
+
+/// "Learn a row" (VDMX's Detect range): pick a row of controls and how many, then Listen. Returns the row and count
+/// when Listen is pressed.
+fn learn_row_menu(ui: &mut egui::Ui, comp: &phosphor_engine::Composition, selected: Option<u64>) -> Option<(phosphor_engine::Row, usize)> {
+    use phosphor_engine::Row;
+    let mut go = None;
+    crate::ui::field_menu(ui, label(icon::ROWS, "Learn a row"), |ui| {
+        ui.set_min_width(300.0);
+        crate::ui::heading_help(ui, "Learn a row", "Move the first knob of a row on your controller, then the last: the ones between are worked out (CC 20 to 27, notes 36 to 43, /fader1 to /fader8) and each control in the row gets one.");
+        let id = egui::Id::new("learn_row_pick");
+        let (mut pick, mut n): (usize, usize) = ui.ctx().data(|d| d.get_temp(id)).unwrap_or((0, 8));
+        let layer = selected.filter(|s| comp.layer(*s).is_some());
+        let rows: [(Option<Row>, &str); 4] = [
+            (Some(Row::Columns), "Clip columns"),
+            (layer.map(Row::Clips), "The selected layer's clips"),
+            (Some(Row::Opacity), "Every layer's opacity"),
+            (selected.filter(|s| comp.dials(*s).is_some_and(|d| !d.is_empty())).map(Row::Dials), "The selected layer's dials"),
+        ];
+        for (k, (row, name)) in rows.iter().enumerate() {
+            if crate::ui::pick_item(ui, pick == k, *name).clicked() && row.is_some() {
+                pick = k;
+            }
+        }
+        crate::ui::field(ui, "How many", |ui| {
+            guarded!(ui, n, egui::DragValue::new(&mut n).range(2..=64));
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(id, (pick, n)));
+        match rows[pick].0 {
+            Some(row) => {
+                let count = comp.row_targets(row, n).len();
+                hint(ui, format!("Maps {count} controls"));
+                if crate::ui::command_if(ui, count >= 2, label(icon::EAR, "Listen")).on_hover_text("Then move the first knob of the row, then the last").clicked() {
+                    go = Some((row, n));
+                    ui.close();
+                }
+            }
+            None => {
+                hint(ui, "Select a layer first");
+            }
+        }
+    });
+    go
 }
 
 /// AI assistants (any app that speaks MCP) drive Phosphor through `Phosphor --mcp` (mcp.rs): copy its setup.

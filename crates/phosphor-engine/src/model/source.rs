@@ -267,6 +267,9 @@ pub struct Clip {
     /// The clip's own effects: they come with it wherever it plays, before the layer's effects.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::EffectState>,
+    /// Its named dials (each drives settings anywhere).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dials: Vec<crate::MacroDial>,
 }
 
 /// What a clip remembers when it keeps its own settings.

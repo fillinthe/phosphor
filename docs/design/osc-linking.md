@@ -1,6 +1,6 @@
 # Draft to-do: OSC, linking and programmable controls (VDMX / Resolume style)
 
-For the owner. Started 2026-11-15: [x] = built, [~] = partly (what's left is in the note), [ ] = not started.
+For the owner. Started 2026-11-15, more 2026-11-18: [x] = built, [~] = partly (what's left is in the note), [ ] = not started.
 
 **Where Phosphor is today.** More of this already exists than it may seem. There are shared modulators
 (`model/modulators.rs`, the "LFOs & Modulators" panel in `panels/modulators.rs`). Controller mappings carry a
@@ -27,10 +27,15 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
 - [~] **Per-target curves and value effects on every link** (**built 2026-11-15, tested: the instant ones (steps, curve, formula, threshold, limit, repeat, randomize, drawn curve); smooth / delay / fall stay on controller mappings**) (V): give `Binding` the same `fx: Vec<ValueFx>` that
   `ControlMap` has, so each target of a surface fader or modulator can have its own curve, steps, delay or formula.
   Reuse `value_fx_menu` (`panels/control.rs`) as a shared component. Size M.
-- [ ] **Link from the source: drag onto any control** (V): drag a modulator, surface widget or knob from the
-  MIDI/OSC monitor onto any slider to link it. VDMX does this with a right-click drag from LFO, Clock, Step
-  Sequencer, Control Surface and Data Looper. Today you always go the other way: right-click the slider, then
-  Modulate or Learn. Use `ui::drop_payload`. Size M.
+- [x] **Link from the source: drag onto any control** (**built 2026-11-18, tested: `link_roles`, dials as drivers, the
+  drop rules; the drag itself not yet seen on screen**) (V): drag a modulator (its link handle in Modulators or its
+  window), a Control Surface widget (link handle beside "Drives", each bar, an XY pad's Y), a row's input in the MIDI /
+  OSC monitor, a dial, or any slider with Alt held, onto any slider (`ui::Level`): it lights while it can take the
+  drop. A modulator becomes the slider's modulation (sweeping the whole range when it had none); a widget or dial
+  drives it (one more target in its list); a slider dropped on a dial is driven by the dial; two plain controls: the
+  one landed on follows the one carried; a controller input is mapped. `ui::link` (`LinkSource`, `link_handle`,
+  `link_drag_text`, `carry_from_slider`, `link_drop`), app `State::link`, engine `link_roles` / `is_driver` /
+  `Composition::link_driver`. Size M.
 - [~] **"Links" view: one source, every target** (**built 2026-11-15: MIDI / OSC › Links; follows and surface targets edited in place, controller inputs and modulator followers listed. Seen on screen empty only**) (V: Data Source Mappings window): a single list grouped by source
   (a MIDI knob, an OSC address, a modulator, a surface widget). It shows every target with its range and curve,
   editable in place, with "jump to" links. Today `mappings_editor` (`panels/control.rs`) lists one row per pairing,
@@ -39,10 +44,15 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
   opacity follows layer 1's speed, inverted. Add a `ModSource` / `link` to a `ControlTarget`, read with
   `control::get_target`. Today only shared modulators and surface widgets can be sources; the Computed widget reads
   controls but only on a surface. Size M.
-- [ ] **Macro knobs on a layer, effect or clip (dashboard)** (R): eight named dials at the top of a layer, group,
-  clip or MASTER. Drag any parameter onto a dial, and each link gets an in/out slice and invert. Today this needs a
-  Control Surface page. This is a light, scoped version that's saved with the layer or clip and travels in presets.
-  Size M.
+- [x] **Macro knobs on a layer, effect or clip (dashboard)** (**built 2026-11-18, tested: dials on layers, groups,
+  clips and MASTER, their targets follow only when a dial moves, old saves open without them, a duplicated layer's
+  dials drive the copy. The Inspector section not yet seen on screen**) (R): up to eight named dials (`MacroDial`,
+  `model/macros.rs`; `LayerState.dials`, `LayerGroup.dials`, `Clip.dials`, `Composition.master_dials`, all with serde
+  defaults) shown under the layer's opacity in the Inspector, in a group's and MASTER's Inspector and in the picked
+  clip's section (`panels::dials_section`). Each dial is a control (`ControlTarget::Macro`, OSC
+  `/phosphor/layer/<id>/dial/N`, `/phosphor/master/dial/N`): map a knob to it, Alt-drag a slider onto it (or it onto a
+  slider), or pick settings in its menu, each with its own part of the dial, curve and range (`binding_list`).
+  `State::run_dials` hands a dial's moves on (nothing runs without dials). Not yet: dials on an effect. Size M.
 - [~] **Copy / paste a control's links** (**was already there: Copy / Paste mappings in the right-click menu, Copy / Paste the motion. Not yet: onto all of a layer's sliders at once**) (V: Copy / Paste Local): copy a slider's mappings, modulation and value
   effects onto another control, or onto all of a layer's sliders at once. Size S.
 
@@ -65,8 +75,12 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
   Size M.
 - [~] **Show the OSC address on any control** (**was already there: the address with a Copy button is in every control's right-click menu. Not yet: an "OSC mode" that labels every slider**) (R: Shortcuts › Edit OSC): an "OSC mode" that labels every slider with
   its address, plus a right-click "Copy OSC address" command. Today you find it in OSC Query or the code. Size S.
-- [ ] **Detect range: map a whole row at once** (V): send the first and last note or address, and a clip row or eight
-  faders map in one go. Today each control is learned one at a time. Size S.
+- [x] **Detect range: map a whole row at once** (**built 2026-11-18, tested: rows of CCs, notes, OSC addresses (also
+  /fader1 to /fader12), DMX channels, Stream Deck keys; wrong pairs refused; a row learned again replaces, not doubles.
+  The menu seen on screen, the listening not tried with a real controller**) (V): MIDI / OSC › Mappings › Learn a row:
+  pick clip columns, the selected layer's clips, every layer's opacity or the selected layer's dials and how many, press
+  Listen, move the first knob then the last; the ones between are worked out and each control gets one
+  (`ControlSource::row`, `Composition::{row_targets, learn_row}`, `model/detect_range.rs`). Size S.
 - [x] **String and list receivers** (**built 2026-11-15: a name picks a menu item; text layers and `<address>/<k>` list items were already there**) (V): an OSC string sets text (exists for text layers), picks a menu item by name,
   or one item of an OSC list feeds a control. Size S.
 - [ ] **Per-surface OSC Query publishing and a browser remote per surface** (V): each surface or page is published on
@@ -75,10 +89,13 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
 
 ## LFO / modulator window
 
-- [~] **A real LFO editor window** (**partly, 2026-11-15: each modulator draws its wave with a playhead and lists what follows it. Not yet: its own window, scrub / pause / reverse / retrigger, per-target amount in the list**) (V: LFO plugin): its own window (or tab) for each modulator. It shows a big live
-  waveform with a playhead, transport (rate, scrub, pause, reverse, retrigger), length in seconds or bars, and a
-  "followed by" list of every control using it, with per-target amount. Today `panels/modulators.rs` is a compact
-  form inside a list and the wave isn't drawn. The owner's ask: "an LFO window, not in a right-click menu". Size M.
+- [x] **A real LFO editor window** (**built 2026-11-18, tested: pause, reverse, retrigger / scrub in the engine
+  (`Modulator.{paused, reverse}`, `ModPhases::set_cycle`); the window itself not yet seen on screen**) (V: LFO plugin):
+  the Modulators panel's open button puts a modulator in a window of its own (`panels::modulator_window`, any number
+  open, drawn app-level): a big live wave with its playhead (click or drag on it to scrub), pause, reverse, retrigger,
+  its rate / sync / shape settings, and "Followed by" with each control's own Amount (or From / To when it sweeps)
+  and invert (`Composition::linked_modulations_mut`). Length in beats / bars comes from Sync. The owner's ask: "an LFO
+  window, not in a right-click menu". Size M.
 - [~] **More wave shapes and wave settings** (**built 2026-11-15, tested: phase offset, pulse width, ramp down, exponential, smooth random, noise. Not yet: several waves in one LFO**) (V): phase offset (so several LFOs can be out of step), pulse width,
   ramp down, smooth random, noise, exponential; several waves per LFO, each its own source (multiphase). Today there
   are sine / triangle / saw / square / random / drawn (8 points) and no phase field (`ModSource`, `Modulation` in

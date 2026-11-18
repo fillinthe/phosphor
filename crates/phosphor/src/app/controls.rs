@@ -105,6 +105,16 @@ impl PhosphorApp {
                 st.comp.follows.retain(|f| !(f.source == source && f.to.target == target));
             }
         }
+        // A control carried onto another one (`ui::link_drop`): (where it landed, what was carried).
+        type LinkAsk = (phosphor_engine::ControlTarget, phosphor_engine::ControlTarget);
+        if let Some((target, source)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(crate::ui::LINK_REQUEST);
+            let r = d.get_temp::<LinkAsk>(id);
+            d.remove::<LinkAsk>(id);
+            r
+        }) {
+            st.link(source, target, ctx.input(|i| i.time));
+        }
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::FOLLOWS), std::sync::Arc::new(st.comp.follows.clone())));
         if ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new(panels::WANT_TARGETS))).unwrap_or(false) {
             ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::ALL_TARGETS), std::sync::Arc::new(crate::control::all_targets(&st.comp))));

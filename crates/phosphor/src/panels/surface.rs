@@ -929,9 +929,12 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 }
             });
             help(ui, "Each bar drives its own targets. Map a controller to the widget to move every bar at once, or to one bar (Surface › bar N in any target list).");
+            let wlabel = w.label.clone();
             for (i, b) in w.bars.iter_mut().enumerate() {
                 let title = format!("Bar {} drives{}", i + 1, if b.bindings.is_empty() { "" } else { " ·" });
                 crate::ui::section(ui, ("bar", id, i), title, i == 0, |ui| {
+                    let bar = ControlTarget::SurfaceBar { widget: id, bar: i as u8 };
+                    crate::ui::link_handle(ui, ("bar", id, i), crate::ui::LinkSource::Control { target: bar, name: format!("{wlabel} · bar {}", i + 1) }, "Drag onto any slider: this bar drives it too");
                     binding_list(ui, ("bar_bindings", id, i), targets, &mut b.bindings);
                 });
             }
@@ -943,7 +946,10 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 });
                 help(ui, "An LFO, the sound or the beat moves it around where you set it, and its targets follow (the white line shows where it is).");
             }
-            crate::ui::heading_help(ui, axis, "Each target gets this widget's value, rescaled to its from–to range.");
+            ui.horizontal(|ui| {
+                crate::ui::link_handle(ui, ("widget", id), crate::ui::LinkSource::Control { target: ControlTarget::Surface(id), name: w.label.clone() }, "Drag onto any slider: this widget drives it too");
+                crate::ui::heading_help(ui, axis, "Each target gets this widget's value, rescaled to its from–to range. Drag the link handle onto any slider to add it here.");
+            });
             binding_list(ui, ("bindings", id), targets, &mut w.bindings);
         }
         if w.kind == WidgetKind::Color {
@@ -957,7 +963,10 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         }
         if w.kind == WidgetKind::XyPad {
             ui.add_space(4.0);
-            crate::ui::heading(ui, "Vertical (Y) drives");
+            ui.horizontal(|ui| {
+                crate::ui::link_handle(ui, ("widget_y", id), crate::ui::LinkSource::Control { target: ControlTarget::SurfaceY(id), name: format!("{} (Y)", w.label) }, "Drag onto any slider: this pad's vertical axis drives it too");
+                crate::ui::heading(ui, "Vertical (Y) drives");
+            });
             binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
         }
         if w.kind == WidgetKind::Choices {

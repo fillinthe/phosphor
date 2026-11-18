@@ -12,6 +12,8 @@ pub(crate) fn drag_ghost(ctx: &egui::Context, st: &State) {
         st.comp.media_bin.get(m.0).map(|m| label(icon::FILM_STRIP, &m.name))
     } else if let Some(s) = Dnd::payload::<SourceDrag>(ctx) {
         Some(label(icon::VIDEO_CAMERA, &s.name))
+    } else if let Some(l) = Dnd::payload::<crate::ui::LinkSource>(ctx) {
+        Some(label(icon::LINK, &format!("Link {}: drop on a slider", l.name())))
     } else if let Some(id) = Dnd::payload::<u64>(ctx) {
         st.comp.layer(*id).map(|l| l.name.clone()).or_else(|| st.comp.group(*id).map(|g| g.name.clone())).map(|n| label(icon::STACK, &n))
     } else {

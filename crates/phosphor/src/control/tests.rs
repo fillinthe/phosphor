@@ -275,6 +275,28 @@ fn a_knob_sets_a_hand_modulator_and_osc_has_an_address() {
     assert_eq!(default_osc_address(&ControlTarget::Modulator(7)), "/phosphor/modulator/7");
 }
 
+/// A dial is a control like any other: a knob or OSC sets it, it reads back, it's listed and has an address; a layer
+/// duplicated with its dials keeps them driving the copy's own settings.
+#[test]
+fn a_dial_is_a_control_with_an_address() {
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    comp.layer_mut(a).unwrap().dials.push(phosphor_engine::MacroDial::numbered(1));
+    let dial = ControlTarget::Macro { owner: a, index: 0 };
+    let mut out = Vec::new();
+    set_target(&mut comp, &dial, 0.6, &mut out);
+    assert_eq!(get_target(&comp, &dial), Some(0.6));
+    assert!(all_targets(&comp).iter().any(|(t, name)| *t == dial && name.contains("Dial 1")));
+    assert_eq!(default_osc_address(&dial), format!("/phosphor/layer/{a}/dial/1"));
+    assert_eq!(default_osc_address(&ControlTarget::Macro { owner: phosphor_engine::MASTER_ID, index: 2 }), "/phosphor/master/dial/3");
+    // A copy's dial drives the copy.
+    assert!(comp.link_driver(&dial, ControlTarget::LayerOpacity(a)));
+    let copy = comp.layer(a).cloned().unwrap();
+    let copy = comp.adopt_layer(copy);
+    assert_ne!(copy.id, a);
+    assert_eq!(copy.dials[0].targets[0].target, ControlTarget::LayerOpacity(copy.id));
+}
+
 /// Soft takeover: a fader far from the value doesn't jump it; once it passes the value it follows; a mouse move
 /// in between makes it catch up again.
 #[test]

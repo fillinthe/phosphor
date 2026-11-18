@@ -116,6 +116,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::SurfaceY(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value_y,
         ControlTarget::SurfaceBar { widget, bar } => comp.surface.widgets.iter().find(|w| w.id == *widget)?.bars.get(*bar as usize)?.value,
         ControlTarget::Modulator(id) => comp.modulators.iter().find(|m| m.id == *id)?.value,
+        ControlTarget::Macro { owner, index } => comp.dials(*owner)?.get(*index as usize)?.value,
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => on(comp.launch.fade),
             AppControl::FadeTime => to_unit(comp.launch.fade_secs, 0.05, 10.0, true),
@@ -182,6 +183,12 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::Modulator(id) => {
             if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == *id) {
                 m.value = v.clamp(0.0, 1.0);
+            }
+        }
+        // (Its targets follow once a frame: `State::run_dials`.)
+        ControlTarget::Macro { owner, index } => {
+            if let Some(d) = comp.dials_mut(*owner).and_then(|d| d.get_mut(*index as usize)) {
+                d.value = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::SurfaceBar { widget, bar } => {
@@ -549,6 +556,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     for m in comp.modulators.iter().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
         out.push((ControlTarget::Modulator(m.id), format!("Modulator · {}", m.name)));
     }
+    for (owner, name, i, d) in comp.all_dials() {
+        out.push((ControlTarget::Macro { owner, index: i as u8 }, format!("{name} · dial {}", d.name)));
+    }
     for col in 0..comp.clip_columns {
         out.push((ControlTarget::TriggerColumn(col), format!("Column {} (trigger)", col + 1)));
     }
@@ -818,12 +828,17 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::SurfaceBar { widget, bar } => format!("/phosphor/surface/{widget}/bar/{}", bar + 1),
         ControlTarget::Modulator(id) => format!("/phosphor/modulator/{id}"),
+        ControlTarget::Macro { owner, index } if *owner == phosphor_engine::MASTER_ID => format!("/phosphor/master/dial/{}", index + 1),
+        ControlTarget::Macro { owner, index } => format!("/phosphor/layer/{owner}/dial/{}", index + 1),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),
     }
 }
 
 pub fn target_label(comp: &Composition, target: &ControlTarget) -> String {
-    all_targets(comp).into_iter().find(|(t, _)| t == target).map(|(_, n)| n).unwrap_or_else(|| "(removed)".into())
+    all_targets(comp).into_iter().find(|(t, _)| t == target).map(|(_, n)| n).unwrap_or_else(|| match target {
+        ControlTarget::Slider { name, .. } | ControlTarget::Button { name, .. } => name.clone(),
+        _ => "(removed)".into(),
+    })
 }
 
 #[cfg(test)]

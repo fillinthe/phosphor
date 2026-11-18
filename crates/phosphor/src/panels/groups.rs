@@ -201,6 +201,7 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.horizontal(|ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });
+        super::dials_section(ui, g.id, &mut g.dials);
         crate::ui::field(ui, "Blend", |ui| {
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);
         });

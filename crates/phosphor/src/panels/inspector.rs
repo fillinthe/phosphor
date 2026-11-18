@@ -54,6 +54,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new("MASTER").strong().color(accent()));
                 help(ui, "These effects run over the whole mix, after every layer has been blended.");
             });
+            super::dials_section(ui, MASTER_ID, &mut st.comp.master_dials);
             ui.separator();
             fx_action = effects_editor(ui, &mut st.comp.master_effects, clipboard_len);
         });
@@ -109,6 +110,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 super::clip_bar::speed_level(ui, layer, w);
             }
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).width(w).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
+            super::dials_section(ui, layer.id, &mut layer.dials);
             crate::ui::toolbar(ui, |ui| {
                 let (go, out) = (format!("{} Go live", icon::PLAY), format!("{} Take out", icon::ARROW_DOWN));
                 let (text, tip) = if live { (out.clone(), "Fade it out of the show (auto-fade time)") } else { (go.clone(), "Fade it into the show (auto-fade time); until then you only see it here") };
@@ -132,6 +134,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     }
                     if let Some(a) = super::clip_editor(ui, layer, c, true, is_movie) {
                         clip_act = Some((c, a));
+                    }
+                    if let Some(k) = layer.clips.get_mut(c).filter(|k| k.id != 0) {
+                        super::dials_section(ui, k.id, &mut k.dials);
                     }
                 });
             }
