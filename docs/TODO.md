@@ -2,6 +2,17 @@
 
 Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (moved there 2026-11-14).
 
+## Future (owner, 2026-11-18)
+
+- **Export to a Raspberry Pi** (or a similar small player): a show that plays by itself on a Pi with no Mac or PC:
+  the LED / DMX output first (record the show's DMX as `.phdmx`, the Pi plays it back over sACN / Art-Net out of
+  its Ethernet, looping, starting at power-on), later video to an HDMI output. Needs: recording DMX coming in from
+  another program (LightJams → `.phdmx`, DMX in already listens on every adapter), a small player program for the
+  Pi (Linux ARM: CI already builds Phosphor for Linux ARM), and an "Export for a Pi…" that writes the player, the
+  recording and its settings (adapter, universes, loop) onto a card or over the network.
+- **Stage layout, next steps:** the LED / DMX fixtures on the Stage canvas too (lit with what they send); a 3D
+  preview of the stage (screens and projector beams) much later.
+
 ## Owner's answers (2026-11-15, after the show)
 
 - **Release 0.5.7:** wait (MacBook only until tested more).

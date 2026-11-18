@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.11 (not released yet)
 
+- **Stage layout** (Outputs › Stage): a big black canvas of the venue with every output live where it really
+  is: drag an output into place, size it by its corner, edges snap to each other; scroll or drag the black to move
+  around, pinch to zoom; a picture of the venue behind them if you like (Venue picture). Saved with the project.
+  The earlier side-by-side view is still there (Tiles).
 - **Every project in Recent gets a copy on this computer while its drive is connected** (at launch and when the
   Projects window opens), not only the ones you open, so each opens later with the drive away. A project that has
   no copy yet says so on its card.

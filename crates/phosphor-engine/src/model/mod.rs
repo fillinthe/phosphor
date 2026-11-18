@@ -39,6 +39,8 @@ pub use templates::TEMPLATES;
 pub use merge::Merged;
 mod remap;
 mod source;
+mod stage;
+pub use stage::*;
 mod surface;
 mod tracking;
 mod live_data;

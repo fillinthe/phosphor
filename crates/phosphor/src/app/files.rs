@@ -244,6 +244,13 @@ impl PhosphorApp {
                         st.comp.show_file_on_slice(sid, &name, crate::media::spec_for_path(&path));
                     }
                 }
+                Purpose::StageBackdrop => {
+                    if let Some(p) = paths.first() {
+                        st.comp.stage.backdrop = p.to_string_lossy().to_string();
+                        // Placed around the outputs again (a new picture has its own shape).
+                        st.comp.stage.backdrop_place = None;
+                    }
+                }
                 Purpose::StagePhoto(oid) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter_mut().find(|o| o.id == oid)) {
                         o.stage_photo = p.to_string_lossy().to_string();
