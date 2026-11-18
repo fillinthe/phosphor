@@ -250,6 +250,9 @@ pub struct State {
     /// Following another Phosphor (`crate::follow`): the link to the leader, and what this one sends when it leads.
     #[cfg(not(target_arch = "wasm32"))]
     pub following: Option<crate::follow::Link>,
+    /// The Session reachable from the internet: the router's port opening while it's on (`crate::internet`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub internet: Option<crate::internet::Opening>,
     /// A player: follow this leader every time Phosphor starts (empty = don't).
     pub follow_at_launch: String,
     #[cfg(not(target_arch = "wasm32"))]

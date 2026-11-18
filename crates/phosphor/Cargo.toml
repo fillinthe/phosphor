@@ -64,6 +64,8 @@ laser-dac = { version = "0.14", default-features = false, features = ["network-d
 mdns-sd = "0.21"
 if-addrs = "0.15"
 socket2 = "0.6"
+# Reaching a Session from the internet: asks the router to open its port (UPnP IGD; MIT).
+igd-next = "0.18"
 flate2 = "1"
 rusty_link = "0.4"
 tungstenite = "0.26"

@@ -5,6 +5,11 @@ use super::*;
 pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     follow_section(ui, st);
+    // The router's opening goes with the Session.
+    #[cfg(not(target_arch = "wasm32"))]
+    if !st.net.running() {
+        st.internet = None;
+    }
     let State { net, notice, .. } = &mut *st;
     crate::ui::heading_help(ui, "Session", "Anyone on your network opens the link and sees the output live; they can send their music back.");
     crate::ui::toolbar(ui, |ui| {
@@ -50,6 +55,8 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             });
             help(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        internet_row(ui, st);
         ui.separator();
         audience_play(ui, st);
         let State { net, remote_password, require_password, .. } = &mut *st;
@@ -95,6 +102,59 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(msg) = &st.notice {
         ui.colored_label(WARN, msg.as_str());
+    }
+}
+
+/// The Session from the internet: the router opens its port (UPnP) and says the public address, for another Phosphor
+/// somewhere else to follow or to show the picture of. Needs the control password first (strangers could watch, never
+/// control).
+#[cfg(not(target_arch = "wasm32"))]
+fn internet_row(ui: &mut egui::Ui, st: &mut State) {
+    let locked = st.require_password && !st.remote_password.is_empty();
+    let mut on = st.internet.is_some();
+    crate::ui::toolbar(ui, |ui| {
+        let r = ui.add_enabled_ui(locked || on, |ui| crate::ui::toggle(ui, &mut on, label(icon::GLOBE, "Reach from the internet"))).inner;
+        if r.on_hover_text("Asks your router to let this Session in from outside, so a Phosphor somewhere else can follow this show or show its picture. Off again closes it").changed() {
+            st.internet = on.then(|| {
+                let mut ports = vec![st.net.port];
+                if st.net.https {
+                    ports.push(st.net.port + 1);
+                }
+                crate::internet::Opening::open(ports)
+            });
+        }
+        help(ui, "For a Phosphor in another place: on that one, type the address below into Follow another Phosphor (it plays this show; its media must be there too) or press Show its picture (this output, live, as a layer: nothing else needed there).");
+    });
+    if !locked && !on {
+        hint(ui, "Set a password to control (below) first: anyone could find an open Session.");
+    }
+    let port = st.net.port;
+    let Some(open) = &mut st.internet else { return };
+    open.poll();
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+    match open.status.clone() {
+        crate::internet::Status::Asking => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                hint(ui, "asking the router…");
+            });
+        }
+        crate::internet::Status::Open { public, .. } => {
+            let addr = open.address(port).unwrap_or_default();
+            crate::ui::field(ui, "From anywhere", |ui| {
+                ui.monospace(&addr);
+                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy the address for the other Phosphor").clicked() {
+                    ui.ctx().copy_text(addr.clone());
+                }
+            });
+            if !crate::internet::is_public(public) {
+                ui.colored_label(WARN, format!("{} Your router's own address ({public}) isn't a public one: it sits behind another router (often a phone or mobile connection), so this won't reach you from outside.", icon::WARNING));
+            }
+        }
+        crate::internet::Status::Failed(why) => {
+            let here = crate::control::local_ip().unwrap_or_default();
+            ui.colored_label(WARN, format!("{} {why}. In your router's settings, forward TCP port {port} to this computer ({here}), then share your public address with :{port}.", icon::WARNING));
+        }
     }
 }
 
@@ -228,6 +288,14 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
+/// Where another Phosphor's Session hands out its output picture (`http://host:port/stream.mjpeg`), from what was typed.
+#[cfg(not(target_arch = "wasm32"))]
+fn leader_picture(typed: &str) -> String {
+    let host = typed.trim().trim_start_matches("http://").trim_start_matches("https://").split('/').next().unwrap_or_default().to_string();
+    let host = if host.contains(':') { host } else { format!("{host}:{}", crate::net::DEFAULT_PORT) };
+    format!("http://{host}/stream.mjpeg")
+}
+
 /// Follow another Phosphor: play its show (project, beat, clips) on this machine's own outputs (`crate::follow`).
 #[cfg(not(target_arch = "wasm32"))]
 fn follow_section(ui: &mut egui::Ui, st: &mut State) {
@@ -268,10 +336,31 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {
                     st.following = Some(crate::follow::Link::connect(&addr));
                 }
+                if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::MONITOR_PLAY, "Show its picture"))
+                    .on_hover_text("A new layer with the other Phosphor's output, live (it needs nothing else here: no project, no media). Works across the internet when that one is set to Reach from the internet")
+                    .clicked()
+                {
+                    let now = ui.input(|i| i.time);
+                    let source = crate::media::live::stream_source(&leader_picture(&addr));
+                    let l = st.comp.add_layer();
+                    l.name = format!("From {}", addr.trim()).chars().take(32).collect();
+                    let layer = l.id;
+                    st.selected = Some(layer);
+                    st.launch_source(layer, source, Vec::new(), addr.trim().to_string(), now);
+                }
                 help(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
             });
             ui.ctx().data_mut(|d| d.insert_temp(key, addr));
         }
     }
     ui.separator();
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    #[test]
+    fn the_picture_address_comes_from_what_was_typed() {
+        assert_eq!(super::leader_picture("203.0.113.9:9000"), "http://203.0.113.9:9000/stream.mjpeg");
+        assert_eq!(super::leader_picture(" http://studio.local/ "), format!("http://studio.local:{}/stream.mjpeg", crate::net::DEFAULT_PORT));
+    }
 }
