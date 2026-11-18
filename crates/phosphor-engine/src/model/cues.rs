@@ -280,7 +280,14 @@ impl Composition {
 
     /// Glides every number towards the cue (call each frame until `fade.done`).
     pub fn step_cue(&mut self, fade: &CueFade, now: f32) {
-        let Some(cue) = self.cues.cues.get(fade.cue).cloned() else { return };
+        let Some(slot) = self.cues.cues.get_mut(fade.cue) else { return };
+        // Lent out for the step and put back (the whole cue was copied every frame of a fade).
+        let cue = std::mem::take(slot);
+        self.step_cue_to(&cue, fade, now);
+        self.cues.cues[fade.cue] = cue;
+    }
+
+    fn step_cue_to(&mut self, cue: &Cue, fade: &CueFade, now: f32) {
         let t = if fade.secs <= 0.0 { 1.0 } else { ((now - fade.start) / fade.secs).clamp(0.0, 1.0) };
         // Ease in and out.
         let k = t * t * (3.0 - 2.0 * t);
