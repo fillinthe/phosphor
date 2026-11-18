@@ -49,14 +49,229 @@ pub struct Registry {
     pub kicked: std::collections::HashSet<u64>,
     pub blocked: std::collections::BTreeSet<String>,
     next: u64,
+    /// Wrong passwords by address (remote and following).
+    guesses: Guesses,
+    /// Open connections: in all, and by address (`Entry`).
+    open: usize,
+    open_by_ip: std::collections::HashMap<String, usize>,
+    /// Guest ids this session handed out (a phone can only come back as one of these, never pick its own).
+    issued: std::collections::HashSet<String>,
 }
 
 pub type Reg = Arc<Mutex<Registry>>;
+
+/// Most connections the session serves at once, and from one address (a phone's page uses a few).
+const MAX_CONNECTIONS: usize = 256;
+const MAX_PER_ADDRESS: usize = 32;
+/// Most guest ids remembered in one session.
+const MAX_ISSUED: usize = 10_000;
+
+/// Wrong passwords from one address: after each, that address waits longer before it may try again (half a
+/// second, doubling, at most a minute), however many connections it opens. A right one clears it.
+#[derive(Default)]
+struct Guesses {
+    by_ip: std::collections::HashMap<String, (u32, web_time::Instant)>,
+}
+
+impl Guesses {
+    fn may_try(&self, ip: &str, now: web_time::Instant) -> bool {
+        self.by_ip.get(ip).is_none_or(|(_, at)| now >= *at)
+    }
+
+    fn failed(&mut self, ip: &str, now: web_time::Instant) {
+        if self.by_ip.len() > 1000 {
+            self.by_ip.retain(|_, (_, at)| *at > now);
+        }
+        let e = self.by_ip.entry(ip.to_string()).or_insert((0, now));
+        e.0 += 1;
+        e.1 = now + std::time::Duration::from_millis((500u64 << (e.0 - 1).min(7)).min(60_000));
+    }
+}
+
+impl Registry {
+    /// Checks a password `tried` from `ip` against `current`, slowing down an address that keeps guessing
+    /// (while it must wait, every try is wrong).
+    fn try_password(&mut self, ip: &str, tried: &str, current: &str) -> bool {
+        let now = web_time::Instant::now();
+        if !self.guesses.may_try(ip, now) {
+            return false;
+        }
+        if tried == current {
+            self.guesses.by_ip.remove(ip);
+            true
+        } else {
+            self.guesses.failed(ip, now);
+            false
+        }
+    }
+
+    /// The id a guest plays under: the one it asked for if this session gave it out, else a `fresh` one.
+    fn claim(&mut self, asked: &str, fresh: impl FnOnce() -> String) -> String {
+        if !asked.is_empty() && self.issued.contains(asked) {
+            return asked.to_string();
+        }
+        let token = fresh();
+        if self.issued.len() < MAX_ISSUED {
+            self.issued.insert(token.clone());
+        }
+        token
+    }
+}
+
+/// An open connection, counted while it lives (`Entry::open`); None when the session is full.
+struct Entry {
+    reg: Reg,
+    ip: String,
+}
+
+impl Entry {
+    fn open(reg: &Reg, ip: &str) -> Option<Self> {
+        let mut r = reg.lock().unwrap();
+        let mine = r.open_by_ip.get(ip).copied().unwrap_or(0);
+        if r.open >= MAX_CONNECTIONS || mine >= MAX_PER_ADDRESS {
+            return None;
+        }
+        r.open += 1;
+        r.open_by_ip.insert(ip.to_string(), mine + 1);
+        Some(Self { reg: reg.clone(), ip: ip.to_string() })
+    }
+}
+
+impl Drop for Entry {
+    fn drop(&mut self) {
+        let mut r = self.reg.lock().unwrap();
+        r.open = r.open.saturating_sub(1);
+        if let Some(n) = r.open_by_ip.get_mut(&self.ip) {
+            *n -= 1;
+            if *n == 0 {
+                r.open_by_ip.remove(&self.ip);
+            }
+        }
+    }
+}
+
+/// Commands from one guest: at most this many a second on average, this many at once.
+const GUEST_RATE: f32 = 120.0;
+const GUEST_BURST: f32 = 240.0;
+
+/// A token bucket: lets `rate` things a second through, `burst` at once.
+struct Bucket {
+    tokens: f32,
+    last: web_time::Instant,
+}
+
+impl Bucket {
+    fn new() -> Self {
+        Self { tokens: GUEST_BURST, last: web_time::Instant::now() }
+    }
+
+    fn take(&mut self, now: web_time::Instant) -> bool {
+        self.tokens = (self.tokens + now.saturating_duration_since(self.last).as_secs_f32() * GUEST_RATE).min(GUEST_BURST);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Most commands waiting for the app (it takes them every frame; more means it stalled or someone floods).
+const MAX_QUEUED: usize = 4096;
+
+/// One header's value from a request head (name without the colon, any case).
+fn header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
+    request.lines().skip(1).find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        k.trim().eq_ignore_ascii_case(name).then(|| v.trim())
+    })
+}
+
+/// A request a web page on another site made (its Origin isn't this server): such a page could drive the show
+/// from any browser on the network. Requests without an Origin (our own app, other programs) are fine.
+fn cross_site(request: &str) -> bool {
+    let Some(origin) = header(request, "Origin") else { return false };
+    let Some(host) = origin.strip_prefix("http://").or_else(|| origin.strip_prefix("https://")) else { return true };
+    header(request, "Host").is_none_or(|h| !h.eq_ignore_ascii_case(host.trim_end_matches('/')))
+}
+
+#[cfg(test)]
+mod limit_tests {
+    use super::*;
+
+    #[test]
+    fn guessing_passwords_from_one_address_slows_down() {
+        let mut r = Registry::default();
+        assert!(!r.try_password("10.0.0.9", "nope", "secret"));
+        // Straight away, even the right password is refused for that address (another address may try).
+        assert!(!r.try_password("10.0.0.9", "secret", "secret"));
+        assert!(r.try_password("10.0.0.8", "secret", "secret"));
+        let now = web_time::Instant::now();
+        for _ in 0..20 {
+            r.guesses.failed("10.0.0.9", now);
+        }
+        let (_, at) = r.guesses.by_ip["10.0.0.9"];
+        assert!(at - now <= std::time::Duration::from_secs(60), "never more than a minute");
+        assert!(!r.guesses.may_try("10.0.0.9", now + std::time::Duration::from_secs(59)));
+        assert!(r.guesses.may_try("10.0.0.9", now + std::time::Duration::from_secs(61)));
+    }
+
+    #[test]
+    fn connections_are_capped_in_all_and_per_address() {
+        let reg: Reg = Default::default();
+        let mine: Vec<Entry> = (0..MAX_PER_ADDRESS).map_while(|_| Entry::open(&reg, "10.0.0.2")).collect();
+        assert_eq!(mine.len(), MAX_PER_ADDRESS);
+        assert!(Entry::open(&reg, "10.0.0.2").is_none(), "one address can't take every thread");
+        assert!(Entry::open(&reg, "10.0.0.3").is_some());
+        drop(mine);
+        assert!(Entry::open(&reg, "10.0.0.2").is_some(), "closed connections free their place");
+        let all: Vec<Entry> = (0..MAX_CONNECTIONS * 2).filter_map(|i| Entry::open(&reg, &format!("10.0.{}.{}", i / 200, i % 200))).collect();
+        assert_eq!(all.len(), MAX_CONNECTIONS);
+        drop(all);
+        assert_eq!(reg.lock().unwrap().open, 0);
+        assert!(reg.lock().unwrap().open_by_ip.is_empty());
+    }
+
+    #[test]
+    fn a_guest_only_gets_an_id_the_session_gave_out() {
+        let mut r = Registry::default();
+        let first = r.claim("made-up-by-the-phone", || "server1".into());
+        assert_eq!(first, "server1", "a phone can't choose who it is");
+        assert_eq!(r.claim("server1", || "server2".into()), "server1", "a reconnect keeps its place");
+        assert_eq!(r.claim("", || "server3".into()), "server3");
+    }
+
+    #[test]
+    fn a_guest_flooding_commands_is_held_to_a_rate() {
+        let mut b = Bucket::new();
+        let now = b.last;
+        let through = (0..1000).filter(|_| b.take(now)).count();
+        assert_eq!(through, GUEST_BURST as usize);
+        let later = now + std::time::Duration::from_millis(500);
+        let through = (0..1000).filter(|_| b.take(later)).count();
+        assert_eq!(through, (GUEST_RATE / 2.0) as usize);
+    }
+
+    #[test]
+    fn pages_from_other_sites_cant_drive_the_show() {
+        let req = |origin: &str| format!("GET /control HTTP/1.1\r\nHost: 192.168.1.5:8777\r\n{origin}Upgrade: websocket\r\n\r\n");
+        assert!(!cross_site(&req("")), "our app and other programs send no Origin");
+        assert!(!cross_site(&req("Origin: http://192.168.1.5:8777\r\n")), "the remote page itself");
+        assert!(!cross_site(&req("origin: HTTP://192.168.1.5:8777\r\n".to_lowercase().as_str())));
+        assert!(cross_site(&req("Origin: http://evil.example\r\n")));
+        assert!(cross_site(&req("Origin: null\r\n")));
+        assert!(cross_site(&req("Origin: http://192.168.1.5:8778\r\n")), "another port is another site");
+        let https = "GET /control HTTP/1.1\r\nhost: phosphor.local:8778\r\nOrigin: https://phosphor.local:8778\r\n\r\n";
+        assert!(!cross_site(https));
+    }
+}
 
 /// Registers a connection for as long as it lives; leaving happens on drop.
 struct Seat {
     reg: Reg,
     id: u64,
+    ip: String,
 }
 
 impl Seat {
@@ -75,18 +290,28 @@ impl Seat {
         r.next += 1;
         let id = r.next;
         r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: web_time::Instant::now(), controlling: false, token: String::new(), name: String::new(), level: 0.0 });
-        Self { reg: reg.clone(), id }
+        Self { reg: reg.clone(), id, ip: ip.to_string() }
+    }
+
+    /// A password this connection tried (see `Registry::try_password`).
+    fn try_password(&self, tried: &str, current: &str) -> bool {
+        self.reg.lock().unwrap().try_password(&self.ip, tried, current)
     }
 
     fn kicked(&self) -> bool {
         self.reg.lock().unwrap().kicked.contains(&self.id)
     }
 
-    fn set_token(&self, token: &str, name: &str) {
-        if let Some(p) = self.reg.lock().unwrap().peers.iter_mut().find(|p| p.id == self.id) {
-            p.token = token.chars().filter(|c| c.is_ascii_alphanumeric()).take(40).collect();
+    /// A guest's hello: the id it asked to come back as (kept only if this session gave it out, else a `fresh`
+    /// one) and its name. Returns the id it plays under (the phone keeps it for next time).
+    fn set_token(&self, asked: &str, name: &str, fresh: impl FnOnce() -> String) -> String {
+        let mut r = self.reg.lock().unwrap();
+        let token = r.claim(asked, fresh);
+        if let Some(p) = r.peers.iter_mut().find(|p| p.id == self.id) {
+            p.token.clone_from(&token);
             p.name = name.chars().filter(|c| !c.is_control()).take(24).collect::<String>().trim().to_string();
         }
+        token
     }
 
     fn set_controlling(&self, on: bool) {
@@ -124,7 +349,7 @@ mod audio_rate_tests {
 
 /// "iPhone · Safari" style label from a User-Agent header.
 fn device_label(request: &str) -> String {
-    let ua = request.lines().find_map(|l| l.strip_prefix("User-Agent:").or_else(|| l.strip_prefix("user-agent:"))).unwrap_or("").trim();
+    let ua = header(request, "User-Agent").unwrap_or("");
     let os = if ua.contains("iPhone") {
         "iPhone"
     } else if ua.contains("iPad") || (ua.contains("Macintosh") && ua.contains("Mobile")) {
@@ -358,24 +583,29 @@ impl NetSession {
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
                     let mut idle = true;
-                    let take = |stream: std::net::TcpStream, cfg: Option<Arc<rustls::ServerConfig>>| {
+                    // A thread per connection, as many as the session allows (a full session closes new ones at once).
+                    let take = |stream: std::net::TcpStream, from: std::net::SocketAddr, cfg: Option<Arc<rustls::ServerConfig>>| {
+                        let Some(entry) = Entry::open(&registry, &from.ip().to_string()) else { return };
                         let (running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow) =
                             (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), files.clone(), follow.clone());
-                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow));
+                        let _ = std::thread::Builder::new().name("phosphor-net-conn".into()).spawn(move || {
+                            let _entry = entry;
+                            native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow);
+                        });
                     };
                     match listener.accept() {
-                        Ok((stream, _)) => {
+                        Ok((stream, from)) => {
                             idle = false;
-                            take(stream, None);
+                            take(stream, from, None);
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                         Err(_) => break,
                     }
                     if let Some((l, cfg)) = &tls {
                         match l.accept() {
-                            Ok((stream, _)) => {
+                            Ok((stream, from)) => {
                                 idle = false;
-                                take(stream, Some(cfg.clone()));
+                                take(stream, from, Some(cfg.clone()));
                             }
                             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                             Err(_) => break,
@@ -582,12 +812,17 @@ mod native {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
         let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+        // A device that stops reading (a phone that walked away mid-picture) lets its connection go instead of
+        // holding the thread.
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
         let Ok(tcp) = stream.try_clone() else { return };
         let Ok(mut conn) = crate::net_tls::Conn::new(stream, tls.as_ref()) else { return };
-        // The request head (up to the blank line), read once; WebSocket paths get it replayed.
+        // The request head (up to the blank line), read once; WebSocket paths get it replayed. A sender that
+        // trickles it in gets 10 seconds in all.
         let mut head: Vec<u8> = Vec::with_capacity(2048);
         let mut chunk = [0u8; 512];
-        while head.len() < 8192 && !head.windows(4).any(|w| w == b"\r\n\r\n") {
+        let began = std::time::Instant::now();
+        while head.len() < 8192 && !head.windows(4).any(|w| w == b"\r\n\r\n") && began.elapsed() < Duration::from_secs(10) {
             match conn.read(&mut chunk) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => head.extend_from_slice(&chunk[..n]),
@@ -605,6 +840,11 @@ mod native {
             return;
         }
         let device = super::device_label(&request);
+        let controls = ["/control", "/guest", "/audio", "/follow"].iter().any(|p| path.starts_with(p)) || (path.starts_with("/whep") && request.starts_with("POST"));
+        if controls && super::cross_site(&request) {
+            let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            return;
+        }
         if path.starts_with("/control") {
             let seat = super::Seat::join(&registry, super::PeerKind::Remote, &ip, &device);
             control_socket(stream, tcp, running, remote, seat, false);
@@ -617,7 +857,7 @@ mod native {
         }
         // WebRTC (WHEP): the browser posts its offer (SDP), gets the answer; the picture then comes over UDP.
         if path.starts_with("/whep") && request.starts_with("POST") {
-            let len = request.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0).min(64 * 1024);
+            let len = super::header(&request, "Content-Length").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(64 * 1024);
             // The connection replays the request head first: read head + body, then keep what's after the head.
             let head_len = request.find("\r\n\r\n").map_or(request.len(), |i| i + 4);
             let mut all = Vec::with_capacity(head_len + len);
@@ -630,7 +870,10 @@ mod native {
             }
             let body = all.get(head_len..).unwrap_or_default().to_vec();
             let host = tcp.local_addr().map(|a| a.ip()).unwrap_or(std::net::IpAddr::from([127, 0, 0, 1]));
-            let reply = match follow.2.answer(&String::from_utf8_lossy(&body), host) {
+            // Each WebRTC viewer is listed in Devices (and can be disconnected or blocked there) for as long as it watches.
+            let seat = super::Seat::join(&registry, super::PeerKind::Viewer, &ip, &device);
+            let stay = move || running.load(Ordering::Relaxed) && !seat.kicked();
+            let reply = match follow.2.answer(&String::from_utf8_lossy(&body), host, stay) {
                 Ok(sdp) => format!("HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\nLocation: /whep/viewer\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{sdp}", sdp.len()),
                 Err(e) => format!("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{e}", e.len()),
             };
@@ -641,7 +884,14 @@ mod native {
         if path.starts_with("/follow") {
             let seat = super::Seat::join(&registry, super::PeerKind::Follower, &ip, "Phosphor (following)");
             let _ = tcp.set_nodelay(true);
-            let Ok(ws) = tungstenite::accept(stream) else { return };
+            let Ok(mut ws) = tungstenite::accept(stream) else { return };
+            // With a session password, a follower must know it (the project is the whole show).
+            let current = remote.3.lock().unwrap().clone();
+            if let Some(current) = current
+                && !crate::follow::admit(&mut ws, |tried| seat.try_password(tried, &current))
+            {
+                return;
+            }
             let _ = tcp.set_read_timeout(Some(Duration::from_millis(15)));
             follow.1.fetch_add(1, Ordering::Relaxed);
             crate::follow::serve(ws, follow.0, || running.load(Ordering::Relaxed) && !seat.kicked());
@@ -730,6 +980,25 @@ mod native {
         }
     }
 
+    /// Hands a command to the app (dropped while too many wait: the app stalled or someone floods).
+    fn queue(cmds: &super::RemoteCmds, v: serde_json::Value) {
+        let mut q = cmds.lock().unwrap();
+        if q.len() < super::MAX_QUEUED {
+            q.push(v);
+        }
+    }
+
+    /// A guest id nobody can guess: 16 random bytes as hex.
+    fn new_token() -> String {
+        let mut bytes = [0u8; 16];
+        if rustls::crypto::ring::default_provider().secure_random.fill(&mut bytes).is_err() {
+            // (Never expected; the time still makes a different id each call.)
+            let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+            bytes = t.to_le_bytes();
+        }
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
     /// Remote control: pushes the project state whenever it changes and queues the commands the
     /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
     /// A guest (audience play) needs no password: it learns its seat number, every command it sends
@@ -747,6 +1016,7 @@ mod native {
         // The password this socket proved it knows (None = not authorised, unless none is set).
         let mut granted: Option<Option<String>> = None;
         let mut told: Option<bool> = None;
+        let mut bucket = super::Bucket::new();
         if guest && ws.send(tungstenite::Message::Text(serde_json::json!({ "you": seat.id }).to_string().into())).is_err() {
             return;
         }
@@ -772,23 +1042,29 @@ mod native {
                 Ok(tungstenite::Message::Text(t)) => {
                     let Ok(mut v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
                     if guest {
+                        // A phone sending more than any hand could is ignored until it slows down.
+                        if !bucket.take(web_time::Instant::now()) {
+                            continue;
+                        }
                         if v.get("t").and_then(|t| t.as_str()) == Some("hello") {
-                            seat.set_token(v.get("token").and_then(|t| t.as_str()).unwrap_or(""), v.get("name").and_then(|t| t.as_str()).unwrap_or(""));
+                            // The id it plays under comes from here (a phone can't take another's place in line).
+                            let token = seat.set_token(v.get("token").and_then(|t| t.as_str()).unwrap_or(""), v.get("name").and_then(|t| t.as_str()).unwrap_or(""), new_token);
+                            if ws.send(tungstenite::Message::Text(serde_json::json!({ "you": seat.id, "token": token }).to_string().into())).is_err() {
+                                break;
+                            }
                             continue;
                         }
                         if let Some(o) = v.as_object_mut() {
                             o.insert("_from".into(), serde_json::json!(seat.id));
-                            cmds.lock().unwrap().push(v);
+                            queue(&cmds, v);
                         }
                         continue;
                     }
                     if v.get("t").and_then(|t| t.as_str()) == Some("auth") {
                         let tried = v.get("password").and_then(|p| p.as_str()).unwrap_or("");
-                        if current.as_deref().is_some_and(|p| p == tried) {
+                        if current.as_deref().is_some_and(|p| seat.try_password(tried, p)) {
                             granted = Some(current.clone());
                         } else {
-                            // Slow down guessing a little.
-                            std::thread::sleep(Duration::from_millis(400));
                             let _ = ws.send(tungstenite::Message::Text(r#"{"auth":"bad"}"#.into()));
                             told = Some(false);
                         }
@@ -799,7 +1075,7 @@ mod native {
                         if let Some(o) = v.as_object_mut() {
                             o.insert("_by".into(), serde_json::json!(seat.id));
                         }
-                        cmds.lock().unwrap().push(v);
+                        queue(&cmds, v);
                     }
                 }
                 Ok(tungstenite::Message::Close(_)) => break,

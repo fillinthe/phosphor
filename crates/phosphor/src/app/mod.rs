@@ -107,6 +107,7 @@ const KEY_SEND_CRASHES: &str = "send_crashes";
 const KEY_SOUND_OUT: &str = "sound_out_device";
 /// A player: the leader to follow every time Phosphor starts ("" = none).
 const KEY_FOLLOW_AT_LAUNCH: &str = "follow_at_launch";
+const KEY_FOLLOW_PASSWORD: &str = "follow_password";
 const KEY_LOCK: &str = "lock";
 const KEY_PANELS_LOCKED: &str = "panels_locked";
 const KEY_RENDER_RATE: &str = "render_rate";
@@ -255,6 +256,8 @@ pub struct State {
     pub internet: Option<crate::internet::Opening>,
     /// A player: follow this leader every time Phosphor starts (empty = don't).
     pub follow_at_launch: String,
+    /// The leader's session password (sent when following; kept for a player that follows at launch).
+    pub follow_password: String,
     #[cfg(not(target_arch = "wasm32"))]
     pub leader: crate::follow::Leader,
     /// FFGL plugins: the list found, and the instances drawing for effects and sources.

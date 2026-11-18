@@ -45,13 +45,53 @@ impl Leader {
         f.stamp = Some((now, Instant::now()));
         if now >= self.next_check {
             self.next_check = now + PROJECT_EVERY;
-            let project = comp.to_json();
+            let project = shared_json(comp);
             if *self.last_json != project {
                 self.last_json = Arc::new(project);
                 f.project = (f.project.0 + 1, self.last_json.clone());
             }
         }
     }
+}
+
+/// The project as followers get it: without projector (PJLink) passwords (a follower keeps its own outputs anyway).
+pub fn shared_json(comp: &Composition) -> String {
+    if !comp.outputs.iter().any(|o| o.projector.as_ref().is_some_and(|p| !p.password.is_empty())) {
+        return comp.to_json();
+    }
+    let mut c = comp.clone();
+    for p in c.outputs.iter_mut().filter_map(|o| o.projector.as_mut()) {
+        p.password.clear();
+    }
+    c.to_json()
+}
+
+/// Leader side, when its session has a password: waits (a few seconds) for the follower's hello and lets it in
+/// if `check` passes its password. A follower turned away is told so before the socket closes.
+pub fn admit<S: std::io::Read + std::io::Write>(ws: &mut tungstenite::WebSocket<S>, check: impl FnOnce(&str) -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < until {
+        match ws.read() {
+            Ok(tungstenite::Message::Text(t)) => {
+                let Ok(v) = serde_json::from_str::<Value>(t.as_str()) else { continue };
+                if v.get("t").and_then(Value::as_str) != Some("hello") {
+                    continue;
+                }
+                let ok = check(v.get("password").and_then(Value::as_str).unwrap_or(""));
+                if !ok {
+                    let _ = ws.send(tungstenite::Message::Text(json!({"t": "auth", "ok": false}).to_string().into()));
+                    let _ = ws.close(None);
+                    let _ = ws.flush();
+                }
+                return ok;
+            }
+            Ok(tungstenite::Message::Close(_)) => return false,
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+            Err(_) => return false,
+        }
+    }
+    false
 }
 
 /// The `/follow` socket (leader side, on the session server's thread for this connection).
@@ -132,14 +172,15 @@ impl Drop for Link {
 
 impl Link {
     /// Starts following the Phosphor at `address` ("host" or "host:port"; the session's port by default).
-    pub fn connect(address: &str) -> Link {
+    /// `password` = the leader's session password (needed when it has one).
+    pub fn connect(address: &str, password: &str) -> Link {
         let address = address.trim().trim_start_matches("http://").trim_end_matches('/').to_string();
         let host = if address.contains(':') { address.clone() } else { format!("{address}:{}", crate::net::DEFAULT_PORT) };
         let (tx, rx) = mpsc::channel();
         let fix: Arc<Mutex<Option<TimeFix>>> = Arc::new(Mutex::new(None));
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (fix2, stop2) = (fix.clone(), stop.clone());
-        let _ = std::thread::Builder::new().name("follow".into()).spawn(move || run(&host, tx, fix2, stop2));
+        let (fix2, stop2, password) = (fix.clone(), stop.clone(), password.to_string());
+        let _ = std::thread::Builder::new().name("follow".into()).spawn(move || run(&host, &password, tx, fix2, stop2));
         Link { address, rx, fix, stop, status: "connecting…".into(), clock: None, nudged: Vec::new(), projects: 0 }
     }
 
@@ -200,7 +241,7 @@ impl Link {
 }
 
 /// The connection thread: connect (and reconnect), pass messages on, ping every second to measure the time.
-fn run(host: &str, tx: mpsc::Sender<Incoming>, fix: Arc<Mutex<Option<TimeFix>>>, stop: Arc<std::sync::atomic::AtomicBool>) {
+fn run(host: &str, password: &str, tx: mpsc::Sender<Incoming>, fix: Arc<Mutex<Option<TimeFix>>>, stop: Arc<std::sync::atomic::AtomicBool>) {
     let start = Instant::now();
     while !stop.load(std::sync::atomic::Ordering::Relaxed) {
         let stream = match std::net::TcpStream::connect_timeout(&match host.parse() {
@@ -229,7 +270,12 @@ fn run(host: &str, tx: mpsc::Sender<Incoming>, fix: Arc<Mutex<Option<TimeFix>>>,
             continue;
         };
         let _ = stream.set_read_timeout(Some(Duration::from_millis(20)));
+        // The password first (a leader without one, or an older one, takes no notice).
+        if ws.send(tungstenite::Message::Text(json!({"t": "hello", "password": password}).to_string().into())).is_err() {
+            continue;
+        }
         let _ = tx.send(Incoming::Status("following".into()));
+        let mut refused = false;
         let mut next_ping = Instant::now();
         while !stop.load(std::sync::atomic::Ordering::Relaxed) {
             if Instant::now() >= next_ping {
@@ -251,6 +297,7 @@ fn run(host: &str, tx: mpsc::Sender<Incoming>, fix: Arc<Mutex<Option<TimeFix>>>,
                         Some("clock") => {
                             let _ = tx.send(Incoming::Clock(v));
                         }
+                        Some("auth") if v.get("ok").and_then(Value::as_bool) == Some(false) => refused = true,
                         Some("pong") => {
                             let (Some(sent), Some(leader)) = (v.get("at").and_then(Value::as_f64), v.get("now").and_then(Value::as_f64)) else { continue };
                             let rtt = (start.elapsed().as_secs_f64() - sent).max(0.0);
@@ -270,6 +317,12 @@ fn run(host: &str, tx: mpsc::Sender<Incoming>, fix: Arc<Mutex<Option<TimeFix>>>,
                 Err(tungstenite::Error::Io(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
                 Err(_) => break,
             }
+        }
+        if refused {
+            let ask = if password.is_empty() { "the leader's session has a password: type it here" } else { "wrong password for the leader's session" };
+            let _ = tx.send(Incoming::Status(ask.into()));
+            std::thread::sleep(Duration::from_secs(5));
+            continue;
         }
         let _ = tx.send(Incoming::Status("lost the leader: reconnecting…".into()));
         std::thread::sleep(Duration::from_millis(500));
@@ -329,6 +382,49 @@ mod tests {
         let merged = merge(leader.clone(), &local);
         assert_eq!(merged.layers.len(), 1);
         assert_eq!(merged.outputs[0].name, "Left wall");
+    }
+
+    #[test]
+    fn followers_never_get_projector_passwords() {
+        let mut comp = Composition::default();
+        comp.ensure_outputs();
+        comp.outputs[0].projector = Some(phosphor_engine::Projector { host: "10.0.0.50".into(), password: "pjlink-secret".into() });
+        let json = shared_json(&comp);
+        assert!(!json.contains("pjlink-secret"), "the password stays on the leader");
+        assert!(json.contains("10.0.0.50"));
+        assert_eq!(comp.outputs[0].projector.as_ref().unwrap().password, "pjlink-secret", "the leader's own project keeps it");
+        let mut plain = Composition::default();
+        plain.ensure_outputs();
+        assert_eq!(shared_json(&plain), plain.to_json());
+    }
+
+    /// A follower that knows the session password gets in; one that doesn't is told and turned away.
+    #[test]
+    fn following_needs_the_session_password() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let leader = std::thread::spawn(move || {
+            (0..2)
+                .map(|_| {
+                    let (s, _) = listener.accept().unwrap();
+                    s.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
+                    let mut ws = tungstenite::accept(s).unwrap();
+                    admit(&mut ws, |tried| tried == "letmein")
+                })
+                .collect::<Vec<bool>>()
+        });
+        let follower = |password: &str| {
+            let s = std::net::TcpStream::connect(addr).unwrap();
+            let (mut ws, _) = tungstenite::client(format!("ws://{addr}/follow"), s).unwrap();
+            ws.send(tungstenite::Message::Text(json!({"t": "hello", "password": password}).to_string().into())).unwrap();
+            match ws.read() {
+                Ok(tungstenite::Message::Text(t)) => t.to_string(),
+                _ => String::new(),
+            }
+        };
+        assert!(follower("guess").contains(r#""ok":false"#));
+        let _ = follower("letmein");
+        assert_eq!(leader.join().unwrap(), vec![false, true]);
     }
 
     #[test]
