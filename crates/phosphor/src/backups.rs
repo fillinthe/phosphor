@@ -12,9 +12,13 @@ pub fn folder(project: &Path) -> PathBuf {
     project.with_file_name(format!("{stem} Backups"))
 }
 
+/// What an autosave's backup has at the end of its name: autosaves keep their own `KEEP`, so they never push out
+/// the backups of saves made by hand.
+const AUTO: &str = " autosave";
+
 /// Copies the file at `project` (if any) into its backups folder, named by the time (UTC), and drops the oldest
-/// beyond `KEEP`. Returns the copy's path.
-pub fn back_up(project: &Path, unix_secs: u64) -> std::io::Result<Option<PathBuf>> {
+/// beyond `KEEP` of its kind (`auto` = made by autosave). Returns the copy's path.
+pub fn back_up(project: &Path, unix_secs: u64, auto: bool) -> std::io::Result<Option<PathBuf>> {
     if !project.exists() {
         return Ok(None);
     }
@@ -22,10 +26,16 @@ pub fn back_up(project: &Path, unix_secs: u64) -> std::io::Result<Option<PathBuf
     std::fs::create_dir_all(&dir)?;
     let stem = project.file_stem().map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
     let ext = project.extension().map_or_else(|| "phosphor".into(), |e| e.to_string_lossy().into_owned());
-    let copy = dir.join(format!("{stem} {}.{ext}", stamp(unix_secs)));
+    let kind = if auto { AUTO } else { "" };
+    let copy = dir.join(format!("{stem} {}{kind}.{ext}", stamp(unix_secs)));
     std::fs::copy(project, &copy)?;
-    // Oldest first by name (the stamp sorts by time).
-    let mut all: Vec<PathBuf> = std::fs::read_dir(&dir)?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.to_string_lossy() == ext)).collect();
+    // Oldest first by name (the stamp sorts by time), this kind only.
+    let mut all: Vec<PathBuf> = std::fs::read_dir(&dir)?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e.to_string_lossy() == ext))
+        .filter(|p| p.file_stem().is_some_and(|s| s.to_string_lossy().ends_with(AUTO)) == auto)
+        .collect();
     all.sort();
     let extra = all.len().saturating_sub(KEEP);
     for old in &all[..extra] {
@@ -72,15 +82,37 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let project = dir.join("Show.phosphor");
-        assert_eq!(back_up(&project, 1).unwrap(), None, "nothing to back up yet");
+        assert_eq!(back_up(&project, 1, false).unwrap(), None, "nothing to back up yet");
         for k in 0..13u64 {
             std::fs::write(&project, format!("version {k}")).unwrap();
-            back_up(&project, 1_792_677_933 + k).unwrap();
+            back_up(&project, 1_792_677_933 + k, false).unwrap();
         }
         let mut kept: Vec<String> = std::fs::read_dir(folder(&project)).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
         kept.sort();
         assert_eq!(kept.len(), KEEP);
         assert!(!kept.contains(&"version 0".to_string()) && kept.contains(&"version 12".to_string()), "{kept:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Autosaves keep their own ten: a long night of autosaves leaves the saves made by hand alone.
+    #[test]
+    fn autosaves_dont_push_out_saves_by_hand() {
+        let dir = std::env::temp_dir().join(format!("phosphor-autobackups-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let project = dir.join("Show.phosphor");
+        for k in 0..3u64 {
+            std::fs::write(&project, format!("hand {k}")).unwrap();
+            back_up(&project, 1_792_677_933 + k, false).unwrap();
+        }
+        for k in 0..30u64 {
+            std::fs::write(&project, format!("auto {k}")).unwrap();
+            back_up(&project, 1_792_680_000 + k, true).unwrap();
+        }
+        let kept: Vec<String> = std::fs::read_dir(folder(&project)).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
+        assert_eq!(kept.iter().filter(|k| k.starts_with("hand")).count(), 3, "{kept:?}");
+        assert_eq!(kept.iter().filter(|k| k.starts_with("auto")).count(), KEEP, "{kept:?}");
+        assert!(kept.contains(&"auto 29".to_string()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

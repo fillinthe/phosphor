@@ -121,7 +121,7 @@ impl PresetStore {
         {
             let dir = self.dir().ok_or("No settings folder available")?;
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            std::fs::write(dir.join(format!("{}.{}", safe(name), self.ext)), json).map_err(|e| e.to_string())?;
+            crate::project_files::write_whole(&dir.join(format!("{}.{}", safe(name), self.ext)), json).map_err(|e| e.to_string())?;
             self.refresh();
             Ok(())
         }

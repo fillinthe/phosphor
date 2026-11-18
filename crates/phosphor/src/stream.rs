@@ -305,6 +305,9 @@ pub struct Streamer {
     pub settings: StreamSettings,
     tx: Option<SyncSender<Msg>>,
     child: Arc<Mutex<Option<Child>>>,
+    /// The thread writing a Hap movie: it writes the movie's index after the last frame, so quitting waits for it.
+    #[cfg(not(target_arch = "wasm32"))]
+    hap_writer: Option<std::thread::JoinHandle<()>>,
     shared: Arc<Mutex<Shared>>,
     pacer: crate::pacing::FramePacer,
     pub frame_size: (u32, u32),
@@ -366,12 +369,32 @@ pub fn ffmpeg_path() -> Option<String> {
         })
 }
 
+/// How long FFmpeg gets to finish a file after its input ends before it's ended (a stuck one never stays).
+#[cfg(not(target_arch = "wasm32"))]
+const FINISH_SECS: f64 = 20.0;
+
+/// Waits for FFmpeg to exit by itself, up to `secs`; then ends it.
+#[cfg(not(target_arch = "wasm32"))]
+fn reap(mut child: Child, secs: f64) {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
+    while std::time::Instant::now() < until {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 impl Streamer {
     pub fn new(settings: StreamSettings) -> Self {
         Self {
             settings,
             tx: None,
             child: Arc::new(Mutex::new(None)),
+            #[cfg(not(target_arch = "wasm32"))]
+            hap_writer: None,
             shared: Arc::new(Mutex::new(Shared::default())),
             pacer: Default::default(),
             frame_size: (0, 0),
@@ -474,10 +497,14 @@ impl Streamer {
         let path = s.recorded_path();
         let kind = s.file_format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
         let fps = s.fps.clamp(1, 120);
+        // One still finishing (stopped a moment ago) is let finish first: two writers never share a file.
+        if let Some(w) = self.hap_writer.take() {
+            let _ = w.join();
+        }
         let mut writer = crate::media::video::hap_encode::HapWriter::create(&path, width, height, fps, kind)?;
         let (tx, rx) = std::sync::mpsc::sync_channel::<Msg>(4);
         let shared = self.shared.clone();
-        std::thread::Builder::new()
+        let handle = std::thread::Builder::new()
             .name("phosphor-hap-record".into())
             .spawn(move || {
                 let mut last: Vec<u8> = Vec::new();
@@ -503,6 +530,7 @@ impl Streamer {
                 }
             })
             .map_err(|e| e.to_string())?;
+        self.hap_writer = Some(handle);
         self.tx = Some(tx);
         self.frame_size = (width, height);
         self.pacer.reset(now);
@@ -718,17 +746,23 @@ impl Streamer {
             self.program_feed = None;
         }
         self.started = None;
+        // (Taken out first: the lock isn't held while FFmpeg finishes, so a new start never waits for it.)
         #[cfg(not(target_arch = "wasm32"))]
-        let child = self.child.clone();
-        #[cfg(not(target_arch = "wasm32"))]
-        std::thread::spawn(move || {
-            if let Some(mut c) = child.lock().unwrap().take() {
-                let _ = c.wait();
-            }
-        });
+        if let Some(c) = self.child.lock().unwrap().take() {
+            std::thread::spawn(move || reap(c, FINISH_SECS));
+        }
     }
 
-    /// Blocking variant for benchmarks: waits for FFmpeg to exit.
+    /// Something is still being written: a recording running, or a Hap movie finishing its file.
+    pub fn busy(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.hap_writer.as_ref().is_some_and(|w| !w.is_finished()) {
+            return true;
+        }
+        self.running()
+    }
+
+    /// Stops and waits for the file to be finished (quitting, benchmarks): FFmpeg's exit, or the Hap movie's index.
     pub fn stop_and_wait(&mut self) {
         self.wanted = None;
         self.tx = None;
@@ -737,9 +771,15 @@ impl Streamer {
             self.program_feed = None;
         }
         self.started = None;
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if let Some(mut c) = self.child.lock().unwrap().take() {
-            let _ = c.wait();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(w) = self.hap_writer.take() {
+                let _ = w.join();
+            }
+            let child = self.child.lock().unwrap().take();
+            if let Some(c) = child {
+                reap(c, FINISH_SECS);
+            }
         }
     }
 
