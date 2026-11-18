@@ -112,6 +112,9 @@ pub struct Composition {
     pub stage: crate::StageLayout,
     /// Effects applied to the whole mix, after every layer has been blended.
     pub master_effects: Vec<EffectState>,
+    /// MASTER's named dials (each drives settings anywhere).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub master_dials: Vec<MacroDial>,
     /// MIDI/OSC bindings.
     pub control_maps: Vec<ControlMap>,
     /// Controls that send their value out (MIDI / OSC) when it changes.
@@ -205,7 +208,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, blackout_on: false, blackout: 0.0, blackout_clock: 0.0, blackout_secs: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), follows: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), live_data: LiveData::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), deep_color: false, crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, fade_ease: FadeEase::default(), outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default(), lasers: Lasers::default(), stage: crate::StageLayout::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, blackout_on: false, blackout: 0.0, blackout_clock: 0.0, blackout_secs: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), master_dials: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), follows: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), live_data: LiveData::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), deep_color: false, crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, fade_ease: FadeEase::default(), outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default(), lasers: Lasers::default(), stage: crate::StageLayout::default() }
     }
 }
 
@@ -418,16 +421,34 @@ impl Composition {
 
     /// A layer from elsewhere (a copy, a saved layer) with fresh ids for it, its effects and clips.
     pub fn adopt_layer(&mut self, mut layer: LayerState) -> LayerState {
-        layer.id = self.new_id();
-        layer.effects = self.adopt_effects(std::mem::take(&mut layer.effects));
-        for c in &mut layer.clips {
-            c.id = self.new_id();
-            if let Some(own) = &mut c.own {
-                own.effects = self.adopt_effects(std::mem::take(&mut own.effects));
+        // Old id -> new id, so the copy's dials drive the copy's own settings.
+        let mut ids: Vec<(u64, u64)> = Vec::new();
+        let fresh = |comp: &mut Self, old: u64, ids: &mut Vec<(u64, u64)>| {
+            let new = comp.new_id();
+            ids.push((old, new));
+            new
+        };
+        layer.id = fresh(self, layer.id, &mut ids);
+        let adopt = |comp: &mut Self, fx: &mut Vec<EffectState>, ids: &mut Vec<(u64, u64)>| {
+            for e in fx.iter_mut() {
+                e.id = fresh(comp, e.id, ids);
             }
-            c.effects = self.adopt_effects(std::mem::take(&mut c.effects));
+        };
+        adopt(self, &mut layer.effects, &mut ids);
+        for c in &mut layer.clips {
+            c.id = fresh(self, c.id, &mut ids);
+            if let Some(own) = &mut c.own {
+                adopt(self, &mut own.effects, &mut ids);
+            }
+            adopt(self, &mut c.effects, &mut ids);
         }
-        layer.clip_effects = self.adopt_effects(std::mem::take(&mut layer.clip_effects));
+        adopt(self, &mut layer.clip_effects, &mut ids);
+        let new_id = |old: u64| ids.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
+        for d in layer.dials.iter_mut().chain(layer.clips.iter_mut().flat_map(|c| c.dials.iter_mut())) {
+            for b in &mut d.targets {
+                b.target.remap_ids(new_id);
+            }
+        }
         layer.clip_effects_from = crate::EffectsOwner::None;
         layer.active_clip = None;
         layer.transition = None;

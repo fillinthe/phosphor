@@ -147,6 +147,8 @@ pub enum ControlTarget {
     /// Any slider on screen without a control of its own (a setting), by its stable key (panel, label, which one) and
     /// the name shown for it: limits, lock, snaps and mappings for every slider.
     Slider { key: u64, name: String },
+    /// One of the named dials of a layer, group, clip or MASTER (`owner`; `MacroDial`): each drives its targets.
+    Macro { owner: u64, index: u8 },
 }
 
 /// App-wide mappable controls.

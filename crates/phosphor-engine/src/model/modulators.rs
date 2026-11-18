@@ -96,10 +96,68 @@ pub struct Modulator {
     /// An operator's second input (a modulator earlier in the list; 0 = nothing wired in).
     #[serde(default)]
     pub second: u64,
+    /// Held where it is (its cycle doesn't move).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
+    /// Runs its cycle backwards.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reverse: bool,
 }
 
 /// Samples per beat in a looper take.
 pub const LOOPER_RES: usize = 32;
+
+/// Calls `$f(what it moves, modulation)` for every modulation set on a control in the project (MASTER fade, comps,
+/// groups, layers' opacity / transform / generator settings, every effect), read-only or (`mut`) to change.
+macro_rules! walk_modulations {
+    ($comp:expr, $f:ident, $effects:ident $(, $m:tt)?) => {{
+        let comp = $comp;
+        if let Some(m) = &$($m)? comp.master_fade_mod {
+            $f("Master fade".to_string(), m);
+        }
+        for c in &$($m)? comp.comps {
+            let what = format!("Comp {} · opacity", c.name);
+            if let Some(m) = &$($m)? c.opacity_mod {
+                $f(what, m);
+            }
+        }
+        for g in &$($m)? comp.groups {
+            let what = format!("{} · opacity", g.name);
+            if let Some(m) = &$($m)? g.opacity_mod {
+                $f(what, m);
+            }
+        }
+        for l in &$($m)? comp.layers {
+            let name = l.name.clone();
+            if let Some(m) = &$($m)? l.opacity_mod {
+                $f(format!("{name} · opacity"), m);
+            }
+            let t = &$($m)? l.transform;
+            for (part, m) in [("position X", &$($m)? t.x_mod), ("position Y", &$($m)? t.y_mod), ("scale", &$($m)? t.scale_mod), ("rotation", &$($m)? t.rotation_mod)] {
+                if let Some(m) = m {
+                    $f(format!("{name} · {part}"), m);
+                }
+            }
+            let desc = match &l.source {
+                super::SourceSpec::Generator(g) => crate::shaders::generator(g),
+                _ => None,
+            };
+            if let Some(desc) = desc {
+                for pm in &$($m)? l.generator_mods {
+                    let what = format!("{name} · {} · {}", desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name));
+                    $f(what, &$($m)? pm.m);
+                }
+            }
+        }
+        for fx in comp.$effects() {
+            let Some(desc) = crate::shaders::effect(&fx.effect) else { continue };
+            for pm in &$($m)? fx.mods {
+                let what = format!("{} · {}", desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name));
+                $f(what, &$($m)? pm.m);
+            }
+        }
+    }};
+}
 
 impl super::Composition {
     /// Sets (or first makes) the Hand modulator called `name` to `v` (preview XY pads, video tracking). Does nothing
@@ -121,44 +179,29 @@ impl super::Composition {
     /// modulation is linked to it, and the modulators chained from it.
     pub fn modulator_followers(&self, id: u64) -> Vec<String> {
         let mut out = Vec::new();
-        let mut add = |m: &Option<super::Modulation>, what: String| {
-            if m.as_ref().is_some_and(|m| m.link == id) {
+        let mut add = |what: String, m: &super::Modulation| {
+            if m.link == id {
                 out.push(what);
             }
         };
-        add(&self.master_fade_mod, "Master fade".into());
-        for c in &self.comps {
-            add(&c.opacity_mod, format!("Comp {} · opacity", c.name));
-        }
-        for g in &self.groups {
-            add(&g.opacity_mod, format!("{} · opacity", g.name));
-        }
-        for l in &self.layers {
-            add(&l.opacity_mod, format!("{} · opacity", l.name));
-            add(&l.transform.x_mod, format!("{} · position X", l.name));
-            add(&l.transform.y_mod, format!("{} · position Y", l.name));
-            add(&l.transform.scale_mod, format!("{} · scale", l.name));
-            add(&l.transform.rotation_mod, format!("{} · rotation", l.name));
-            if let super::SourceSpec::Generator(g) = &l.source
-                && let Some(desc) = crate::shaders::generator(g)
-            {
-                for pm in &l.generator_mods {
-                    add(&Some(pm.m), format!("{} · {} · {}", l.name, desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name)));
-                }
-            }
-        }
-        for fx in self.all_effects() {
-            let Some(desc) = crate::shaders::effect(&fx.effect) else { continue };
-            for pm in &fx.mods {
-                add(&Some(pm.m), format!("{} · {}", desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name)));
-            }
-        }
+        walk_modulations!(self, add, all_effects);
         for m in &self.modulators {
             if m.chain.is_some_and(|c| c.from == id) {
                 out.push(format!("{} (modulator)", m.name));
             }
         }
         out
+    }
+
+    /// Every control's modulation linked to shared modulator `id`, with what it moves in words, to change how much
+    /// each one follows it (the modulator's window).
+    pub fn linked_modulations_mut(&mut self, id: u64, mut f: impl FnMut(String, &mut super::Modulation)) {
+        let mut each = |what: String, m: &mut super::Modulation| {
+            if m.link == id {
+                f(what, m);
+            }
+        };
+        walk_modulations!(self, each, all_effects_mut, mut);
     }
 
     /// Adds saved modulators (a template: one, or a set chained together) with fresh ids, their chains kept
@@ -245,7 +288,7 @@ impl Looper {
 
 impl Default for Modulator {
     fn default() -> Self {
-        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5, looper: Looper::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 }
+        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5, looper: Looper::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false }
     }
 }
 
@@ -264,6 +307,16 @@ impl ModPhases {
     /// Where modulator `id` is in its cycle now (0..1), for drawing its playhead. None before its first frame.
     pub fn cycle_of(&self, id: u64) -> Option<f32> {
         self.phases.iter().find(|(i, _)| *i == id).map(|(_, p)| p.rem_euclid(1.0) as f32)
+    }
+
+    /// Puts modulator `id` at this point of its cycle (0..1): 0 = retrigger (back to the start), anything else =
+    /// scrub. It goes on from there at its own speed.
+    pub fn set_cycle(&mut self, id: u64, at: f32) {
+        let at = at.clamp(0.0, 0.9999) as f64;
+        match self.phases.iter_mut().find(|(i, _)| *i == id) {
+            Some((_, p)) => *p = p.floor() + at,
+            None => self.phases.push((id, at)),
+        }
     }
 }
 
@@ -308,6 +361,8 @@ pub fn evaluate(mods: &[Modulator], inputs: &ModInputs, phases: &mut ModPhases) 
         };
         let s = &m.signal;
         let step = if s.sync { db / (s.rate.max(1.0 / 16.0) as f64) } else { dt * s.rate as f64 };
+        // Paused: held; reversed: the cycle runs backwards.
+        let step = if m.paused { 0.0 } else if m.reverse { -step } else { step };
         let phase = match phases.phases.iter_mut().find(|(id, _)| *id == m.id) {
             Some((_, p)) => {
                 *p += step * speed;
@@ -356,8 +411,8 @@ mod tests {
 
     #[test]
     fn modulators_chain_in_order_and_controls_follow_them() {
-        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
-        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
+        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
         // t = 0.25 s: the square is on (1), the saw at 0.25: 0.25 × 1.
         let on = evaluate(&[square.clone(), saw.clone()], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(on[0], (1, 1.0));
@@ -374,8 +429,8 @@ mod tests {
 
     #[test]
     fn speed_chaining_changes_the_rate_without_jumps() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
-        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
+        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
         let mods = [knob, saw];
         let mut ph = ModPhases::default();
         let mut prev = evaluate(&mods, &ModInputs { time: 0.0, ..Default::default() }, &mut ph)[1].1;
@@ -388,9 +443,42 @@ mod tests {
     }
 
     #[test]
+    fn pause_reverse_and_retrigger() {
+        let saw = Modulator { id: 1, signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, ..Default::default() };
+        let mut ph = ModPhases::default();
+        let at = |t: f32, mods: &[Modulator], ph: &mut ModPhases| evaluate(mods, &ModInputs { time: t, ..Default::default() }, ph)[0].1;
+        let mut mods = [saw];
+        at(0.0, &mods, &mut ph);
+        assert!((at(0.2, &mods, &mut ph) - 0.2).abs() < 1e-4);
+        mods[0].paused = true;
+        assert!((at(0.5, &mods, &mut ph) - 0.2).abs() < 1e-4, "paused: held");
+        mods[0].paused = false;
+        mods[0].reverse = true;
+        assert!((at(0.6, &mods, &mut ph) - 0.1).abs() < 1e-4, "reversed: back down");
+        ph.set_cycle(1, 0.0);
+        assert_eq!(ph.cycle_of(1), Some(0.0), "retriggered");
+        mods[0].reverse = false;
+        ph.set_cycle(1, 0.75);
+        assert!((at(0.7, &mods, &mut ph) - 0.85).abs() < 1e-4, "scrubbed, then on from there");
+    }
+
+    #[test]
+    fn a_window_finds_and_changes_what_follows_a_modulator() {
+        let mut comp = crate::Composition::default();
+        let l = comp.add_layer().id;
+        comp.layer_mut(l).unwrap().opacity_mod = Some(Modulation { link: 9, amount: 0.5, ..Default::default() });
+        comp.layer_mut(l).unwrap().transform.scale_mod = Some(Modulation { link: 3, ..Default::default() });
+        let name = comp.layer(l).unwrap().name.clone();
+        assert_eq!(comp.modulator_followers(9), vec![format!("{name} · opacity")]);
+        comp.linked_modulations_mut(9, |_, m| m.amount = 0.25);
+        assert_eq!(comp.layer(l).unwrap().opacity_mod.unwrap().amount, 0.25);
+        assert_eq!(comp.layer(l).unwrap().transform.scale_mod.unwrap().amount, 0.5, "another modulator's follower is left alone");
+    }
+
+    #[test]
     fn a_hand_modulator_feeds_the_chain() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
-        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0 };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
+        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default(), op: None, second: 0, paused: false, reverse: false };
         let out = evaluate(&[knob, lfo], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(out[0], (1, 0.3));
         assert!((out[1].1 - 0.3).abs() < 1e-6, "{:?}", out[1]);

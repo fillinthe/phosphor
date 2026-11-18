@@ -242,6 +242,9 @@ pub struct LayerState {
     pub sync_beats: f32,
     /// Clip slots, by column.
     pub clips: Vec<Clip>,
+    /// Its named dials (each drives settings anywhere; Resolume's dashboard).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dials: Vec<MacroDial>,
     /// Not used: the fade time is `LaunchSettings.fade_secs` for every layer. Still written so Phosphor 0.4.0 and
     /// older (which require it) keep opening files saved by newer versions.
     pub transition_secs: f32,
@@ -444,6 +447,7 @@ impl Default for LayerState {
             loop_beats: 0.0,
             sync_beats: 0.0,
             clips: Vec::new(),
+            dials: Vec::new(),
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
             transition_effect: default_transition_effect(),

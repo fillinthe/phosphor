@@ -54,6 +54,8 @@ pub(crate) use light_library::*;
 #[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
 mod modulators;
+mod modulator_window;
+mod macros;
 mod sequencer;
 mod leds;
 mod clip_lasers;
@@ -113,6 +115,8 @@ pub(crate) use layer_windows::*;
 pub(crate) use layers::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use link_import::*;
+pub(crate) use modulator_window::*;
+pub(crate) use macros::*;
 pub(crate) use inputs::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use online::*;

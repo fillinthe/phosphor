@@ -104,10 +104,11 @@ pub(crate) fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
 /// Temp-data key: the running position (0..1 of a cycle) of the shared modulator whose signal is drawn next.
 pub(crate) const MOD_CYCLE: &str = "phosphor_mod_cycle";
 
-/// One cycle of a signal's shape, with a playhead at `at` (0..1 of the cycle) and a dot at its value there.
+/// One cycle of a signal's shape, with a playhead at `at` (0..1 of the cycle) and a dot at its value there. Taller
+/// waves get wider (a modulator's window). Click or drag on it: `scrub_at` says where (0..1 of the cycle).
 pub(crate) fn wave_view(ui: &mut egui::Ui, m: &Modulation, at: Option<f32>, height: f32) -> egui::Response {
     const POINTS: usize = 96;
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(360.0), height), Sense::hover());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(360f32.max(height * 3.0)), height), Sense::click_and_drag());
     if !ui.is_rect_visible(rect) {
         return resp;
     }
@@ -137,15 +138,26 @@ pub(crate) const SYNC_CHOICES: &[(f32, &str)] =
 
 /// A shared modulator's own signal (Modulators panel): the source, rate and steps; not the amount or range
 /// (each control following it sets those) and no "follow another" chips (chaining does that).
-pub(crate) fn modulation_editor_signal(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
-    signal_editor(ui, m, true);
+/// `wave_h` = how tall its wave is drawn (0 = not drawn: the caller draws its own). Returns where in its cycle the
+/// wave was clicked or dragged (0..1), to scrub the modulator there.
+pub(crate) fn modulation_editor_signal(ui: &mut egui::Ui, m: &mut Option<Modulation>, wave_h: f32) -> Option<f32> {
+    signal_editor(ui, m, true, wave_h)
 }
 
 pub(crate) fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
-    signal_editor(ui, m, false);
+    signal_editor(ui, m, false, 40.0);
 }
 
-fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: bool) {
+/// Where a click or drag on a wave (`wave_view`) is, as a point of its cycle (0..1).
+pub(crate) fn scrub_at(r: &egui::Response) -> Option<f32> {
+    if !(r.clicked() || r.dragged()) {
+        return None;
+    }
+    let p = r.interact_pointer_pos()?;
+    Some(((p.x - r.rect.left()) / r.rect.width().max(1.0)).clamp(0.0, 1.0))
+}
+
+fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: bool, wave_h: f32) -> Option<f32> {
     ui.set_min_width(320.0);
     let inputs = mod_inputs(ui);
     let current = m.map(|m| m.source);
@@ -189,7 +201,8 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     {
         mm.link = 0;
     }
-    let Some(mm) = m else { return };
+    let Some(mm) = m else { return None };
+    let mut scrub = None;
     ui.separator();
     if mm.link == 0 && mm.source.is_lfo() {
         ui.horizontal(|ui| {
@@ -220,7 +233,10 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         // The wave itself, one cycle, with where it is now. (A shared modulator hands its own running position in.)
         let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
         let at = ui.ctx().data_mut(|d| d.remove_temp::<f32>(egui::Id::new(MOD_CYCLE))).unwrap_or(cycles.rem_euclid(1.0));
-        wave_view(ui, mm, Some(at), if signal_only { 64.0 } else { 40.0 });
+        if wave_h > 0.0 {
+            let r = wave_view(ui, mm, Some(at), wave_h);
+            scrub = scrub_at(&r).filter(|_| signal_only);
+        }
     }
     if mm.link == 0 && matches!(mm.source, ModSource::Steps | ModSource::Drawn) {
         let what = if mm.source == ModSource::Drawn { "Wave (drag to draw; a smooth loop through the points)" } else { "Steps (drag to set)" };
@@ -232,7 +248,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     if signal_only {
         let v = phosphor_engine::control::source_value(mm, &inputs);
         ui.add(crate::ui::meter(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
-        return;
+        return scrub;
     }
     ui.horizontal(|ui| {
         segmented(ui, &mut mm.range, &[(false, "Add to slider".to_string()), (true, "Sweep a range".to_string())], |_, r, sweep| {
@@ -254,4 +270,5 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     }
     let v = phosphor_engine::control::source_value(mm, &inputs);
     ui.add(crate::ui::meter(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
+    scrub
 }

@@ -89,7 +89,7 @@ impl<'a> Level<'a> {
     }
 
     pub fn show(self, ui: &mut egui::Ui) -> egui::Response {
-        let Level { value, min, max, default, text, percent, modulation, target, width, vertical, tip, log, switch } = self;
+        let Level { value, min, max, default, text, percent, mut modulation, target, width, vertical, tip, log, switch } = self;
         // The on/off button first (it takes its room from the bar).
         let mut off = false;
         let mut switch_w = 0.0;
@@ -140,8 +140,10 @@ impl<'a> Level<'a> {
             }
         }
 
+        // Alt-drag carries this slider onto another one (or a dial) to link them; nothing moves while a link is carried.
+        let carrying = super::link::carry_from_slider(ui, &r, target.as_ref(), &text);
         // Primary button only: right-click opens the menu without moving the value.
-        let primary = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());
+        let primary = !carrying && ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());
         // Jump (the default): the value goes to the spot pressed. Drag from value: it moves from where it was by how far
         // the pointer has gone since the press, and a plain click leaves it.
         let jump = super::locks::jumps(ui, target.as_ref());
@@ -181,7 +183,7 @@ impl<'a> Level<'a> {
                 r.mark_changed();
             }
         }
-        if r.double_clicked() && !locked {
+        if r.double_clicked() && !locked && !carrying {
             *value = default;
             r.mark_changed();
         }
@@ -378,7 +380,11 @@ impl<'a> Level<'a> {
         if let Some(t) = &target {
             mapped_dot(ui, &r, t);
         }
-        let how = if locked { "Locked (right-click to unlock)" } else { "Double-click to reset · Shift = snap · right-click to type a value, lock and more" };
+        // A modulator, widget, dial, controller input or another slider dropped here: linked.
+        if super::link::link_drop(ui, &r, target.as_ref(), modulation.as_deref_mut()) {
+            r.mark_changed();
+        }
+        let how = if locked { "Locked (right-click to unlock)" } else { "Double-click to reset · Shift = snap · Alt-drag onto another slider or a dial to link them · right-click to type a value, lock and more" };
         let hover = format!("{}\n{how}", tip.unwrap_or(&text));
         let r = r.on_hover_text(hover.trim_start());
 

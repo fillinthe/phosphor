@@ -171,6 +171,7 @@ impl LayerState {
                     muted: false,
                     thumb: String::new(),
                     effects: Vec::new(),
+                    dials: Vec::new(),
                 }));
                 self.trigger_clip(slot, now, secs)
             }
