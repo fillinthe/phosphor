@@ -103,6 +103,58 @@ fn without_names(line: &str) -> &str {
     line[..cut].trim_end()
 }
 
+/// Text for a crash report sent by itself with the user's name taken out of paths: the home folder becomes "~", and
+/// any other "/Users/<name>", "/home/<name>" or "C:\\Users\\<name>" becomes "~" too (the crash log's panic and
+/// stack lines hold paths).
+fn without_user(text: &str, home: Option<&str>) -> String {
+    let mut out = text.to_string();
+    if let Some(h) = home.map(|h| h.trim_end_matches(['/', '\\'])).filter(|h| h.len() > 1) {
+        // Only the whole folder name ("/Users/sam", not the start of "/Users/samuel").
+        let mut done = String::with_capacity(out.len());
+        let mut rest = out.as_str();
+        while let Some(i) = rest.find(h) {
+            let after = &rest[i + h.len()..];
+            done.push_str(&rest[..i]);
+            if after.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') {
+                done.push_str(h);
+            } else {
+                done.push('~');
+            }
+            rest = after;
+        }
+        done.push_str(rest);
+        out = done;
+    }
+    for root in ["/Users/", "/home/", "\\Users\\", "/users/"] {
+        let mut done = String::with_capacity(out.len());
+        let mut rest = out.as_str();
+        while let Some(i) = rest.find(root) {
+            let after = &rest[i + root.len()..];
+            // The name runs to the next separator (or the end).
+            let name_len = after.find(['/', '\\', '\n', ' ', '"', '\'', ':', ')']).unwrap_or(after.len());
+            if name_len == 0 || after[..name_len].eq_ignore_ascii_case("shared") {
+                done.push_str(&rest[..i + root.len()]);
+                rest = after;
+                continue;
+            }
+            // A drive letter before "\Users\" (C:) goes too.
+            let drive = i >= 2 && rest.as_bytes()[i - 1] == b':' && rest.as_bytes()[i - 2].is_ascii_alphabetic();
+            let start = if root.starts_with('\\') && drive { i - 2 } else { i };
+            done.push_str(&rest[..start]);
+            done.push('~');
+            rest = &after[name_len..];
+        }
+        done.push_str(rest);
+        out = done;
+    }
+    out
+}
+
+/// The home folder, for `without_user`.
+fn home_dir() -> Option<String> {
+    std::env::var("HOME").ok().or_else(|| std::env::var("USERPROFILE").ok())
+}
+
 /// The diagnostics for a crash report sent by itself (after a relaunch): the run that crashed, nothing named.
 pub fn crash_diagnostics(st: &mut State) -> String {
     diagnostics_from(st, true)
@@ -125,6 +177,11 @@ pub fn diagnostics(st: &mut State) -> String {
 }
 
 fn diagnostics_from(st: &mut State, crash: bool) -> String {
+    let out = diagnostics_named(st, crash);
+    if crash { without_user(&out, home_dir().as_deref()) } else { out }
+}
+
+fn diagnostics_named(st: &mut State, crash: bool) -> String {
     let os = st.bug.os.get_or_insert_with(os_version).clone();
     let s = st.stats.latest;
     let comp = &st.comp;
@@ -416,6 +473,12 @@ mod tests {
         // A long tail is cut on a character, never inside one.
         let long = "é".repeat(5000);
         assert!(super::tail_of(&long, 6001).len() <= 6001);
+        // Crash reports carry no user name in paths (the crash log's panic and stack lines).
+        let crash = "panicked at /Users/sam/src/a.rs:3\n  stuck at: C:\\Users\\Sam\\x.dll\n/home/pi/show.phosphor /Users/Shared/x";
+        let clean = super::without_user(crash, Some("/Users/sam"));
+        assert_eq!(clean, "panicked at ~/src/a.rs:3\n  stuck at: ~\\x.dll\n~/show.phosphor /Users/Shared/x");
+        assert_eq!(super::without_user("/Users/bob", None), "~");
+        assert_eq!(super::without_user("/var/u/sam/a and /var/u/samuel", Some("/var/u/sam")), "~/a and /var/u/samuel");
         // Crash reports keep the kind of event, not names or paths.
         assert_eq!(super::without_names("12:00:01 clip played: layer \"Rings\" \u{2190} /Volumes/WD/a.mov"), "12:00:01 clip played: layer");
     }
