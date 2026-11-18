@@ -243,6 +243,7 @@ impl PhosphorApp {
                 follow_seen: Default::default(),
                 dial_seen: Default::default(),
                 mod_windows: Vec::new(),
+                targets_cache: Default::default(),
                 snapshot_output: None,
                 clip_thumb_request: None,
                 timeline_pos: 0.0,
@@ -322,6 +323,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 mad_import: None,
                 #[cfg(not(target_arch = "wasm32"))]
+                mad_probe: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 relink: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 dmx: Default::default(),
@@ -392,6 +395,8 @@ impl PhosphorApp {
             panels_locked: stored(KEY_PANELS_LOCKED).is_some_and(|v| v == "1"),
             cloud_layouts_applied: false,
             cloud_layouts_check: 5.0,
+            #[cfg(not(target_arch = "wasm32"))]
+            saves_export: None,
             layout_draft: None,
             last_ui: (web_time::Instant::now(), 0.0),
             hidden_pacer: Default::default(),

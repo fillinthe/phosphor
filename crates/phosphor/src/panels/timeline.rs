@@ -61,7 +61,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             st.offline_stop();
         }
     }
-    let names: HashMap<ControlTarget, String> = crate::control::all_targets(&st.comp).into_iter().collect();
+    let names = st.targets_cache.names(&st.comp);
     let length = st.comp.timeline.length.max(0.1);
     let full = ui.available_width();
     // Track names take a column (narrower in a narrow panel).
@@ -259,7 +259,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
     let lane = egui::Rect::from_min_max(egui::pos2(lane_x, row.top() + 2.0), egui::pos2(row.right(), row.bottom() - 2.0));
     p.rect_filled(lane, 2.0, ui.visuals().faint_bg_color);
     p.text(egui::pos2(row.left() + 4.0, row.center().y), egui::Align2::LEFT_CENTER, "Events", egui::FontId::proportional(11.0), ui.visuals().text_color());
-    let targets: Vec<(ControlTarget, String)> = names.iter().map(|(t, n)| (t.clone(), n.clone())).collect();
+    let targets = st.targets();
     let mut remove = None;
     for (k, e) in st.comp.timeline.events.iter_mut().enumerate() {
         let x = lane_x + (e.t / length) as f32 * lane_w;

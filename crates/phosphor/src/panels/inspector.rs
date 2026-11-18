@@ -11,7 +11,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         }
         super::Focus::Widget => {
             if let Some(id) = super::selected_widget(ui.ctx()) {
-                let targets = crate::control::all_targets(&st.comp);
+                let targets = st.targets();
                 crate::ui::column_scroll(ui).id_salt("inspector_widget").auto_shrink(false).show(ui, |ui| {
                     super::widget_editor(ui, st, id, &targets);
                 });

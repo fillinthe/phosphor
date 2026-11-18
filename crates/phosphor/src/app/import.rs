@@ -17,6 +17,55 @@ pub struct AvcImport {
     pub with_screens: bool,
 }
 
+/// A MadMapper project's pictures looked at in the background: visual id → (aspect, not on this Mac).
+#[derive(Default)]
+pub struct MadProbe {
+    rx: Option<Receiver<std::collections::HashMap<i64, (f32, bool)>>>,
+    found: Option<std::collections::HashMap<i64, (f32, bool)>>,
+}
+
+impl MadProbe {
+    /// Looks at every picture `file` shows, on a thread.
+    fn begin(&mut self, file: &crate::import::madmapper::MadFile) {
+        let visuals: Vec<crate::import::madmapper::MadVisual> = file.used_visuals().into_iter().cloned().collect();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = std::thread::Builder::new().name("mad-probe".into()).spawn(move || {
+            let found = visuals
+                .iter()
+                .map(|v| {
+                    let missing = matches!(v.kind.as_str(), "Movie" | "Image") && !std::path::Path::new(v.url.trim()).exists();
+                    (v.id, (crate::import::madmapper::file_aspect(v), missing))
+                })
+                .collect();
+            let _ = tx.send(found);
+        });
+        *self = Self { rx: Some(rx), found: None };
+    }
+
+    /// What was found, once it's all in (None while looking).
+    fn ready(&mut self) -> Option<&std::collections::HashMap<i64, (f32, bool)>> {
+        if self.found.is_none()
+            && let Some(answer) = self.rx.as_ref().map(|rx| rx.try_recv())
+        {
+            match answer {
+                Ok(found) => self.found = Some(found),
+                // (The look failed: the sizes default to 16:9.)
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.found = Some(Default::default()),
+                Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+            }
+            self.rx = None;
+        }
+        self.found.as_ref()
+    }
+
+    /// What was found, waiting for it if it's still looking (benchmarks); empty if it never finishes.
+    fn take(&mut self) -> std::collections::HashMap<i64, (f32, bool)> {
+        let found = self.found.take().or_else(|| self.rx.take().and_then(|rx| rx.recv().ok()));
+        *self = Self::default();
+        found.unwrap_or_default()
+    }
+}
+
 /// Paths found by a relink search: (old path, new path), and how many were looked for.
 pub type Relinked = (Vec<(String, String)>, usize);
 
@@ -26,7 +75,10 @@ impl State {
     pub fn begin_import(&mut self, path: &str) {
         if path.to_lowercase().ends_with(".mad") {
             match crate::import::madmapper::read(path) {
-                Ok(file) => self.mad_import = Some(file),
+                Ok(file) => {
+                    self.mad_probe.begin(&file);
+                    self.mad_import = Some(file);
+                }
                 Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
             }
             return;
@@ -84,15 +136,17 @@ impl State {
     /// Brings the MadMapper project waiting in `mad_import` in: as a new project, or added to this one. Says what
     /// came across in the notice.
     pub fn finish_mad_import(&mut self, new: bool) {
-        use crate::import::madmapper::{add_to, file_aspect, to_composition};
+        use crate::import::madmapper::{add_to, to_composition};
         let Some(file) = self.mad_import.take() else { return };
+        let found = self.mad_probe.take();
+        let aspect = |v: &crate::import::madmapper::MadVisual| found.get(&v.id).map_or(16.0 / 9.0, |(a, _)| *a);
         let done = if new {
-            let (comp, done) = to_composition(&file, &file_aspect);
+            let (comp, done) = to_composition(&file, &aspect);
             self.load_composition(comp);
             self.project_path = None;
             done
         } else {
-            add_to(&mut self.comp, &file, &file_aspect)
+            add_to(&mut self.comp, &file, &aspect)
         };
         let mut msg = format!(
             "Imported {} from MadMapper: {}, {}, {}.",
@@ -223,6 +277,7 @@ impl PhosphorApp {
     /// A MadMapper project read: what comes across, then a new project or added to this one.
     fn mad_window(&mut self, ctx: &egui::Context) {
         let Some(file) = &self.state.mad_import else { return };
+        let found = self.state.mad_probe.ready().cloned();
         let mut open = true;
         let (mut new, mut add) = (false, false);
         crate::ui::dialog(ctx, format!("{} Import from MadMapper", icon::DOWNLOAD_SIMPLE)).open(&mut open).resizable(true).default_width(460.0).show(ctx, |ui| {
@@ -242,7 +297,7 @@ impl PhosphorApp {
             ui.label("Pictures the slices show (each becomes a layer):");
             crate::ui::column_scroll(ui).max_height(200.0).show(ui, |ui| {
                 for v in file.used_visuals() {
-                    let missing = matches!(v.kind.as_str(), "Movie" | "Image") && !std::path::Path::new(v.url.trim()).exists();
+                    let missing = found.as_ref().and_then(|f| f.get(&v.id)).is_some_and(|(_, missing)| *missing);
                     let kind = match v.kind.as_str() {
                         "Movie" => "Movie",
                         "Image" => "Picture",
@@ -269,10 +324,14 @@ impl PhosphorApp {
                 crate::ui::hint(ui, format!("Not brought in: {}.", left.join(", ")));
             }
             ui.add_space(6.0);
-            crate::ui::toolbar(ui, |ui| {
+            if found.is_none() {
+                crate::ui::hint(ui, "Looking at the pictures (their sizes, whether they're on this Mac)…");
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+            }
+            ui.add_enabled_ui(found.is_some(), |ui| crate::ui::toolbar(ui, |ui| {
                 new = crate::ui::command(ui, crate::ui::label(icon::CHECK, "Open as a new project")).on_hover_text("A new project: the outputs, their slices and a layer for each picture").clicked();
                 add = crate::ui::command(ui, crate::ui::label(icon::PLUS, "Add to this project")).on_hover_text("Adds the outputs (with their slices) and the layers to the project that's open").clicked();
-            });
+            }));
         });
         if new || add {
             self.state.finish_mad_import(new);

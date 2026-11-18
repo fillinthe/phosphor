@@ -76,7 +76,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let shared = st.mod_inputs.shared;
     let now = ui.ctx().input(|i| i.time);
     // Event boxes pick a target: the list once per frame, only while one exists.
-    let targets = if st.comp.modulators.iter().any(|m| m.designer && m.event.is_some()) { crate::control::all_targets(&st.comp) } else { Vec::new() };
+    let targets = if st.comp.modulators.iter().any(|m| m.designer && m.event.is_some()) { st.targets() } else { Default::default() };
     // Undo and Redo here are the app's own (Edit menu, Cmd-Z): one history for everything, so a deleted box comes
     // back with its picture and settings, and a changed setting is a step too. (The Designer used to keep its own
     // list of boxes and wires only: a box came back empty and settings weren't steps at all.)
@@ -263,7 +263,7 @@ struct View<'a> {
     /// What a box's source picker asked for (a file, the browser), for its layer.
     action: Option<(u64, super::layers::LayerAction)>,
     /// Every control an Event box may set (empty while no box has an event).
-    targets: Vec<(ControlTarget, String)>,
+    targets: std::sync::Arc<Vec<(ControlTarget, String)>>,
     /// A Timer / Table box's Restart was pressed (its modulator).
     restart: Option<u64>,
     /// A Table box wants its file picked (its modulator).

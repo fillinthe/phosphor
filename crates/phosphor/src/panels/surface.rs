@@ -158,7 +158,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         page_tabs(ui, &mut st.comp.surface, edit);
     }
 
-    let targets = crate::control::all_targets(&st.comp);
+    let targets = st.targets();
     let inspector = edit && (picked.len() >= 2 || selected.is_some_and(|id| st.comp.surface.widget(id).is_some()));
     let mut sets: Vec<(ControlTarget, f32)> = Vec::new();
     let mut grab: Option<Grab> = ctx.data(|d| d.get_temp(grab_id)).flatten();

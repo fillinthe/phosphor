@@ -331,12 +331,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
         .map(|(i, _)| i)
         .collect();
     let bin = &st.comp.media_bin;
-    match view.sort {
-        MediaSort::Name => shown.sort_by_key(|i| bin[*i].name.to_lowercase()),
-        MediaSort::Newest => shown.reverse(),
-        MediaSort::Type => shown.sort_by_key(|i| (!crate::media::is_movie(&bin[*i].name), bin[*i].name.to_lowercase())),
-        MediaSort::Length => shown.sort_by_key(|i| length_key(&bin[*i])),
-    }
+    sort_items(&mut shown, bin, view.sort);
     let tile_w = view.tile;
     let groups: Vec<String> = if view.by_folder {
         let mut g: Vec<String> = Vec::new();
@@ -927,6 +922,17 @@ pub(crate) fn media_extras(item: &phosphor_engine::MediaItem) -> Vec<(String, St
         }
     }
     out
+}
+
+/// Puts media bin items (indexes into `bin`) in `sort`'s order (Media panel and Media browser). Each name is
+/// lowered once, not on every comparison.
+pub(crate) fn sort_items(shown: &mut [usize], bin: &[phosphor_engine::MediaItem], sort: MediaSort) {
+    match sort {
+        MediaSort::Name => shown.sort_by_cached_key(|i| bin[*i].name.to_lowercase()),
+        MediaSort::Newest => shown.sort_by_key(|i| std::cmp::Reverse(*i)),
+        MediaSort::Type => shown.sort_by_cached_key(|i| (!crate::media::is_movie(&bin[*i].name), bin[*i].name.to_lowercase())),
+        MediaSort::Length => shown.sort_by_key(|i| length_key(&bin[*i])),
+    }
 }
 
 pub(crate) fn length_key(m: &phosphor_engine::MediaItem) -> std::cmp::Reverse<i64> {

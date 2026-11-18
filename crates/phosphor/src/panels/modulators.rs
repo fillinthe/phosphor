@@ -67,13 +67,13 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let mut open_window = None;
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
     // What gate tracks can fire (only worked out when there's a gate track to show).
-    let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { crate::control::all_targets(&st.comp) } else { Vec::new() };
+    let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { st.targets() } else { Default::default() };
     // Color tracks paint color settings: every color's red (its green and blue follow).
     let colour_reds: Vec<(phosphor_engine::ControlTarget, String)> = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.is_colour())) {
-        let all = if targets.is_empty() { crate::control::all_targets(&st.comp) } else { targets.clone() };
-        all.into_iter()
+        let all = if targets.is_empty() { st.targets() } else { targets.clone() };
+        all.iter()
             .filter(|(t, _)| crate::control::colour_siblings(&st.comp, t).is_some())
-            .map(|(t, n)| (t, n.trim_end_matches(" R").trim_end_matches("Red").trim_end_matches(" · ").to_string()))
+            .map(|(t, n)| (t.clone(), n.trim_end_matches(" R").trim_end_matches("Red").trim_end_matches(" · ").to_string()))
             .collect()
     } else {
         Vec::new()

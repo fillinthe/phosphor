@@ -8,7 +8,7 @@ pub(crate) fn links(ui: &mut egui::Ui, st: &mut State) {
     let count = st.comp.follows.len();
     let title = if count == 0 { format!("{} Links: what drives what", icon::LINK) } else { format!("{} Links: what drives what ({count} following)", icon::LINK) };
     crate::ui::section_help(ui, "control_links", title, Some("Everything that moves something else, by source. To make one control follow another: right-click the follower › Follow another control. To link a knob: right-click › Listen."), false, |ui| {
-        let targets = crate::control::all_targets(&st.comp);
+        let targets = st.targets();
         let name = |t: &ControlTarget| targets.iter().find(|(x, _)| x == t).map_or_else(|| "(removed)".to_string(), |(_, n)| n.clone());
         let mut show: Option<(Tab, Option<u64>, Option<u64>)> = None;
         let comp = &mut st.comp;
