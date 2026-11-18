@@ -305,6 +305,33 @@ pub fn start(job: Job) -> Shared {
     shared
 }
 
+/// FFmpeg running for a convert: stopped and reaped when the convert ends early (an error), never left running.
+struct Ffmpeg(std::process::Child);
+
+impl Drop for Ffmpeg {
+    fn drop(&mut self) {
+        if self.0.try_wait().ok().flatten().is_none() {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+}
+
+/// FFmpeg's complaints, read as they come on a thread (left in its pipe, a damaged file's stream of errors filled
+/// it and FFmpeg stopped, waiting: the convert hung). Keeps the end.
+fn read_errors(stderr: Option<std::process::ChildStderr>) -> std::thread::JoinHandle<String> {
+    std::thread::spawn(move || {
+        let mut tail = String::new();
+        let Some(stderr) = stderr else { return tail };
+        for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
+            if !line.trim().is_empty() {
+                tail = line;
+            }
+        }
+        tail
+    })
+}
+
 fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
     let ffmpeg = crate::stream::ffmpeg_path().ok_or("FFmpeg isn't available")?;
     let (w, h) = job.size.apply(job.probe.width, job.probe.height);
@@ -315,13 +342,15 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
             // Decode with ffmpeg to RGBA frames, encode them with Phosphor's Hap encoder.
             let kind = job.format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
             let fps = job.probe.fps.round().max(1.0) as u32;
-            let mut child = crate::os::command(&ffmpeg)
-                .args(["-hide_banner", "-loglevel", "error", "-i", &job.src, "-an", "-vf", &scale, "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .spawn()
-                .map_err(|e| format!("couldn't start FFmpeg ({e})"))?;
-            let mut stdout = child.stdout.take().ok_or("no output from FFmpeg")?;
+            let mut child = Ffmpeg(
+                crate::os::command(&ffmpeg)
+                    .args(["-hide_banner", "-loglevel", "error", "-i", &job.src, "-an", "-vf", &scale, "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| format!("couldn't start FFmpeg ({e})"))?,
+            );
+            let mut stdout = child.0.stdout.take().ok_or("no output from FFmpeg")?;
             let mut writer = crate::media::video::hap_encode::HapWriter::create(out, w, h, fps, kind)?;
             let mut frame = vec![0u8; w as usize * h as usize * 4];
             let mut n = 0u64;
@@ -330,7 +359,7 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
                 n += 1;
                 s.lock().unwrap().done = (n as f64 / total).min(0.99) as f32;
             }
-            let _ = child.wait();
+            let _ = child.0.wait();
             if n == 0 {
                 return Err("no frames could be read from this file".into());
             }
@@ -362,23 +391,21 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
                 args.extend(["-c:a", "aac", "-b:a", "192k"].map(String::from));
             }
             args.push(out.to_string());
-            let mut child = crate::os::command(&ffmpeg).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("couldn't start FFmpeg ({e})"))?;
-            if let Some(stdout) = child.stdout.take() {
+            let mut child = Ffmpeg(crate::os::command(&ffmpeg).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("couldn't start FFmpeg ({e})"))?);
+            let errors = read_errors(child.0.stderr.take());
+            if let Some(stdout) = child.0.stdout.take() {
                 for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
                     if let Some(us) = line.strip_prefix("out_time_us=").and_then(|v| v.trim().parse::<f64>().ok()) {
                         s.lock().unwrap().done = (us / 1e6 / job.probe.seconds.max(0.1)).clamp(0.0, 0.99) as f32;
                     }
                 }
             }
-            let status = child.wait().map_err(|e| e.to_string())?;
+            let status = child.0.wait().map_err(|e| e.to_string())?;
+            let err = errors.join().unwrap_or_default();
             if status.success() {
                 Ok(())
             } else {
-                let mut err = String::new();
-                if let Some(mut e) = child.stderr.take() {
-                    let _ = e.read_to_string(&mut err);
-                }
-                Err(format!("FFmpeg stopped: {}", err.lines().last().unwrap_or("unknown error")))
+                Err(format!("FFmpeg stopped: {}", if err.is_empty() { "unknown error" } else { &err }))
             }
         }
     }
@@ -400,6 +427,29 @@ mod tests {
         assert!(hap > 150_000_000 && hap < 220_000_000, "{hap}");
         assert!(h264 < hap / 5, "{h264}");
         assert!(estimate(&p, Format::Hap, Quality::Balanced, Size::Fit720) < hap / 2);
+    }
+
+    /// A convert that stops early stops its FFmpeg too; a program that writes a lot of errors doesn't hang it.
+    #[cfg(unix)]
+    #[test]
+    fn ffmpeg_is_stopped_and_its_errors_read() {
+        let child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let pid = child.id();
+        drop(Ffmpeg(child));
+        let alive = std::process::Command::new("kill").args(["-0", &pid.to_string()]).stderr(Stdio::null()).status().unwrap().success();
+        assert!(!alive, "stopped");
+        // 400 KB of errors (more than a pipe holds), then a last line and a failure.
+        let mut child = Ffmpeg(
+            std::process::Command::new("sh")
+                .args(["-c", "i=0; while [ $i -lt 4000 ]; do echo 'a damaged packet, a damaged packet, a damaged packet, a damaged packet, ok' 1>&2; i=$((i+1)); done; echo 'the end' 1>&2; exit 1"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let errors = read_errors(child.0.stderr.take());
+        assert!(!child.0.wait().unwrap().success());
+        assert_eq!(errors.join().unwrap(), "the end");
     }
 
     #[test]
