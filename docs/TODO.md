@@ -7,7 +7,10 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 - **Phosphor on a Raspberry Pi: a backup player that runs the show on its own** (owner's design, 2026-11-18):
   1. **Make the card:** in Phosphor, "Set up a Pi…" asks for the Wi-Fi name and password (and the device's name),
      then writes a ready-to-boot SD card (Raspberry Pi OS Lite + the Phosphor player + those settings), like the Pi
-     Imager does. Nothing to type on the Pi.
+     Imager does. Nothing to type on the Pi. Phosphor downloads what the card needs itself: the latest Raspberry Pi
+     OS Lite release (from the Raspberry Pi's own image list, checked against its published checksum, kept so the
+     next card doesn't download it again, re-downloaded when a newer one is out) and the Pi player from the same
+     Phosphor release.
   2. **It finds itself:** the Pi joins that Wi-Fi at first boot and announces itself on the network (mDNS, as the
      Session already does); Phosphor lists it ("Pis on this network"), no IP addresses to type.
   3. **Talk to it:** from Phosphor, see its status (playing, temperature, card space), update its player.
