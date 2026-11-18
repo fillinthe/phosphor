@@ -170,7 +170,10 @@ impl CueList {
 /// A cue being faded into: where every number started.
 #[derive(Clone, Debug)]
 pub struct CueFade {
+    /// Where the cue was when it started (found by `cue_id` first: cues moved, added or removed during the fade
+    /// don't make it fade towards another cue).
     pub cue: usize,
+    pub cue_id: u64,
     pub start: f32,
     pub secs: f32,
     master_from: f32,
@@ -214,6 +217,7 @@ impl Composition {
         let secs = cue.fade.max(0.0);
         let mut fade = CueFade {
             cue: index,
+            cue_id: cue.id,
             start: now,
             secs,
             master_from: self.master_fade,
@@ -280,11 +284,13 @@ impl Composition {
 
     /// Glides every number towards the cue (call each frame until `fade.done`).
     pub fn step_cue(&mut self, fade: &CueFade, now: f32) {
-        let Some(slot) = self.cues.cues.get_mut(fade.cue) else { return };
+        // The cue by its id (it may have moved since the fade began), else at its place if that's still it.
+        let at = (fade.cue_id != 0).then(|| self.cues.cues.iter().position(|c| c.id == fade.cue_id)).flatten();
+        let Some(i) = at.or_else(|| self.cues.cues.get(fade.cue).filter(|c| c.id == fade.cue_id).map(|_| fade.cue)) else { return };
         // Lent out for the step and put back (the whole cue was copied every frame of a fade).
-        let cue = std::mem::take(slot);
+        let cue = std::mem::take(&mut self.cues.cues[i]);
         self.step_cue_to(&cue, fade, now);
-        self.cues.cues[fade.cue] = cue;
+        self.cues.cues[i] = cue;
     }
 
     fn step_cue_to(&mut self, cue: &Cue, fade: &CueFade, now: f32) {
@@ -487,6 +493,21 @@ mod tests {
         let fade = comp.go_to_cue(1, 20.0).unwrap();
         comp.step_cue(&fade, 30.0);
         assert!(comp.lasers.projectors[0].look == 3 && (comp.lasers.master - 0.5).abs() < 1e-5, "an old cue leaves the lasers be");
+    }
+
+    /// A cue added above the one fading in (the list moved under it) doesn't make the fade head for another cue.
+    #[test]
+    fn a_fade_follows_its_cue_not_its_place() {
+        let mut comp = Composition::default();
+        comp.master_fade = 0.2;
+        let cue = comp.record_cue("Dim".into());
+        comp.cues.cues.push(Cue { fade: 2.0, ..cue });
+        comp.master_fade = 1.0;
+        let fade = comp.go_to_cue(0, 0.0).unwrap();
+        let other = comp.record_cue("Bright".into());
+        comp.cues.cues.insert(0, Cue { master_fade: 0.9, ..other });
+        comp.step_cue(&fade, 2.0);
+        assert!((comp.master_fade - 0.2).abs() < 1e-5, "{}", comp.master_fade);
     }
 
     #[test]

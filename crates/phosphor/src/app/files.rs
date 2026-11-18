@@ -86,16 +86,15 @@ impl PhosphorApp {
         if let Some(found) = self.state.folders.poll(now) {
             // Files that vanished from a watched folder leave the bin; new ones join it.
             // (A folder that's missing, its drive unplugged or the network down, keeps its files: they come back.)
-            let folders: Vec<String> = self.state.folders.folders.iter().filter(|f| !self.state.folders.missing(f)).cloned().collect();
+            // (One too big to list whole keeps the files it had too: the ones past the limit weren't looked at.)
+            let folders: std::collections::HashSet<&str> = self.state.folders.folders.iter().filter(|f| !self.state.folders.missing(f) && !self.state.folders.partial(f)).map(String::as_str).collect();
             let paths: std::collections::HashSet<&str> = found.iter().map(|(_, p, _)| p.as_str()).collect();
-            self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(&m.folder) || paths.contains(m.path.as_str()));
-            for (name, path, folder) in &found {
-                if self.state.comp.add_folder_media(name, path, folder) {
-                    // Downloaded files (Online, Following) keep who made them.
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if let Some(m) = self.state.comp.media_bin.last_mut() {
-                        m.credit = crate::online::saved_credit(std::path::Path::new(path));
-                    }
+            self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(m.folder.as_str()) || paths.contains(m.path.as_str()));
+            for i in self.state.comp.add_folder_media_many(&found) {
+                // Downloaded files (Online, Following) keep who made them.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(m) = self.state.comp.media_bin.get_mut(i) {
+                    m.credit = crate::online::saved_credit(std::path::Path::new(&m.path));
                 }
             }
         }

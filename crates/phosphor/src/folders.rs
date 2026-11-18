@@ -14,7 +14,12 @@ pub struct FolderState {
     pub network: bool,
     /// Missing at the last scan (drive unplugged, network down).
     pub missing: bool,
+    /// Had more files than one scan lists (`SCAN_LIMIT`): the files past it weren't seen.
+    pub partial: bool,
 }
+
+/// Files listed per watched folder at most, each scan.
+const SCAN_LIMIT: usize = 3000;
 
 type Scan = (Found, Vec<(String, FolderState)>);
 
@@ -56,6 +61,11 @@ impl FolderWatcher {
         self.state.get(folder).is_some_and(|s| s.missing)
     }
 
+    /// Too big to list whole at the last scan: its files that weren't seen stay in the bin.
+    pub fn partial(&self, folder: &str) -> bool {
+        self.state.get(folder).is_some_and(|s| s.partial)
+    }
+
     pub fn scanning(&self) -> bool {
         self.scanning
     }
@@ -81,10 +91,11 @@ impl FolderWatcher {
                     let mut out = Vec::new();
                     let mut states = Vec::new();
                     for f in &folders {
-                        let mut budget = 3000;
-                        let state = FolderState { network: on_network(Path::new(f)), missing: !Path::new(f).is_dir() };
-                        states.push((f.clone(), state));
+                        let mut budget = SCAN_LIMIT;
+                        let mut state = FolderState { network: on_network(Path::new(f)), missing: !Path::new(f).is_dir(), partial: false };
                         walk(Path::new(f), 4, &mut budget, f, &mut out, &dirs);
+                        state.partial = budget == 0;
+                        states.push((f.clone(), state));
                     }
                     let _ = tx.send((out, states));
                 })
