@@ -149,6 +149,24 @@ impl Composition {
             .chain(self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter().flat_map(|s| s.effects.iter())))
     }
 
+    /// Effects kept for later, not running now: every clip's own chain and its saved settings' chain, and media
+    /// files' own effects. `all_effects` + these = every effect a show can use (packing a show, shader edits).
+    pub fn stored_effects(&self) -> impl Iterator<Item = &EffectState> {
+        self.layers
+            .iter()
+            .flat_map(|l| l.clips.iter())
+            .flat_map(|c| c.effects.iter().chain(c.own.iter().flat_map(|o| o.effects.iter())))
+            .chain(self.media_bin.iter().flat_map(|m| m.effects.iter()))
+    }
+
+    pub fn stored_effects_mut(&mut self) -> impl Iterator<Item = &mut EffectState> {
+        self.layers
+            .iter_mut()
+            .flat_map(|l| l.clips.iter_mut())
+            .flat_map(|c| c.effects.iter_mut().chain(c.own.iter_mut().flat_map(|o| o.effects.iter_mut())))
+            .chain(self.media_bin.iter_mut().flat_map(|m| m.effects.iter_mut()))
+    }
+
     pub fn all_effects_mut(&mut self) -> impl Iterator<Item = &mut EffectState> {
         self.master_effects
             .iter_mut()
