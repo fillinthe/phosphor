@@ -548,11 +548,15 @@ impl NetSession {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn start(&mut self) -> Result<(), String> {
         self.stop();
-        let listener = std::net::TcpListener::bind(("0.0.0.0", self.port)).map_err(|e| format!("Port {}: {e}", self.port))?;
+        // A flag of its own for this run: the last run's listener and connections saw theirs go off in `stop` and
+        // end (sharing one, they never saw it: it was back on before they looked, and kept the port).
+        self.running = Arc::new(AtomicBool::new(false));
+        // (The last run's listener lets go of the port at its next wake-up.)
+        let listener = crate::net_util::bind_retrying(|| std::net::TcpListener::bind(("0.0.0.0", self.port))).map_err(|e| format!("Port {}: {e}", self.port))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         // HTTPS on the next port (phones only share their mic on a secure page); a self-signed certificate.
         let tls = match crate::net_tls::server_config() {
-            Ok(cfg) => std::net::TcpListener::bind(("0.0.0.0", self.port + 1)).ok().and_then(|l| l.set_nonblocking(true).ok().map(|_| (l, cfg))),
+            Ok(cfg) => crate::net_util::bind_retrying(|| std::net::TcpListener::bind(("0.0.0.0", self.port + 1))).ok().and_then(|l| l.set_nonblocking(true).ok().map(|_| (l, cfg))),
             Err(e) => {
                 eprintln!("session: no HTTPS ({e})");
                 None
