@@ -283,7 +283,8 @@ impl State {
     /// windows all come through here.
     pub(crate) fn undo_step(&mut self, step: i8) {
         let got = if step < 0 { self.history.undo(&self.comp) } else { self.history.redo(&self.comp) };
-        if let Some(c) = got {
+        if let Some(mut c) = got {
+            crate::history::keep_imports(&self.comp, &mut c);
             self.comp = c;
             self.comp.ensure_outputs();
             // What was selected may not be in this step (a layer made after it, a clip slot since removed):

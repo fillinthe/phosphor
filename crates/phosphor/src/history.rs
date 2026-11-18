@@ -316,9 +316,32 @@ impl History {
     }
 }
 
+/// Media brought in stays in the Media bin when a step is undone or redone: undo takes back edits, not imports
+/// (owner, 2026-11-18). `restored` is the step about to replace `now`.
+pub fn keep_imports(now: &Composition, restored: &mut Composition) {
+    let kept: Vec<_> = now.media_bin.iter().filter(|m| !restored.media_bin.iter().any(|o| o.path == m.path)).cloned().collect();
+    restored.media_bin.extend(kept);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn undo_keeps_imported_media() {
+        let mut h = History::default();
+        let mut comp = Composition::default();
+        h.track(&comp, 0.0, false);
+        comp.media_bin.push(phosphor_engine::MediaItem { name: "a".into(), path: "/m/a.mov".into(), ..Default::default() });
+        h.track(&comp, 1.0, false);
+        h.track(&comp, 2.0, false);
+        let mut back = h.undo(&comp).unwrap();
+        assert!(back.media_bin.is_empty());
+        keep_imports(&comp, &mut back);
+        assert_eq!(back.media_bin.len(), 1, "Undo took the import out of Media");
+        keep_imports(&comp, &mut back);
+        assert_eq!(back.media_bin.len(), 1, "kept twice");
+    }
 
     #[test]
     fn a_modulator_moving_by_itself_is_not_an_edit() {
