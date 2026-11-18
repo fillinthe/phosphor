@@ -204,23 +204,29 @@ fn save_to_disk(file_path: &PathBuf, kv: &HashMap<String, String>) {
         log::warn!("Failed to create directory {}: {err}", parent_dir.display());
     }
 
-    match std::fs::File::create(file_path) {
+    // PHOSPHOR PATCH: written whole into a file beside it, flushed to the disk, then swapped in, so a crash or a
+    // full disk mid-write never leaves a cut-off app.ron (all settings lost at the next start).
+    let part = file_path.with_extension(format!("ron.{}.part", std::process::id()));
+    match std::fs::File::create(&part) {
         Ok(file) => {
             let mut writer = std::io::BufWriter::new(file);
             let config = Default::default();
 
             profiling::scope!("ron::serialize");
-            if let Err(err) = ron::Options::default()
+            let written = ron::Options::default()
                 .to_io_writer_pretty(&mut writer, &kv, config)
                 .and_then(|()| writer.flush().map_err(|err| err.into()))
-            {
+                .and_then(|()| writer.get_ref().sync_all().map_err(|err| err.into()))
+                .and_then(|()| std::fs::rename(&part, file_path).map_err(|err| err.into()));
+            if let Err(err) = written {
+                let _ = std::fs::remove_file(&part);
                 log::warn!("Failed to serialize app state: {err}");
             } else {
                 log::trace!("Persisted to {}", file_path.display());
             }
         }
         Err(err) => {
-            log::warn!("Failed to create file {}: {err}", file_path.display());
+            log::warn!("Failed to create file {}: {err}", part.display());
         }
     }
 }

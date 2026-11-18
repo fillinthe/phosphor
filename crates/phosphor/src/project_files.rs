@@ -165,6 +165,28 @@ mod tests {
         assert!(skipped("/Users/me/Desktop/Untitled Backups/Untitled 2026-10-25.phosphor"));
         assert!(skipped("/Users/me/.Trash/a.phosphor") && skipped("/Users/me/Library/x/a.phosphor") && !skipped("/Volumes/WD/shows/a.phosphor"));
     }
+
+    /// A whole write replaces the file and leaves nothing beside it; a write that can't happen keeps the old file.
+    #[test]
+    fn whole_writes_replace_or_keep() {
+        let dir = std::env::temp_dir().join(format!("phosphor-whole-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Show.phosphor");
+        std::fs::write(&file, "old").unwrap();
+        write_whole(&file, "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no part files left");
+        // Into a folder that isn't there: an error, nothing written.
+        assert!(write_whole(&dir.join("gone").join("x.phosphor"), "x").is_err());
+        // Many writers at once: each finishes whole.
+        let writers: Vec<_> = (0..8).map(|k| { let f = file.clone(); std::thread::spawn(move || write_whole(&f, format!("writer {k}").repeat(1000)).unwrap()) }).collect();
+        writers.into_iter().for_each(|w| w.join().unwrap());
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!((0..8).any(|k| text == format!("writer {k}").repeat(1000)), "one writer's text, whole");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// The copy of a project kept on this computer (the settings folder's cache), so a project whose file is on a drive
@@ -186,12 +208,31 @@ pub fn keep_copy(project: &str, json: &str, ahead: bool) -> std::io::Result<()> 
     keep_copy_at(&path, json, ahead)
 }
 
+/// Writes `data` to `path` whole or not at all: into a file of its own beside it (named for this process and
+/// write, so two writes at once never share one), flushed to the disk, then swapped in. A crash or a full disk
+/// mid-write leaves the old file as it was, never half of the new one.
+pub fn write_whole(path: &Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
+    use std::io::Write;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = path.file_name().map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
+    let part = path.with_file_name(format!(".{name}.{}-{n}.part", std::process::id()));
+    let written = std::fs::File::create(&part).and_then(|mut f| {
+        f.write_all(data.as_ref())?;
+        f.sync_all()
+    });
+    match written.and_then(|()| std::fs::rename(&part, path)) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            Err(e)
+        }
+    }
+}
+
 fn keep_copy_at(path: &Path, json: &str, ahead: bool) -> std::io::Result<()> {
     std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?;
-    // (Written whole, then swapped in: a crash mid-write never leaves half a project.)
-    let part = path.with_extension("part");
-    std::fs::write(&part, json)?;
-    std::fs::rename(&part, path)?;
+    write_whole(path, json)?;
     let mark = ahead_mark(path);
     if ahead {
         std::fs::write(mark, "")?;

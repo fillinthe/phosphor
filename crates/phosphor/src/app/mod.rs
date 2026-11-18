@@ -580,11 +580,17 @@ impl State {
                     });
                     return;
                 }
-                match crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs()).and_then(|_| std::fs::write(p, &json)) {
+                // A backup that can't be made (a read-only backups folder, a full drive) is said, but never
+                // stops the save itself.
+                let backup = crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs(), auto).err();
+                match crate::project_files::write_whole(std::path::Path::new(p), &json) {
                     Ok(()) => {
                         self.saved_hash = hash_text(&json);
                         let _ = crate::project_files::keep_copy(p, &json, false);
-                        self.notice = Some(format!("Saved {name}"));
+                        self.notice = Some(match backup {
+                            None => format!("Saved {name}"),
+                            Some(e) => format!("Saved {name} (its backup couldn't be made: {e})"),
+                        });
                     }
                     Err(e) => self.notice = Some(format!("Save failed: {e}")),
                 }
@@ -601,7 +607,7 @@ impl State {
         }
         self.autosave_at = now;
         if hash_text(&self.comp.to_json()) != self.saved_hash {
-            self.save_project();
+            self.save_project_kind(true);
             if let Some(n) = &mut self.notice {
                 *n = format!("Autosaved ({})", n.trim_start_matches("Saved "));
             }
@@ -1249,7 +1255,7 @@ impl eframe::App for PhosphorApp {
             let now = ui.ctx().input(|i| i.time);
             if !self.bench_session && self.saver.due(now) {
                 let snap = self.snapshot();
-                self.saver.save(now, &snap);
+                self.saver.save(now, snap);
             }
             if !self.bench_session {
                 self.state.autosave_tick(now);
@@ -1265,14 +1271,14 @@ impl eframe::App for PhosphorApp {
     fn on_exit(&mut self) {
         // Recordings still going: let FFmpeg finish their files (an unfinished .mp4 doesn't play).
         #[cfg(not(target_arch = "wasm32"))]
-        for r in std::iter::once(&mut self.state.stream).chain(self.state.recorders.iter_mut()).filter(|r| r.running()) {
+        for r in std::iter::once(&mut self.state.stream).chain(self.state.recorders.iter_mut()).filter(|r| r.busy()) {
             r.stop_and_wait();
         }
         if !self.bench_session {
             let snap = self.snapshot();
-            self.saver = Default::default();
+            self.saver.finish();
             if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), crate::show::storage_dir()) {
-                let _ = std::fs::write(dir.join("recovery.json"), json);
+                let _ = crate::project_files::write_whole(&dir.join("recovery.json"), json);
             }
             crate::recovery::end_session();
         }

@@ -111,11 +111,14 @@ pub fn end_session() {
     }
 }
 
-/// Writes the snapshot every couple of seconds when something changed (atomically, off the UI thread).
+/// Writes the snapshot every couple of seconds when something changed. The UI thread only hands over a copy; one
+/// writer thread of its own turns it into text, compares it with the last and writes it whole (never two at once).
 #[derive(Default)]
 pub struct Saver {
-    last: String,
     last_time: f64,
+    worker: Option<(std::sync::mpsc::SyncSender<Snapshot>, std::thread::JoinHandle<()>)>,
+    /// Where it writes (None = `snapshot_path`; tests give their own).
+    to: Option<PathBuf>,
 }
 
 impl Saver {
@@ -123,20 +126,38 @@ impl Saver {
         now - self.last_time >= 2.0
     }
 
-    pub fn save(&mut self, now: f64, snapshot: &Snapshot) {
+    pub fn save(&mut self, now: f64, snapshot: Snapshot) {
         self.last_time = now;
-        let Ok(json) = serde_json::to_string(snapshot) else { return };
-        if json == self.last {
-            return;
+        if self.worker.is_none() {
+            let Some(path) = self.to.clone().or_else(snapshot_path) else { return };
+            // (No room to queue: a copy is only taken while the writer waits, so the newest one is what gets written.)
+            let (tx, rx) = std::sync::mpsc::sync_channel::<Snapshot>(0);
+            let Ok(handle) = std::thread::Builder::new().name("recovery-snapshot".into()).spawn(move || {
+                let mut last = String::new();
+                while let Ok(snap) = rx.recv() {
+                    let Ok(json) = serde_json::to_string(&snap) else { continue };
+                    if json != last {
+                        let _ = crate::project_files::write_whole(&path, &json);
+                        last = json;
+                    }
+                }
+            }) else {
+                return;
+            };
+            self.worker = Some((tx, handle));
         }
-        self.last = json.clone();
-        let Some(path) = snapshot_path() else { return };
-        std::thread::spawn(move || {
-            let tmp = path.with_extension("json.tmp");
-            if std::fs::write(&tmp, json).is_ok() {
-                let _ = std::fs::rename(&tmp, &path);
-            }
-        });
+        // Still writing the last one: this one is skipped (the next comes in two seconds).
+        if let Some((tx, _)) = &self.worker {
+            let _ = tx.try_send(snapshot);
+        }
+    }
+
+    /// Lets the writer finish what it has and stop (before the last snapshot is written on quit).
+    pub fn finish(&mut self) {
+        if let Some((tx, handle)) = self.worker.take() {
+            drop(tx);
+            let _ = handle.join();
+        }
     }
 }
 
@@ -322,6 +343,32 @@ fn relaunch() {
 
 #[cfg(test)]
 mod tests {
+    /// The snapshot is written whole by the writer thread, only when it changed, and quitting waits for it.
+    #[test]
+    fn snapshots_are_written_off_the_ui_thread() {
+        let dir = std::env::temp_dir().join(format!("phosphor-recovery-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("recovery.json");
+        let mut saver = super::Saver { to: Some(path.clone()), ..Default::default() };
+        let snap = |selected| super::Snapshot { selected: Some(selected), ..Default::default() };
+        saver.save(0.0, snap(1));
+        assert!(!saver.due(1.0) && saver.due(2.0));
+        // Let the writer take it, then hand over a newer one.
+        for k in 0..200 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            saver.save(2.0 + k as f64, snap(7));
+            if std::fs::read_to_string(&path).is_ok_and(|t| t.contains("\"selected\":7")) {
+                break;
+            }
+        }
+        saver.finish();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"selected\":7"), "{text}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no part files left");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_freeze_sample_reads_as_source_lines() {
         let report = "Call graph:\n    1290 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 1290 start  (in dyld) + 6992  [0x1]\n    + ! 1290 main  (in phosphor) + 36  [0x2]  main.rs:214\n    + !   1290 f  (in phosphor) + 3  [0x3]  function.rs:250\n    + !     1287 run  (in phosphor) + 3  [0x3]  frame.rs:289\n    + !     : 900 media  (in phosphor) + 60  [0x4]  media.rs:202\n    + !     : 387 other  (in phosphor) + 60  [0x5]  layers.rs:9\n    + !     3 idle  (in AppKit) + 1\n    1 Thread_2\n";

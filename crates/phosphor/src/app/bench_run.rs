@@ -268,7 +268,7 @@ impl PhosphorApp {
             self.state.stream.stop_and_wait();
             println!("RECORDED {}", self.state.stream.settings.file_path);
         }
-        for r in self.state.recorders.iter_mut().filter(|r| r.running()) {
+        for r in self.state.recorders.iter_mut().filter(|r| r.busy()) {
             r.stop_and_wait();
             println!("RECORDED {}", r.settings.file_path);
         }
