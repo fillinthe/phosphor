@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.5.11 (not released yet)
 
+- **Every project in Recent gets a copy on this computer while its drive is connected** (at launch and when the
+  Projects window opens), not only the ones you open, so each opens later with the drive away. A project that has
+  no copy yet says so on its card.
 - **LED / DMX: send out of a chosen network adapter** (Send out of): a rig on its own network (an Ethernet cable)
   while the Wi-Fi stays on. sACN multicast and Art-Net broadcast go out of that adapter. A warning says so when the
   controllers are on a network this computer isn't on.

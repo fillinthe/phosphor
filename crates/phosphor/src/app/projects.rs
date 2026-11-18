@@ -119,7 +119,7 @@ fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>
         }
     }
     if !card.there {
-        let words = if card.copy { "Drive not connected: opens this computer's copy" } else { "Drive not connected? Click to try" };
+        let words = if card.copy { "Drive not connected: opens this computer's copy" } else { "Drive not connected (no copy here yet)" };
         let font = egui::FontId::proportional(12.0);
         let galley = p.layout(crate::i18n::tr(words), font, crate::theme::WARN, pic.width() - 12.0);
         p.galley(pic.center() - galley.size() / 2.0, galley, crate::theme::WARN);
@@ -159,6 +159,7 @@ impl PhosphorApp {
             st.projects.pictures_checked = true;
             st.projects.pictures.clear();
             st.projects.copies = st.recent.iter().filter(|p| crate::project_files::kept_copy_path(p).is_some_and(|c| c.exists())).cloned().collect();
+            crate::project_files::refresh_copies(st.recent.clone());
             let all: Vec<String> = st.recent.iter().cloned().chain(st.projects.files.found.iter().map(|f| f.path.clone())).collect();
             for project in all {
                 if let Some(p) = crate::project_files::picture_path(&project) {

@@ -34,6 +34,9 @@ impl PhosphorApp {
             }
             if bench.is_none() {
                 crate::cache_store::sweep();
+                // Every Recent project whose drive is plugged in now gets a fresh copy here (opens without it later).
+                let recent: Vec<String> = stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+                crate::project_files::refresh_copies(recent);
             }
         }
         // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
