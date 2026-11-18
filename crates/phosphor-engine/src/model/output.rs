@@ -142,6 +142,8 @@ pub struct OutputConfig {
     /// A picture behind this output's slices (a backdrop, a building's texture) and how strongly it shows. "" = none.
     pub background: String,
     pub background_opacity: f32,
+    /// Where it sits on the Stage layout (None = not placed yet: lined up after the placed ones).
+    pub stage: Option<crate::StagePlace>,
 }
 
 impl crate::Composition {
@@ -233,7 +235,7 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, smooth: false, flip_x: false, flip_y: false, delay_frames: 0, frozen: false, background: String::new(), background_opacity: 1.0 }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, smooth: false, flip_x: false, flip_y: false, delay_frames: 0, frozen: false, background: String::new(), background_opacity: 1.0, stage: None }
     }
 }
 
