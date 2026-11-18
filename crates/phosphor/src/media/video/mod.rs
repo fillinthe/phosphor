@@ -243,7 +243,28 @@ struct Jumps {
 }
 
 impl Shared {
+    fn new(codec: String) -> Self {
+        Shared {
+            ctl: Mutex::new(Ctl { looping: true, mode: PlayMode::default(), quit: false, seek: None }),
+            cv: Condvar::new(),
+            clock: AtomicU64::new(0f64.to_bits()),
+            hardware: AtomicBool::new(false),
+            decoded: AtomicU64::new(0),
+            busy_ns: AtomicU64::new(0),
+            skipped: AtomicU64::new(0),
+            shown: AtomicU64::new(0),
+            reverse_slow: AtomicBool::new(false),
+            pool: Mutex::new(Vec::new()),
+            codec: Mutex::new(codec),
+        }
+    }
+
+    /// Keeps a frame's buffers for the next decoded frame. Only CPU frames (RGBA / NV12) are ever reused: a hardware
+    /// frame kept here pinned the decoder's surface for nothing, and Hap blocks are never taken back.
     fn recycle(&self, frame: VideoFrame) {
+        if !matches!(frame, VideoFrame::Rgba { .. } | VideoFrame::Nv12 { .. }) {
+            return;
+        }
         if let Ok(mut pool) = self.pool.lock()
             && pool.len() < POOL
         {
@@ -347,24 +368,7 @@ impl VideoPlayer {
         let about = dec.about.clone();
         let chapters = dec.chapters.clone();
         let duration = dec.duration;
-        let shared = Arc::new(Shared {
-            ctl: Mutex::new(Ctl {
-                looping: true,
-                mode: PlayMode::default(),
-                quit: false,
-                seek: None,
-            }),
-            cv: Condvar::new(),
-            clock: AtomicU64::new(0f64.to_bits()),
-            hardware: AtomicBool::new(false),
-            decoded: AtomicU64::new(0),
-            busy_ns: AtomicU64::new(0),
-            skipped: AtomicU64::new(0),
-            shown: AtomicU64::new(0),
-            reverse_slow: AtomicBool::new(false),
-            pool: Mutex::new(Vec::new()),
-            codec: Mutex::new(dec.codec.clone()),
-        });
+        let shared = Arc::new(Shared::new(dec.codec.clone()));
         let (tx, rx) = mpsc::sync_channel(QUEUE);
         let sh = shared.clone();
         let tname = name.clone();
@@ -422,19 +426,7 @@ impl VideoPlayer {
         };
         drop(input);
         let sound = sound::ClipAudio::open(path);
-        let shared = Arc::new(Shared {
-            ctl: Mutex::new(Ctl { looping: true, mode: PlayMode::default(), quit: false, seek: None }),
-            cv: Condvar::new(),
-            clock: AtomicU64::new(0f64.to_bits()),
-            hardware: AtomicBool::new(false),
-            decoded: AtomicU64::new(0),
-            busy_ns: AtomicU64::new(0),
-            skipped: AtomicU64::new(0),
-            shown: AtomicU64::new(0),
-            reverse_slow: AtomicBool::new(false),
-            pool: Mutex::new(Vec::new()),
-            codec: Mutex::new("audio".into()),
-        });
+        let shared = Arc::new(Shared::new("audio".into()));
         Ok(Self {
             rx: None,
             shared,

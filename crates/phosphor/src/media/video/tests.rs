@@ -353,3 +353,13 @@ fn a_jump_to_the_very_end_shows_the_end() {
         assert!(at > length * 0.4, "{name}: jumped to the end ({length:.2} s) but the picture is from {at:.2} s");
     }
 }
+
+/// The frame pool keeps only CPU frames (the only kind it hands back): Hap blocks aren't kept for nothing.
+#[test]
+fn the_pool_keeps_only_frames_it_reuses() {
+    let sh = super::Shared::new("test".into());
+    sh.recycle(VideoFrame::Compressed { width: 4, height: 4, format: phosphor_engine::CompressedFormat::Bc1, data: vec![0; 8], alpha: None });
+    assert!(sh.pool.lock().unwrap().is_empty());
+    sh.recycle(VideoFrame::Rgba { width: 4, height: 4, data: vec![0; 64] });
+    assert!(sh.take(true, 4, 4).is_some());
+}
