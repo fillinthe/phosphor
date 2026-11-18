@@ -34,6 +34,39 @@ What changed in each Phosphor release, newest first. Downloads are on the
   drives, thumbnails), a **Clear** button, **Clean up after** (clip copies and thumbnails not used for that many
   days are removed when Phosphor starts; 30 days unless you change it, 0 = never) and **Up to** (the most the clip
   copies may take; 25 GB unless you change it).
+- **Play to a Phosphor somewhere else, over the internet** (Session › Reach from the internet): Phosphor asks your
+  router to let the Session in from outside and shows the address to share (it needs a password to control first).
+  On the other Phosphor, **Show its picture** (Follow another Phosphor) puts that output on a new layer, live:
+  no project or media needed there; or Follow it to play the same show in sync. When the router won't open the
+  port, Phosphor says which port to forward by hand.
+- **Link by dragging:** drag a modulator, a Control Surface widget, a MIDI / OSC monitor row, or any slider (hold
+  Alt) onto a slider to link them. The slider lights up while it can take the drop.
+- **LFO window:** each modulator opens in a window of its own, with a big live wave (click or drag to scrub),
+  pause, reverse, retrigger, and how much each control follows it.
+- **Dials:** up to eight named dials on a layer, group, clip or MASTER, saved with it, each driving any settings
+  with its own part of the dial, curve and range. Map a knob to a dial; each has an OSC address.
+- **Learn a row** (MIDI / OSC › Mappings): move the first and last knob of a row and the ones in between are
+  mapped too (clip columns, layer opacities, a layer's dials).
+- **Safer sessions:** following a Phosphor with a session password needs that password (typed next to its
+  address); followers never get projector passwords; web pages from other sites can't drive the show; a device
+  that keeps guessing the password waits longer each time; the session takes a sane number of connections and
+  WebRTC viewers (shown in Devices, where they can be disconnected); each audience phone gets its id from the Mac
+  and is held to a sane rate. An OSC question with a wildcard gets a short answer, not thousands of packets.
+  (An older Phosphor can't follow a leader that has a password.)
+- **Saving is safer:** a crash while saving can't leave a cut-off project or settings file, a failed backup no
+  longer stops the save, and autosave backups no longer push out the backups of your own saves. Quitting while
+  recording Hap finishes the movie; a stuck FFmpeg no longer hangs a recording or stream.
+- **Fixes:** recalling a venue keeps masks on their slices and slices in their groups; packed shows include
+  shaders used only by clip or file effects; two controls following each other settle instead of chasing each
+  other; an edited project no longer reuses ids; a cue fading in keeps going to that cue when the list changes;
+  very large watched folders keep all their files in Media; automatic crash reports leave out your user name.
+- **Fewer stutters and less memory over a long show:** sending OSC to a computer by name, control lists, media
+  sorting, account syncing, MadMapper import and the calendar file no longer hold up the screen; reconnecting OSC
+  or restarting the Session no longer fails with "address in use"; Shader Editor changes and removed effects free
+  their graphics memory; a screen capture removed while starting stops; converting a damaged movie no longer
+  hangs; the virtual camera does less work while nothing takes its picture; less copying when streaming,
+  recording, NDI and the session run together.
+- Search boxes in lists (fonts, what to control, add menus) start empty each time and no longer hold the keyboard.
 
 ## 0.5.10 (2026-11-17)
 

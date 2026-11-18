@@ -167,13 +167,13 @@ source, or a proxy on your server.
       drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
       project; later the strokes as lines that draw themselves on (and for lasers).
 - [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
-- [~] *(report written 2026-11-16: 61 findings in docs/NOTES.md; fixes under way)* **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
+- [~] *(2026-11-18: all of A–D fixed except D41 (displays plugged / unplugged) and half of D40 (undo of a bin-only import: needs your say); C32 partly (the camera extension idling needs a signed build); E47, E48 done; E49 (split ui/kit.rs) and the areas not read left)* **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
       the design-system rules, and the graphify map's loosely knit areas below. Report first, then fix in small steps.
 - [ ] **OSC and linking like VDMX / Resolume** (owner, 2026-11-15): one control driving many things with their own
       ranges, user-built control windows, a proper LFO window (the LFOs & Modulators panel exists; make it the
       place to build them, not right-click menus), "programmable". The researched list (26 items, VDMX / Resolume
       docs vs the code): `docs/design/osc-linking.md`.
-      **Started 2026-11-15 (MacBook only):** 4 built, 10 partly, 12 not started; each item says what's left.
+      **Started 2026-11-15; 2026-11-18:** link by dragging, the LFO window, dials, Learn a row built; each item in the file says what's left.
 - [ ] **Code health** (graphify map, 2026-11-14: 14,953 nodes, 501 communities): `ui/kit.rs` (cohesion 0.05) and
       Mapping + Studio (0.11) are loosely knit: split them by job. British spellings left only in internal names
       (`colour_button`, `theme::FAVOURITE`, `colour_budget.txt`; serde field names stay for old saves).
@@ -181,7 +181,7 @@ source, or a proxy on your server.
 
 ## Ideas
 
-- [ ] **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
+- [~] *(2026-11-18: Reach from the internet (router opens the port by UPnP, public address shown) + Show its picture (the output as a live layer) built; not tried across two networks. Left: a relay for routers that won't open a port or sit behind a phone / carrier network (needs a server, e.g. through the G Workshop account), encryption for that link)* **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
       network (`follow::{Link, Leader}`, the `/follow` socket); reach a Phosphor somewhere else (relay or invite
       link through the G Workshop account, NAT traversal, latency and media that isn't on the other machine).
 - [ ] **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another

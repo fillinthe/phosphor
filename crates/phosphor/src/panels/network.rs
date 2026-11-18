@@ -52,8 +52,8 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::command(ui, icon::COPY).on_hover_text("Copy the secure link").clicked() {
                     ui.ctx().copy_text(secure.clone());
                 }
+                help(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
             });
-            help(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
         }
         #[cfg(not(target_arch = "wasm32"))]
         internet_row(ui, st);
@@ -330,8 +330,8 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
         }
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-            ui.horizontal(|ui| {
-                let w = (ui.available_width() - 360.0).clamp(100.0, 260.0);
+            ui.horizontal_wrapped(|ui| {
+                let w = (ui.available_width() - 150.0).clamp(100.0, 260.0);
                 crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
                 crate::ui::password_field(ui, &mut st.follow_password, "its password, if any", 130.0)
                     .on_hover_text("The leader's \"Password to control\" (Session panel), when it has one");
