@@ -1307,3 +1307,35 @@ fn a_wildcard_question_gets_a_bounded_answer() {
     }
     assert_eq!(got, ask::MAX_ANSWERS_PER_ASK);
 }
+
+/// Two controls following each other (here at half: A → B halves, B → A halves) settle after one move instead of
+/// chasing each other down frame after frame; a chain A → B → C goes through in one frame.
+#[test]
+fn controls_following_each_other_settle() {
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    let b = comp.add_layer().id;
+    let c = comp.add_layer().id;
+    let half = |t| {
+        let mut to = phosphor_engine::Binding::new(t);
+        to.range.max = 0.5;
+        to
+    };
+    comp.follows.push(phosphor_engine::Follow { source: ControlTarget::LayerOpacity(a), to: half(ControlTarget::LayerOpacity(b)) });
+    comp.follows.push(phosphor_engine::Follow { source: ControlTarget::LayerOpacity(b), to: half(ControlTarget::LayerOpacity(a)) });
+    comp.follows.push(phosphor_engine::Follow { source: ControlTarget::LayerOpacity(b), to: phosphor_engine::Binding::new(ControlTarget::LayerOpacity(c)) });
+    let mut seen = HashMap::new();
+    let mut out = Vec::new();
+    assert!(follow_sends(&comp, &mut seen).is_empty());
+    set_target(&mut comp, &ControlTarget::LayerOpacity(a), 0.8, &mut out);
+    let sends = follow_sends(&comp, &mut seen);
+    assert_eq!(sends.len(), 2, "B and C, not A again: {sends:?}");
+    for (t, v) in &sends {
+        set_target(&mut comp, t, *v, &mut out);
+    }
+    assert!((comp.layer(c).unwrap().opacity - 0.4).abs() < 1e-4, "C took B's new value the same frame");
+    for frame in 0..5 {
+        assert!(follow_sends(&comp, &mut seen).is_empty(), "frame {frame}: nothing moves by itself");
+    }
+    assert!((comp.layer(a).unwrap().opacity - 0.8).abs() < 1e-4);
+}

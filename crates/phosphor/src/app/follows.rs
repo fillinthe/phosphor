@@ -15,8 +15,15 @@ impl State {
             return;
         }
         let sends = crate::control::follow_sends(&self.comp, &mut self.follow_seen);
-        for (target, v) in sends {
-            self.set_control(&target, v, now);
+        for (target, v) in &sends {
+            self.set_control(target, *v, now);
+        }
+        // What a follower really took (a pick-one control rounds, a lock refuses): seen as it is, so a loop of
+        // followers doesn't take the rounding for a move next frame.
+        for (target, _) in sends {
+            if let Some(v) = self.follow_seen.contains_key(&target).then(|| crate::control::get_target(&self.comp, &target)).flatten() {
+                self.follow_seen.insert(target, v);
+            }
         }
     }
 
