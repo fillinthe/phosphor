@@ -732,6 +732,28 @@ impl Composition {
         true
     }
 
+    /// Adds many files from watched folders at once, (name, path, folder) each: one look-up table for the bin
+    /// instead of a search through it per file (a scan of thousands). Returns the indexes of the ones that were new.
+    pub fn add_folder_media_many(&mut self, found: &[(String, String, String)]) -> Vec<usize> {
+        let mut at: std::collections::HashMap<String, usize> = self.media_bin.iter().enumerate().map(|(i, m)| (m.path.clone(), i)).collect();
+        let mut added = Vec::new();
+        for (name, path, folder) in found {
+            match at.get(path) {
+                Some(&i) => {
+                    if self.media_bin[i].folder != *folder {
+                        self.media_bin[i].folder = folder.clone();
+                    }
+                }
+                None => {
+                    at.insert(path.clone(), self.media_bin.len());
+                    added.push(self.media_bin.len());
+                    self.media_bin.push(MediaItem { name: name.clone(), path: path.clone(), folder: folder.clone(), ..Default::default() });
+                }
+            }
+        }
+        added
+    }
+
     /// Makes sure every file used by a layer is in the bin (covers Open…, drops and loaded projects).
     pub fn sync_media_bin(&mut self) {
         let used: Vec<(String, String)> = self
@@ -771,6 +793,14 @@ impl Composition {
         let mut comp: Self = serde_json::from_str(json)?;
         comp.migrate();
         comp.normalize_groups();
+        // A file whose id counter is behind its ids (hand-edited, made by another tool, an old bug): new things
+        // would get ids that are already taken. The counter moves past every id in the file.
+        if let Ok(tree) = serde_json::from_str::<serde_json::Value>(json) {
+            let top = largest_id(&tree);
+            if top >= comp.next_id {
+                comp.next_id = top + 1;
+            }
+        }
         Ok(comp)
     }
 
@@ -971,6 +1001,53 @@ mod format_tests {
     fn share_out_is_off_on_windows_by_default() {
         let c = Composition::default();
         assert_eq!(c.share_out(), !cfg!(windows));
+    }
+}
+
+/// The largest "id" anywhere in a saved project (fixed ids like MASTER's, at the top of the range, left out).
+fn largest_id(v: &serde_json::Value) -> u64 {
+    match v {
+        serde_json::Value::Object(map) => map
+            .iter()
+            .map(|(k, v)| {
+                let own = if k == "id" { v.as_u64().filter(|id| *id < u64::MAX / 2).unwrap_or(0) } else { 0 };
+                own.max(largest_id(v))
+            })
+            .max()
+            .unwrap_or(0),
+        serde_json::Value::Array(items) => items.iter().map(largest_id).max().unwrap_or(0),
+        _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod id_tests {
+    use super::*;
+
+    /// Many folder files at once: new ones join (once), known ones take their folder, the same as one by one.
+    #[test]
+    fn folder_files_join_in_one_go() {
+        let mut c = Composition::default();
+        c.add_folder_media("a.mov", "/f/a.mov", "/f");
+        let found: Vec<(String, String, String)> = ["a.mov", "b.mov", "b.mov", "c.png"].iter().map(|n| (n.to_string(), format!("/f/{n}"), "/g".to_string())).collect();
+        assert_eq!(c.add_folder_media_many(&found), vec![1, 2]);
+        assert_eq!(c.media_bin.iter().map(|m| (m.path.as_str(), m.folder.as_str())).collect::<Vec<_>>(), [("/f/a.mov", "/g"), ("/f/b.mov", "/g"), ("/f/c.png", "/g")]);
+    }
+
+    /// A file whose id counter is behind its ids: new layers and effects never take an id that's in use.
+    #[test]
+    fn a_low_id_counter_moves_past_the_files_ids() {
+        let mut c = Composition::default();
+        c.next_id = 500;
+        let l = c.add_layer();
+        l.effects.push(EffectState { id: 900, effect: "x".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
+        let mut text: serde_json::Value = serde_json::from_str(&c.to_json()).unwrap();
+        text["next_id"] = 1.into();
+        let back = Composition::from_json(&text.to_string()).unwrap();
+        assert_eq!(back.next_id, 901);
+        // A right counter stays as it is.
+        c.next_id = 1000;
+        assert_eq!(Composition::from_json(&c.to_json()).unwrap().next_id, 1000);
     }
 }
 
