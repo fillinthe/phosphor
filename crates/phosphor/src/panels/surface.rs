@@ -130,7 +130,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 .on_hover_text("Line up, spread out or match the size of the selected widgets");
             }
             ui.label(RichText::new("OSC out").small().color(Color32::GRAY));
-            ui.add(egui::TextEdit::singleline(&mut st.comp.surface.osc_host).hint_text("IP, e.g. 192.168.1.20").desired_width(110.0))
+            crate::ui::text_field(ui, &mut st.comp.surface.osc_host, "IP, e.g. 192.168.1.20", Some(110.0))
                 .on_hover_text("Widgets with a Send OSC address send their values here (another app on this Mac: 127.0.0.1). Empty = off.");
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
@@ -842,7 +842,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
     ui.horizontal(|ui| {
         ui.label(RichText::new(w.kind.name()).strong().color(accent()));
-        ui.add(egui::TextEdit::singleline(&mut w.label).desired_width(170.0));
+        crate::ui::text_field(ui, &mut w.label, "", Some(170.0));
     });
     ui.horizontal(|ui| {
         choice_combo(ui, ("widget_kind", id), &mut w.kind, 90.0, false);
@@ -970,7 +970,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
         crate::ui::field(ui, "Send OSC", |ui| {
-            ui.add(egui::TextEdit::singleline(&mut w.osc_out).hint_text("/address (to the OSC out app)").desired_width(170.0))
+            crate::ui::text_field(ui, &mut w.osc_out, "/address (to the OSC out app)", Some(170.0))
                 .on_hover_text("Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.");
         });
         // Audience play: whether guests get it, and how far they can push it.

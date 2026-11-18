@@ -97,7 +97,7 @@ impl PhosphorApp {
                         crate::ui::toggle(ui, &mut st.export.zip, "Also make a .zip (easier to send)");
                         ui.horizontal(|ui| {
                             crate::ui::toggle(ui, &mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
-                            ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
+                            ui.add_enabled_ui(st.export.lock, |ui| crate::ui::password_field(ui, &mut st.export.lock_password, "unlock password (optional)", 170.0));
                         });
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));
                         crate::ui::counts(ui, &[(files as usize, "{0} media file", "{0} media files"), (st.comp.outputs.len(), "{0} output", "{0} outputs"), (st.comp.control_maps.len(), "{0} mapping", "{0} mappings")]);

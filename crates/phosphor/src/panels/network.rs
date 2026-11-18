@@ -35,8 +35,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                 ui.ctx().copy_text(url.clone());
             }
         });
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Easy to type");
+        crate::ui::field(ui, "Easy to type", |ui| {
             ui.monospace(net.local_url());
             help(ui, "Bonjour name: works on iPhones, iPads, Macs and most Android phones on the same Wi-Fi");
         });
@@ -59,10 +58,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
-            ui.add_enabled(
-                *require_password,
-                egui::TextEdit::singleline(remote_password).password(true).hint_text("password").desired_width(140.0),
-            );
+            ui.add_enabled_ui(*require_password, |ui| crate::ui::password_field(ui, remote_password, "password", 140.0));
         });
         if *require_password && remote_password.is_empty() {
             ui.colored_label(WARN, "Type a password, or anyone can control.");
@@ -113,9 +109,11 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     }
     crate::ui::field(ui, "Each turn", |ui| {
         guarded!(ui, play.turn_secs, egui::DragValue::new(&mut play.turn_secs).range(10..=900).suffix(" s"));
-        ui.label("Rest after");
+    });
+    crate::ui::field(ui, "Rest after", |ui| {
         guarded!(ui, play.rest_secs, egui::DragValue::new(&mut play.rest_secs).range(0..=600).suffix(" s")).on_hover_text("How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.");
-        ui.label("Players at once");
+    });
+    crate::ui::field(ui, "Players at once", |ui| {
         guarded!(ui, play.players, egui::DragValue::new(&mut play.players).range(1..=8)).on_hover_text("More than one: each player gets their own Surface page (page 1, 2, …) unless you pick one page for all");
     });
     // What the play page offers, in one row: a switch off takes it off the page and its presses are refused.
@@ -151,8 +149,9 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::pick_value(ui, &mut play.surface_page, Some(i), name);
             }
         });
-        ui.label("Title");
-        ui.add(egui::TextEdit::singleline(&mut play.title).desired_width(160.0));
+    });
+    crate::ui::field(ui, "Title", |ui| {
+        crate::ui::text_field(ui, &mut play.title, "", Some(160.0));
     });
     // Several players: each place can have its own page (and so its own controls).
     if play.players > 1 {
@@ -172,12 +171,9 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         });
     }
     help(ui, "Each control's guest settings (whether guests get it, how far they can push it) are in the Control Surface editor.");
-    let style_changed = ui
-        .horizontal(|ui| {
-            ui.label("Code on the output");
-            choice_combo(ui, "qr_style", &mut play.qr_style, 190.0, false).changed() | crate::ui::toggle(ui, &mut play.qr_caption, "Words under it").changed()
-        })
-        .inner;
+    let style_changed = crate::ui::field(ui, "Code on the output", |ui| {
+        choice_combo(ui, "qr_style", &mut play.qr_style, 190.0, false).changed() | crate::ui::toggle(ui, &mut play.qr_caption, "Words under it").changed()
+    });
     #[cfg(not(target_arch = "wasm32"))]
     if style_changed {
         st.refresh_play_qr(now);

@@ -14,16 +14,12 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     });
     let mut picked = None;
     ComboBox::from_id_salt(id).width(width).selected_text(text).height(320.0).show_ui(ui, |ui| {
-        let mut query: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
-        ui.add(egui::TextEdit::singleline(&mut query).hint_text("Search…").desired_width(width.max(200.0)))
-            .request_focus();
-        let q = query.to_lowercase();
+        let (q, _) = crate::ui::search_field(ui, id, "Search…", width.max(200.0));
         for (t, name) in targets.iter().filter(|(_, n)| q.is_empty() || n.to_lowercase().contains(&q)) {
             if crate::ui::pick_item(ui, current == Some(t), name).clicked() {
                 picked = Some(t.clone());
             }
         }
-        ui.ctx().data_mut(|d| d.insert_temp(id, query));
     });
     picked
 }
@@ -81,7 +77,7 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             guarded!(ui, *n, egui::DragValue::new(n).range(0..=127));
         }
         ControlSource::Osc { address } => {
-            ui.add(egui::TextEdit::singleline(address).hint_text("/touchosc/fader1").desired_width(150.0));
+            crate::ui::text_field(ui, address, "/touchosc/fader1", Some(150.0));
         }
         ControlSource::Key { key } => {
             if ui.add(egui::TextEdit::singleline(key).char_limit(12).desired_width(50.0)).changed() {
@@ -89,7 +85,7 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             }
         }
         ControlSource::Gamepad { input } => {
-            ui.add(egui::TextEdit::singleline(input).hint_text("South").desired_width(110.0))
+            crate::ui::text_field(ui, input, "South", Some(110.0))
                 .on_hover_text("Button or stick name (South, East, LeftStickX, RightTrigger2…); easiest: press Listen and move it");
         }
         ControlSource::Dmx { universe, channel } => {

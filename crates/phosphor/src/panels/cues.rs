@@ -184,7 +184,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     if crate::ui::small_command(ui, icon::PLAY).on_hover_text("Go to this cue").clicked() {
                         fire = Some(i);
                     }
-                    ui.add(egui::TextEdit::singleline(&mut cue.name).desired_width(140.0));
+                    crate::ui::text_field(ui, &mut cue.name, "", Some(140.0));
                     guarded!(ui, cue.fade, egui::DragValue::new(&mut cue.fade).range(0.0..=60.0).speed(0.05).prefix("fade ").suffix(" s"));
                     let mut follows = cue.follow > 0.0;
                     if toggle(ui, &mut follows, "then next").on_hover_text("Go to the next cue by itself after this many seconds").changed() {

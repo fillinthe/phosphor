@@ -31,7 +31,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
     store.ensure_loaded();
     let mut action = None;
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(name).hint_text(format!("Name this {what}")).desired_width(180.0));
+        crate::ui::text_field(ui, name, &format!("Name this {what}"), Some(180.0));
         if crate::ui::command(ui, label(icon::FLOPPY_DISK, &format!("Save {what}"))).clicked() {
             let json = current();
             if json.is_empty() {

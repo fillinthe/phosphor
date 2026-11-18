@@ -242,7 +242,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     // Row 1: search, the full width (it never shares a row, so nothing can cover it).
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
-        ui.add(egui::TextEdit::singleline(&mut st.media_view.search).hint_text("Search media").desired_width(ui.available_width()));
+        crate::ui::text_field(ui, &mut st.media_view.search, "Search media", None);
     });
     // Row 2: import, watch, group, sort, size; wraps when the column is narrow.
     ui.horizontal_wrapped(|ui| {

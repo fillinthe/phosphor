@@ -119,7 +119,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 super::layers::show_button(ui, layer);
                 send = outputs_menu(ui, &outs).or(send);
-                ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
+                crate::ui::text_field(ui, &mut layer.name, "", Some(f32::INFINITY));
             });
             quick = crate::app::quick_row(ui);
             if let Some(c) = clip_slot.filter(|c| layer.clips.get(*c).is_some_and(|k| !k.is_empty())) {
@@ -855,16 +855,12 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
     // (Font, color and alignment wrap in a narrow Inspector.)
     crate::ui::toolbar(ui, |ui| {
-        let search_id = egui::Id::new(("font_search", id));
-        let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
         crate::ui::dropdown(ui, ("font", id), 170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
-            let q = search.to_lowercase();
+            let (q, _) = crate::ui::search_field(ui, ("font", id), "Search fonts", 180.0);
             for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
                 crate::ui::pick_value(ui, &mut style.font, f.id.clone(), &f.name);
             }
         });
-        ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
         let mut rgb = [style.color[0], style.color[1], style.color[2]].map(|v| v as f32 / 255.0);
         if crate::ui::colour_button(ui, &mut rgb) {
             for k in 0..3 {

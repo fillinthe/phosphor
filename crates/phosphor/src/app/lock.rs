@@ -76,7 +76,7 @@ impl PhosphorApp {
                     ui.label("The controls are locked. Unlock to edit the show again.");
                 } else {
                     ui.label("Type the password to edit the show again.");
-                    let r = ui.add(egui::TextEdit::singleline(&mut self.lock.draft).password(true).hint_text("Password").desired_width(220.0));
+                    let r = crate::ui::password_field(ui, &mut self.lock.draft, "Password", 220.0);
                     if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         action = Some(false);
                     }
@@ -91,7 +91,7 @@ impl PhosphorApp {
                 ui.label("Locked, Phosphor only plays: the preview, the clip grid, keys and controllers, the outputs. Menus, panels and editing come back when you unlock.");
                 ui.horizontal(|ui| {
                     ui.label("Password (optional)");
-                    ui.add(egui::TextEdit::singleline(&mut self.lock.draft).password(true).desired_width(180.0));
+                    crate::ui::password_field(ui, &mut self.lock.draft, "", 180.0);
                 });
                 crate::ui::help(ui, "Leave it empty if anyone may unlock. Export Show can open the show locked too.");
                 if crate::ui::command(ui, format!("{} Lock now", icon::LOCK)).clicked() {

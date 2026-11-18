@@ -39,15 +39,15 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                     if s.second_destination == Destination::CustomRtmp {
-                        ui.add(egui::TextEdit::singleline(&mut s.second_url).hint_text("rtmp://…").desired_width(160.0));
+                        crate::ui::text_field(ui, &mut s.second_url, "rtmp://…", Some(160.0));
                     }
-                    ui.add(egui::TextEdit::singleline(&mut s.second_key).password(true).hint_text("stream key").desired_width(160.0));
+                    crate::ui::password_field(ui, &mut s.second_key, "stream key", 160.0);
                 }
             });
             ui.horizontal(|ui| {
                 crate::ui::toggle(ui, &mut s.copy_enabled, "Also record a copy").on_hover_text("An H.264 .mp4 of the stream, written while it goes out");
                 if s.copy_enabled {
-                    ui.add(egui::TextEdit::singleline(&mut s.copy_path).hint_text("…/stream-copy.mp4").desired_width(240.0));
+                    crate::ui::text_field(ui, &mut s.copy_path, "…/stream-copy.mp4", Some(240.0));
                 }
             });
         }
@@ -56,35 +56,35 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::field(ui, "Stream key", |ui| {
                     // (Leaves room for the Secure toggle beside it.)
                     let w = (ui.available_width() - 136.0).clamp(120.0, 260.0);
-                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(w));
+                    crate::ui::password_field(ui, &mut s.stream_key, "", w);
                     crate::ui::toggle(ui, &mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
             Destination::CustomRtmp => {
                 crate::ui::field(ui, "RTMP URL", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.rtmp_url).desired_width(260.0));
+                    crate::ui::text_field(ui, &mut s.rtmp_url, "", Some(260.0));
                 });
                 crate::ui::field(ui, "Stream key", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
+                    crate::ui::password_field(ui, &mut s.stream_key, "", 260.0);
                 });
             }
             Destination::Srt => {
                 crate::ui::field(ui, "SRT URL", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.srt_url).desired_width(300.0));
+                    crate::ui::text_field(ui, &mut s.srt_url, "", Some(300.0));
                 });
             }
             Destination::Whip => {
                 crate::ui::field(ui, "WHIP URL", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.whip_url).hint_text("https://…/whip").desired_width(300.0));
+                    crate::ui::text_field(ui, &mut s.whip_url, "https://…/whip", Some(300.0));
                 });
                 crate::ui::field(ui, "Token", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).hint_text("bearer token, if the service gives one").desired_width(260.0));
+                    crate::ui::password_field(ui, &mut s.stream_key, "bearer token, if the service gives one", 260.0);
                 });
                 help(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
             }
             Destination::File => {
                 crate::ui::field(ui, "File", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.file_path).hint_text("…/recording.mp4 or .mov (ProRes)").desired_width(260.0));
+                    crate::ui::text_field(ui, &mut s.file_path, "…/recording.mp4 or .mov (ProRes)", Some(260.0));
                     #[cfg(not(target_arch = "wasm32"))]
                     if crate::ui::command(ui, "Choose…").clicked() {
                         choose_file = true;
