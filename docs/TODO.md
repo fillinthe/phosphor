@@ -4,12 +4,19 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 
 ## Future (owner, 2026-11-18)
 
-- **Export to a Raspberry Pi** (or a similar small player): a show that plays by itself on a Pi with no Mac or PC:
-  the LED / DMX output first (record the show's DMX as `.phdmx`, the Pi plays it back over sACN / Art-Net out of
-  its Ethernet, looping, starting at power-on), later video to an HDMI output. Needs: recording DMX coming in from
-  another program (LightJams → `.phdmx`, DMX in already listens on every adapter), a small player program for the
-  Pi (Linux ARM: CI already builds Phosphor for Linux ARM), and an "Export for a Pi…" that writes the player, the
-  recording and its settings (adapter, universes, loop) onto a card or over the network.
+- **Phosphor on a Raspberry Pi: a backup player that runs the show on its own** (owner's design, 2026-11-18):
+  1. **Make the card:** in Phosphor, "Set up a Pi…" asks for the Wi-Fi name and password (and the device's name),
+     then writes a ready-to-boot SD card (Raspberry Pi OS Lite + the Phosphor player + those settings), like the Pi
+     Imager does. Nothing to type on the Pi.
+  2. **It finds itself:** the Pi joins that Wi-Fi at first boot and announces itself on the network (mDNS, as the
+     Session already does); Phosphor lists it ("Pis on this network"), no IP addresses to type.
+  3. **Talk to it:** from Phosphor, see its status (playing, temperature, card space), update its player.
+  4. **Send it a show:** export the show (or a part: the LED / DMX output first, recorded as `.phdmx`; later video
+     to its HDMI) to the Pi, which keeps it on its card.
+  5. **It runs on its own:** at power-on, and whenever the computer running the show goes quiet (no frames for a
+     few seconds), it takes over and plays what it was sent, looping, until the computer is back.
+  Needs: recording DMX that comes in (another program's output, too), the Pi player (Linux ARM: CI builds that
+  already), the card writer, discovery, the hand-over when the main computer stops.
 - **Stage layout, next steps:** the LED / DMX fixtures on the Stage canvas too (lit with what they send); a 3D
   preview of the stage (screens and projector beams) much later.
 
