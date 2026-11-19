@@ -209,6 +209,10 @@ pub use native::file_storage::storage_dir;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod icon_data;
 
+/// PHOSPHOR PATCH: run once right after the native event loop is built (see `native::run::create_event_loop`).
+#[cfg(not(target_arch = "wasm32"))]
+pub static AFTER_EVENT_LOOP: std::sync::OnceLock<fn()> = std::sync::OnceLock::new();
+
 // ----------------------------------------------------------------------------
 
 /// Attach an [`egui_inspection::InspectionPlugin`] to `ctx` when enabled via the environment.

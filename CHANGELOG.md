@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Double-click a project or packed show in Finder** (or drop it on Phosphor's Dock icon) and it opens in Phosphor,
+  whether Phosphor is already running or not.
 - **A projector unplugged mid-show** no longer lands its output on another screen (or over your control screen):
   the output hides and a notice says so; plug the projector back in and the output fills it again by itself.
 - **One number, many texts** (Designer): wire one Number box into as many Text boxes as you like; each shows it

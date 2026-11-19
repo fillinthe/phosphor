@@ -76,6 +76,8 @@ mod remote;
 mod screens;
 #[cfg(not(target_arch = "wasm32"))]
 mod screen_watch;
+#[cfg(not(target_arch = "wasm32"))]
+mod open_files;
 mod stats;
 mod support;
 #[cfg(any(target_os = "macos", windows))]
@@ -277,6 +279,8 @@ fn main() -> eframe::Result {
         wgpu_options: gpu_options(),
         ..Default::default()
     };
+    // Files double-clicked in Finder / dropped on the Dock icon reach the app (open_files.rs).
+    let _ = eframe::AFTER_EVENT_LOOP.set(open_files::install);
     eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))))
 }
 
