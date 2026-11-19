@@ -102,7 +102,7 @@ laser shape's own color, an accent swatch, a widget's tint). Everything else is 
 | Shadows | egui's window and popup shadow only | Nothing in a panel casts a shadow. |
 | Expansion on hover / press | 0 | Buttons stay put; the state shows in color and outline. |
 
-No other numbers. A new size is a named constant in `ui/kit.rs` with a comment saying what it's for.
+No other numbers. A new size is a named constant in `ui/kit/layout.rs` with a comment saying what it's for.
 
 ## 5. Motion
 
@@ -112,7 +112,7 @@ No other numbers. A new size is a named constant in `ui/kit.rs` with a comment s
 - No staggered reveals, no bouncing, no spinners except `ui.spinner()` beside words that say what's loading.
 - Pictures from the show are never slowed or faded by the interface.
 
-## 6. Components (the kit, `crates/phosphor/src/ui/kit.rs`)
+## 6. Components (the kit, `crates/phosphor/src/ui/kit/`: buttons, fields, layout, words)
 
 Every control is one of these. A panel never hand-rolls a button, slider, field, menu or list.
 

@@ -1,2 +1,2 @@
 # Raw egui pieces (select-labels, hand-made buttons, checkboxes) a file outside ui/ may still use: panels use
-# the kit (ui/kit.rs). Since 2026-10-23 none: keep it that way (add a kit piece instead). `ui::budget` test.
+# the kit (ui/kit/). Since 2026-10-23 none: keep it that way (add a kit piece instead). `ui::budget` test.

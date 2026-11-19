@@ -172,7 +172,7 @@ source, or a proxy on your server.
       drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
       project; later the strokes as lines that draw themselves on (and for lasers).
 - [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
-- [~] *(2026-11-18: all of A–D fixed except D41 (displays plugged / unplugged) (D40 done: undo keeps imported media); C32 partly (the camera extension idling needs a signed build); E47, E48 done; E49 (split ui/kit.rs) and the areas not read left)* **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
+- [~] *(2026-11-18: all of A–D fixed except D41 (displays plugged / unplugged) (D40 done: undo keeps imported media); C32 partly (the camera extension idling needs a signed build); E47, E48 done; E49 done (ui/kit split into buttons / fields / layout / words); the areas not read left)* **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
       the design-system rules, and the graphify map's loosely knit areas below. Report first, then fix in small steps.
 - [ ] **OSC and linking like VDMX / Resolume** (owner, 2026-11-15): one control driving many things with their own
       ranges, user-built control windows, a proper LFO window (the LFOs & Modulators panel exists; make it the
