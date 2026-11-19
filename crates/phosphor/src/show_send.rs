@@ -308,6 +308,7 @@ pub fn send(s: Send) -> Shared {
         let result = send_packed(&s, &file, p);
         // The pack was only for this: never left in the temp folder.
         let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
         *s.hub.outgoing.lock().unwrap() = None;
         result
     })
