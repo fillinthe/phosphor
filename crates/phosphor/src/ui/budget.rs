@@ -39,7 +39,7 @@ mod tests {
             }
         }
         println!("UI_RAW total {total}");
-        assert!(over.is_empty(), "use the kit (ui/kit.rs) instead of raw egui pieces:\n{}", over.join("\n"));
+        assert!(over.is_empty(), "use the kit (ui/kit/) instead of raw egui pieces:\n{}", over.join("\n"));
     }
 
     /// Every .rs file under src, (path relative to src, its text).
