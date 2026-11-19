@@ -149,8 +149,14 @@ pub struct ParamInfo {
     pub options: Vec<(String, f32)>,
 }
 
+/// A pointer answer that is really "no": null, or FF_FAIL. The SDK sets only the 32-bit half of the union to FAIL
+/// and leaves the other half as it was, so the low half alone says it (no real pointer ends in 0xFFFFFFFF).
+fn failed(p: *mut c_void) -> bool {
+    p.is_null() || p as usize as u32 == FAIL
+}
+
 fn c_string(p: *mut c_void, max: usize) -> String {
-    if p.is_null() || p as usize == FAIL as usize {
+    if failed(p) {
         return String::new();
     }
     // SAFETY: the plugin returns a NUL-terminated string it owns.
@@ -187,7 +193,7 @@ impl Plugin {
     /// Initialises the library (once) and reads its name and kind.
     pub fn init(&self) -> Result<Info, String> {
         let p = unsafe { self.call(GET_INFO, Mixed::uint(0), std::ptr::null_mut()).ptr };
-        if p.is_null() || p as usize == FAIL as usize {
+        if failed(p) {
             return Err("it didn't describe itself".into());
         }
         // SAFETY: GET_INFO returns a pointer to the plugin's static PluginInfoStruct.
@@ -242,7 +248,7 @@ impl Plugin {
         let vp = Viewport { x: 0, y: 0, width, height };
         // SAFETY: INSTANTIATE_GL takes a viewport pointer and returns the instance (or FAIL).
         let p = unsafe { self.call(INSTANTIATE_GL, Mixed::ptr(&vp), std::ptr::null_mut()).ptr };
-        if p.is_null() || p as usize == FAIL as usize || p as u32 == FAIL {
+        if failed(p) {
             return None;
         }
         let host = HostInfo { name: c"Phosphor".as_ptr(), version: c"0.2".as_ptr() };
@@ -279,5 +285,24 @@ impl Plugin {
     #[allow(dead_code)]
     pub fn deinit(&self) {
         self.call(DEINITIALISE, Mixed::uint(0), std::ptr::null_mut());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// FF_FAIL comes back in the number half of the answer; whatever the other half holds, it isn't a pointer to read.
+    #[test]
+    fn a_fail_answer_is_never_read_as_a_pointer() {
+        for upper in [0usize, 0x0000_0001, 0xDEAD_BEEF] {
+            let p = ((upper << 32) | FAIL as usize) as *mut c_void;
+            assert!(failed(p), "{p:?}");
+            assert_eq!(c_string(p, 64), "");
+        }
+        assert!(failed(std::ptr::null_mut()));
+        let s = c"Blur";
+        assert!(!failed(s.as_ptr() as *mut c_void));
+        assert_eq!(c_string(s.as_ptr() as *mut c_void, 64), "Blur");
     }
 }

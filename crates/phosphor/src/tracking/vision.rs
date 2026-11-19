@@ -25,7 +25,7 @@ use super::{Found, Matte};
 const SURE: f32 = 0.3;
 
 pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Tracking) -> Result<Found, String> {
-    if rgba.len() < (width * height * 4) as usize {
+    if !holds(rgba, width, height) {
         return Err("Tracking: picture too small".into());
     }
     autoreleasepool(|_| unsafe {
@@ -100,7 +100,7 @@ pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Trackin
 /// QR codes / barcodes and text in an RGBA picture: (the biggest code's contents, every line of text read, top to
 /// bottom), for what was asked.
 pub fn read(rgba: &[u8], width: u32, height: u32, codes: bool, text: bool) -> Result<(Option<String>, Option<String>), String> {
-    if rgba.len() < (width * height * 4) as usize {
+    if !holds(rgba, width, height) {
         return Err("Reading: picture too small".into());
     }
     autoreleasepool(|_| unsafe {
@@ -148,7 +148,7 @@ pub fn read(rgba: &[u8], width: u32, height: u32, codes: bool, text: bool) -> Re
 
 /// Where the people are in an RGBA picture (Vision person segmentation, balanced quality).
 pub fn person_matte(rgba: &[u8], width: u32, height: u32) -> Result<Matte, String> {
-    if rgba.len() < (width * height * 4) as usize {
+    if !holds(rgba, width, height) {
         return Err("Remove background: picture too small".into());
     }
     if !crate::os::macos_at_least(12, 0) {
@@ -179,6 +179,12 @@ pub fn person_matte(rgba: &[u8], width: u32, height: u32) -> Result<Matte, Strin
         }
         Ok((w as u32, h as u32, out))
     })
+}
+
+/// `rgba` holds a whole `width` x `height` picture, and it isn't empty (the sum is done without overflowing:
+/// in u32 a huge size wrapped around to a small one and passed).
+fn holds(rgba: &[u8], width: u32, height: u32) -> bool {
+    width > 0 && height > 0 && (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)).is_some_and(|n| rgba.len() >= n)
 }
 
 fn area(r: objc2_core_foundation::CGRect) -> f64 {
@@ -221,6 +227,16 @@ unsafe fn pixel_buffer(rgba: &[u8], width: u32, height: u32) -> Option<CFRetaine
 
 #[cfg(test)]
 mod read_tests {
+    /// A size whose bytes overflow a u32 isn't taken for a small picture (it used to wrap and pass the check).
+    #[test]
+    fn huge_sizes_are_refused() {
+        assert!(super::holds(&[0; 16], 2, 2));
+        assert!(!super::holds(&[0; 16], 0, 2));
+        assert!(!super::holds(&[0; 16], 2, 3));
+        assert!(!super::holds(&[0; 16], 65_536, 16_384), "65536 * 16384 * 4 wraps to 0 in u32");
+        assert!(super::look(&[0; 16], 65_536, 16_384, &Default::default()).is_err());
+    }
+
     /// A QR code drawn by Phosphor's own generator is read back by Vision.
     #[test]
     fn reads_a_qr_code() {
