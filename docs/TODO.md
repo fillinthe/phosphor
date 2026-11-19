@@ -4,7 +4,7 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 
 ## Future (owner, 2026-11-18)
 
-- **Phosphor on a Raspberry Pi: a backup player that runs the show on its own** (owner's design, 2026-11-18):
+- **Phosphor on a Raspberry Pi: a backup player that runs the show on its own** (owner's design, 2026-11-18; **not yet**, owner 2026-11-18: no Pi to test on):
   1. **Make the card:** in Phosphor, "Set up a Pi…" asks for the Wi-Fi name and password (and the device's name),
      then writes a ready-to-boot SD card (Raspberry Pi OS Lite + the Phosphor player + those settings), like the Pi
      Imager does. Nothing to type on the Pi. Phosphor downloads what the card needs itself: the latest Raspberry Pi
@@ -93,8 +93,9 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       canvas). **Next:** a live readout on each box (size, cost: needs per-box timing from the engine first); number
       boxes for MIDI / OSC in (a Number box set to Hand / MIDI knob can be mapped already); more than four pictures
       into a Switch.
-- [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
-- [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
+- [ ] **Designer** (owner said yes, 2026-11-18): one Number box driving several Text templates (a countdown / score shown in
+      many text layers); a web box reading a list (headlines, a song list) and showing the next item every few seconds.
+- [ ] *(skipped for now, 2026-11-18)* **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
       add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
 - [~] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14; "full MadMapper-style" 2026-11-15). Built
@@ -181,12 +182,13 @@ source, or a proxy on your server.
 
 ## Ideas
 
-- [~] *(2026-11-18: Reach from the internet (router opens the port by UPnP, public address shown) + Show its picture (the output as a live layer) built; not tried across two networks. Left: a relay for routers that won't open a port or sit behind a phone / carrier network (needs a server, e.g. through the G Workshop account), encryption for that link)* **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
+- [~] *(relay: later, owner 2026-11-18: maybe something online through the gworkshop site)* *(2026-11-18: Reach from the internet (router opens the port by UPnP, public address shown) + Show its picture (the output as a live layer) built; not tried across two networks. Left: a relay for routers that won't open a port or sit behind a phone / carrier network (needs a server, e.g. through the G Workshop account), encryption for that link)* **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
       network (`follow::{Link, Leader}`, the `/follow` socket); reach a Phosphor somewhere else (relay or invite
       link through the G Workshop account, NAT traversal, latency and media that isn't on the other machine).
 - [ ] **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another
       Phosphor so someone can take over when you leave, ideally live (state sync, then the other one takes the
       outputs). Today: File › Export show (a folder with the media) and Follow on the same network.
+      **Owner, 2026-11-18: both:** one packed show file (media inside) first, then sending a show to another Phosphor on the network.
 
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colors to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
