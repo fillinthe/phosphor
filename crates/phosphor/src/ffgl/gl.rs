@@ -149,8 +149,9 @@ impl Drop for Gl {
 fn iosurface(w: u32, h: u32) -> Option<*mut c_void> {
     let dict_class = AnyClass::get(c"NSMutableDictionary")?;
     let num_class = AnyClass::get(c"NSNumber")?;
-    // SAFETY: plain Foundation calls; the dictionary (toll-free bridged to CFDictionary) lives in this scope.
-    unsafe {
+    // SAFETY: plain Foundation calls; the dictionary (toll-free bridged to CFDictionary) lives in this scope. The
+    // dictionary and numbers are autoreleased: a pool of our own lets them go here, whichever thread asks.
+    objc2::rc::autoreleasepool(|_| unsafe {
         let dict: *mut AnyObject = msg_send![dict_class, dictionary];
         let put = |key: &str, v: usize| {
             let n: *mut AnyObject = msg_send![num_class, numberWithUnsignedLong: v];
@@ -163,7 +164,7 @@ fn iosurface(w: u32, h: u32) -> Option<*mut c_void> {
         put("IOSurfacePixelFormat", u32::from_be_bytes(*b"RGBA") as usize);
         let s = IOSurfaceCreate(dict as *const c_void);
         (!s.is_null()).then_some(s)
-    }
+    })
 }
 
 /// A plain GL texture with a framebuffer on it.
@@ -278,9 +279,17 @@ fn program(fragment: &str) -> Option<u32> {
             glCompileShader(sh);
             let mut ok = 0;
             glGetShaderiv(sh, GL_COMPILE_STATUS, &mut ok);
-            (ok != 0).then_some(sh)
+            if ok == 0 {
+                glDeleteShader(sh);
+                return None;
+            }
+            Some(sh)
         };
-        let (v, f) = (compile(GL_VERTEX_SHADER, VERTEX)?, compile(GL_FRAGMENT_SHADER, fragment)?);
+        let v = compile(GL_VERTEX_SHADER, VERTEX)?;
+        let Some(f) = compile(GL_FRAGMENT_SHADER, fragment) else {
+            glDeleteShader(v);
+            return None;
+        };
         let p = glCreateProgram();
         glAttachShader(p, v);
         glAttachShader(p, f);
