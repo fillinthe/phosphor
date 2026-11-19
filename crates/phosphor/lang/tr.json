@@ -5439,5 +5439,7 @@
 "not a Trace drawing (no drawing in it)": "Trace çizimi değil (içinde çizim yok)",
 "not a Trace drawing (no layers)": "Trace çizimi değil (katman yok)",
 "not a Trace drawing ({0})": "Trace çizimi değil ({0})",
-"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace çizimini aç"
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace çizimini aç",
+"User Manual": "Kullanım Kılavuzu",
+"Help: the user manual on phosphorfx.com, always up to date": "Yardım: phosphorfx.com'daki kullanım kılavuzu, her zaman güncel"
 }

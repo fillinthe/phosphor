@@ -5439,5 +5439,7 @@
 "not a Trace drawing (no drawing in it)": "不是 Trace 绘图（其中没有绘图）",
 "not a Trace drawing (no layers)": "不是 Trace 绘图（没有图层）",
 "not a Trace drawing ({0})": "不是 Trace 绘图（{0}）",
-"{0} Open Morpholio Trace Drawing": "{0} 打开 Morpholio Trace 绘图"
+"{0} Open Morpholio Trace Drawing": "{0} 打开 Morpholio Trace 绘图",
+"User Manual": "用户手册",
+"Help: the user manual on phosphorfx.com, always up to date": "帮助：phosphorfx.com 上的用户手册，始终是最新的"
 }

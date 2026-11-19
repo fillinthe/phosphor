@@ -5439,5 +5439,7 @@
 "not a Trace drawing (no drawing in it)": "geen Trace-tekening (er staat geen tekening in)",
 "not a Trace drawing (no layers)": "geen Trace-tekening (geen lagen)",
 "not a Trace drawing ({0})": "geen Trace-tekening ({0})",
-"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace-tekening openen"
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace-tekening openen",
+"User Manual": "Handleiding",
+"Help: the user manual on phosphorfx.com, always up to date": "Help: de handleiding op phosphorfx.com, altijd bijgewerkt"
 }

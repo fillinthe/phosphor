@@ -5439,5 +5439,7 @@
 "not a Trace drawing (no drawing in it)": "não é um desenho do Trace (nenhum desenho dentro)",
 "not a Trace drawing (no layers)": "não é um desenho do Trace (sem camadas)",
 "not a Trace drawing ({0})": "não é um desenho do Trace ({0})",
-"{0} Open Morpholio Trace Drawing": "{0} Abrir desenho do Morpholio Trace"
+"{0} Open Morpholio Trace Drawing": "{0} Abrir desenho do Morpholio Trace",
+"User Manual": "Manual do Usuário",
+"Help: the user manual on phosphorfx.com, always up to date": "Ajuda: o manual do usuário em phosphorfx.com, sempre atualizado"
 }

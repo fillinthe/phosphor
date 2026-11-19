@@ -170,6 +170,7 @@ impl PhosphorApp {
             A::Notes => ctx.open_url(egui::OpenUrl::new_tab("https://github.com/fillinthe/phosphor/releases")),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
+            A::Manual => ctx.open_url(egui::OpenUrl::new_tab(crate::support::manual_url())),
             A::Donate => ctx.open_url(egui::OpenUrl::new_tab(crate::support::DONATE_URL)),
             #[cfg(target_arch = "wasm32")]
             A::ShaderFolder | A::LutFolder => {}
@@ -336,6 +337,10 @@ impl PhosphorApp {
                     crate::support::donate_button(ui);
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
                     self.state.updater.top_bar_button(ui);
+                    // Help: the manual lives on the website (always the latest), in the app's language.
+                    if crate::ui::command(ui, icon::QUESTION).on_hover_text("Help: the user manual on phosphorfx.com, always up to date").clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(crate::support::manual_url()));
+                    }
                     let before = self.ui_brightness;
                     crate::ui::field_menu(ui, icon::SUN, |ui| {
                         ui.label(egui::RichText::new("Interface brightness").strong());
