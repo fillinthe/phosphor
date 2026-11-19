@@ -22,6 +22,8 @@ pub enum PeerKind {
     Guest,
     /// Another Phosphor playing this show on its own outputs (`crate::follow`).
     Follower,
+    /// Another Phosphor taking a show this one sends (`crate::show_send`).
+    Receiver,
 }
 
 /// A phone/tablet/browser connected to the session.
@@ -430,6 +432,9 @@ pub struct NetSession {
     /// The secure listener (port + 1) is up.
     pub https: bool,
     pub status: String,
+    /// Shows sent to and from other Phosphors (`crate::show_send`): offers made here, the pack handed out.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub shows: crate::show_send::Hub,
 }
 
 impl NetSession {
@@ -463,6 +468,8 @@ impl NetSession {
             webrtc: Default::default(),
             https: false,
             status: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            shows: Default::default(),
         }
     }
 
@@ -492,6 +499,11 @@ impl NetSession {
     /// Sets (or clears) the password needed to control from a phone; viewing never needs it.
     pub fn set_password(&self, password: Option<String>) {
         *self.password.lock().unwrap() = password.filter(|p| !p.is_empty());
+    }
+
+    /// The session has a password (other Phosphors need it to follow, or to take a show sent from here).
+    pub fn has_password(&self) -> bool {
+        self.password.lock().unwrap().is_some()
     }
 
     /// Everyone connected right now.
@@ -563,10 +575,12 @@ impl NetSession {
             }
         };
         self.https = tls.is_some();
-        // Bonjour: phones on the Wi-Fi can type phosphor.local instead of the address.
-        self.mdns = crate::control::local_ip().and_then(|ip| {
+        // Bonjour: phones on the Wi-Fi can type phosphor.local instead of the address; other Phosphors find this
+        // Session by its name and `app=phosphor` (to send it a show). (Not from tests: nothing goes on the network.)
+        self.mdns = crate::control::local_ip().filter(|_| !cfg!(test)).and_then(|ip| {
             let daemon = mdns_sd::ServiceDaemon::new().ok()?;
-            let info = mdns_sd::ServiceInfo::new("_http._tcp.local.", "Phosphor Session", "phosphor.local.", ip.as_str(), self.port, std::collections::HashMap::<String, String>::new()).ok()?;
+            let name = crate::control::discovery::identity().0;
+            let info = mdns_sd::ServiceInfo::new(crate::control::discovery::SESSION_SERVICE, &name, "phosphor.local.", ip.as_str(), self.port, crate::control::discovery::properties()).ok()?;
             daemon.register(info).ok()?;
             Some(daemon)
         });
@@ -581,6 +595,7 @@ impl NetSession {
         let thumbs = self.thumbs.clone();
         let files = self.files.clone();
         let follow = (self.follow.clone(), self.followers.clone(), self.webrtc.clone());
+        let shows = self.shows.clone();
         self.webrtc.set_fps(self.fps);
         std::thread::Builder::new()
             .name("phosphor-net".into())
@@ -590,11 +605,11 @@ impl NetSession {
                     // A thread per connection, as many as the session allows (a full session closes new ones at once).
                     let take = |stream: std::net::TcpStream, from: std::net::SocketAddr, cfg: Option<Arc<rustls::ServerConfig>>| {
                         let Some(entry) = Entry::open(&registry, &from.ip().to_string()) else { return };
-                        let (running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow) =
-                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), files.clone(), follow.clone());
+                        let (running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow, shows) =
+                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), files.clone(), follow.clone(), shows.clone());
                         let _ = std::thread::Builder::new().name("phosphor-net-conn".into()).spawn(move || {
                             let _entry = entry;
-                            native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow);
+                            native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow, shows);
                         });
                     };
                     match listener.accept() {
@@ -740,6 +755,12 @@ impl NetSession {
     }
 }
 
+/// An id nobody can guess (16 random bytes as hex): guest ids, the token a sent show is handed out under.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn new_token() -> String {
+    native::new_token()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::collections::VecDeque;
@@ -812,6 +833,7 @@ mod native {
         thumbs: Thumbs,
         files: super::Files,
         follow: (crate::follow::SharedFeed, Arc<AtomicUsize>, crate::webrtc::Hub),
+        shows: crate::show_send::Hub,
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -844,7 +866,7 @@ mod native {
             return;
         }
         let device = super::device_label(&request);
-        let controls = ["/control", "/guest", "/audio", "/follow"].iter().any(|p| path.starts_with(p)) || (path.starts_with("/whep") && request.starts_with("POST"));
+        let controls = ["/control", "/guest", "/audio", "/follow", crate::show_send::OFFER_PATH].iter().any(|p| path.starts_with(p)) || (path.starts_with("/whep") && request.starts_with("POST"));
         if controls && super::cross_site(&request) {
             let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             return;
@@ -861,18 +883,7 @@ mod native {
         }
         // WebRTC (WHEP): the browser posts its offer (SDP), gets the answer; the picture then comes over UDP.
         if path.starts_with("/whep") && request.starts_with("POST") {
-            let len = super::header(&request, "Content-Length").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(64 * 1024);
-            // The connection replays the request head first: read head + body, then keep what's after the head.
-            let head_len = request.find("\r\n\r\n").map_or(request.len(), |i| i + 4);
-            let mut all = Vec::with_capacity(head_len + len);
-            let mut chunk = [0u8; 4096];
-            while all.len() < head_len + len {
-                match stream.read(&mut chunk) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => all.extend_from_slice(&chunk[..n]),
-                }
-            }
-            let body = all.get(head_len..).unwrap_or_default().to_vec();
+            let body = read_body(&mut stream, &request, 64 * 1024);
             let host = tcp.local_addr().map(|a| a.ip()).unwrap_or(std::net::IpAddr::from([127, 0, 0, 1]));
             // Each WebRTC viewer is listed in Devices (and can be disconnected or blocked there) for as long as it watches.
             let seat = super::Seat::join(&registry, super::PeerKind::Viewer, &ip, &device);
@@ -900,6 +911,24 @@ mod native {
             follow.1.fetch_add(1, Ordering::Relaxed);
             crate::follow::serve(ws, follow.0, || running.load(Ordering::Relaxed) && !seat.kicked());
             follow.1.fetch_sub(1, Ordering::Relaxed);
+            return;
+        }
+        // Shows sent between Phosphors: offers made to this one, and the pack this one hands out.
+        if path.starts_with(crate::show_send::OFFER_PATH) || path.starts_with(crate::show_send::PACK_PATH) {
+            let post = request.starts_with("POST");
+            let body = if post { read_body(&mut stream, &request, crate::show_send::MAX_OFFER_BODY) } else { Vec::new() };
+            let taking = path.starts_with(crate::show_send::PACK_PATH);
+            // Only a download is someone connected (listed in Devices, can be dropped or blocked there).
+            let seat = taking.then(|| super::Seat::join(&registry, super::PeerKind::Receiver, &ip, "Phosphor (taking a show)"));
+            let current = remote.3.lock().unwrap().clone();
+            let tried = super::header(&request, crate::show_send::PASSWORD_HEADER).unwrap_or("").to_string();
+            let password_ok = || match (&current, &seat) {
+                (Some(p), Some(seat)) => seat.try_password(&tried, p),
+                (Some(_), None) => false,
+                (None, _) => true,
+            };
+            let stay = || running.load(Ordering::Relaxed) && !seat.as_ref().is_some_and(|s| s.kicked());
+            crate::show_send::serve(&mut stream, post, &path, &ip, &body, &shows, password_ok, stay);
             return;
         }
         if path.starts_with("/audio") {
@@ -992,8 +1021,24 @@ mod native {
         }
     }
 
+    /// The body of a POST (at most `max` bytes): the connection replays the request head first, so head + body are
+    /// read and what's after the head is kept.
+    fn read_body(stream: &mut impl Read, request: &str, max: usize) -> Vec<u8> {
+        let len = super::header(request, "Content-Length").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(max);
+        let head_len = request.find("\r\n\r\n").map_or(request.len(), |i| i + 4);
+        let mut all = Vec::with_capacity(head_len + len);
+        let mut chunk = [0u8; 4096];
+        while all.len() < head_len + len {
+            match stream.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => all.extend_from_slice(&chunk[..n]),
+            }
+        }
+        all.get(head_len..head_len + len).or_else(|| all.get(head_len..)).unwrap_or_default().to_vec()
+    }
+
     /// A guest id nobody can guess: 16 random bytes as hex.
-    fn new_token() -> String {
+    pub(super) fn new_token() -> String {
         let mut bytes = [0u8; 16];
         if rustls::crypto::ring::default_provider().secure_random.fill(&mut bytes).is_err() {
             // (Never expected; the time still makes a different id each call.)

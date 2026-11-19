@@ -19,6 +19,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
   answer, it keeps showing the last list and says so in the box. Long items wrap onto more lines.
 - Designer: letting go of a number wire on empty canvas now offers a Text box, and the box you pick there comes
   wired (a Number picked that way used to come unwired).
+- **Packed shows** (File › Save Packed Show…): the whole show in one `.phosphorpack` file (the project, every media
+  file, and the shaders and LUTs it uses) to carry to another computer. Open it there with File › Open (or drop it
+  on Phosphor): it unpacks into a folder beside it (or one you pick) and the show opens with all its media found.
+- **Send this show to another Phosphor on your network** (Session panel › Send this show): pick one of the
+  Phosphors listed; the other computer asks "… wants to send you a show (2.3 GB). Accept?" and nothing arrives
+  without a yes. It needs your Session password when you have one. Both sides see how far it got and can cancel;
+  the show opens there when it arrives (in Documents › Phosphor Shows).
+- Export Show now also carries LUTs and shaders kept in subfolders.
 
 ## 0.5.11 (2026-11-18)
 

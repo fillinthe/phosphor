@@ -168,6 +168,19 @@ impl PhosphorApp {
                         st.notice = Some(format!("\"{name}\" now has every clip in that folder, and new ones as they arrive"));
                     }
                 }
+                Purpose::OpenProject if paths.first().is_some_and(|p| crate::pack::is_pack(p)) => {
+                    crate::panels::open_pack(st, paths[0].clone());
+                }
+                Purpose::SavePackedShow => {
+                    if let Some(p) = paths.first() {
+                        crate::panels::save_pack(st, p.with_extension(crate::pack::EXT));
+                    }
+                }
+                Purpose::UnpackInto => {
+                    if let (Some(folder), Some(o)) = (paths.first(), st.packs.opening.as_mut()) {
+                        o.choose(folder);
+                    }
+                }
                 Purpose::OpenProject => {
                     if let Some(p) = paths.first() {
                         match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
@@ -534,6 +547,12 @@ impl PhosphorApp {
     pub(crate) fn handle_dropped_files(&mut self, ctx: &egui::Context) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         if dropped.is_empty() {
+            return;
+        }
+        // A packed show dropped on the window: asks where to unpack it, then opens it.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(pack) = dropped.iter().map(|f| f.path().to_path_buf()).find(|p| crate::pack::is_pack(p)) {
+            crate::panels::open_pack(&mut self.state, pack);
             return;
         }
         let now = ctx.input(|i| i.time);

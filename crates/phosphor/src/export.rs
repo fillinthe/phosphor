@@ -5,25 +5,12 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
 
 use phosphor_engine::{Composition, shaders};
 
 use crate::show::{MANIFEST, Manifest, PROJECT, slug};
 
-#[derive(Clone, Debug, Default)]
-pub struct Progress {
-    pub step: String,
-    pub done: bool,
-    pub error: Option<String>,
-    /// The finished app (and zip, if made).
-    pub output: Option<PathBuf>,
-    pub zip: Option<PathBuf>,
-    pub media_files: usize,
-    pub bytes: u64,
-}
-
-pub type Shared = Arc<Mutex<Progress>>;
+pub use crate::job::Shared;
 
 pub struct Request {
     pub comp: Composition,
@@ -47,25 +34,11 @@ pub fn summary(comp: &Composition) -> (usize, u64, usize) {
 
 /// Starts the export on a background thread; the UI polls the returned progress.
 pub fn start(req: Request) -> Shared {
-    let p: Shared = Default::default();
-    let progress = p.clone();
-    std::thread::Builder::new()
-        .name("phosphor-export".into())
-        .spawn(move || {
-            let result = run(req, &progress);
-            let mut g = progress.lock().unwrap();
-            g.done = true;
-            match result {
-                Ok(()) => g.step = "Done".into(),
-                Err(e) => g.error = Some(e),
-            }
-        })
-        .expect("export thread");
-    p
+    crate::job::spawn("phosphor-export", move |p| run(req, p))
 }
 
 fn step(p: &Shared, s: &str) {
-    p.lock().unwrap().step = s.to_string();
+    crate::job::step(p, s);
 }
 
 /// Phosphor.app this binary lives in (or the installed / freshly built one when run from target/).
@@ -123,84 +96,22 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         copy_folder_app(exe.parent().ok_or("Can't tell where Phosphor is installed")?, &exe, &req.dest, &name)?
     };
-    let media = show.join("media");
-    std::fs::create_dir_all(&media).map_err(|e| e.to_string())?;
-
-    // Media: copy each file once, under a unique name, and point the project at the copy.
+    // Media and shaders: each file once, under a unique name, and the project pointed at the copies.
+    let plan = plan(&req.comp);
+    p.lock().unwrap().total = plan.bytes();
+    let total = plan.files.len();
+    for (i, (src, rel)) in plan.files.iter().enumerate() {
+        step(p, &format!("Copying {}/{total}: {}", i + 1, rel));
+        let to = show.join(rel);
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        let n = std::fs::copy(src, &to).map_err(|e| format!("copying {}: {e}", src.display()))?;
+        p.lock().unwrap().bytes += n;
+    }
     let mut comp = req.comp;
-    let mut copied: HashMap<String, String> = HashMap::new();
-    let mut names: HashSet<String> = HashSet::new();
-    let mut failed: Vec<String> = Vec::new();
-    let mut bytes = 0u64;
-    let paths = comp.media_paths();
-    let total = paths.len();
-    for (i, path) in paths.iter().enumerate() {
-        // An image sequence: all its frames into a folder of their own.
-        if crate::media::sequence::is_sequence(path) {
-            let frames = crate::media::sequence::members(path);
-            if frames.is_empty() {
-                failed.push(path.clone());
-                continue;
-            }
-            let mut folder = crate::media::sequence::label(path);
-            let mut n = 2;
-            while !names.insert(folder.clone()) {
-                folder = format!("{} {n}", crate::media::sequence::label(path));
-                n += 1;
-            }
-            let dir = media.join(&folder);
-            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            step(p, &format!("Copying media {}/{total}: {folder} ({} frames)", i + 1, frames.len()));
-            for f in &frames {
-                bytes += std::fs::copy(f, dir.join(f.file_name().unwrap_or_default())).map_err(|e| format!("copying {}: {e}", f.display()))?;
-            }
-            let pattern = Path::new(path).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            copied.insert(path.clone(), format!("media/{folder}/{pattern}"));
-            continue;
-        }
-        let src = Path::new(path);
-        if !src.is_file() {
-            failed.push(path.clone());
-            continue;
-        }
-        let file = src.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_else(|| "media".into());
-        let mut unique = file.clone();
-        let mut n = 2;
-        while !names.insert(unique.clone()) {
-            let stem = Path::new(&file).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let ext = Path::new(&file).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-            unique = format!("{stem} {n}{ext}");
-            n += 1;
-        }
-        step(p, &format!("Copying media {}/{total}: {file}", i + 1));
-        bytes += std::fs::copy(src, media.join(&unique)).map_err(|e| format!("copying {path}: {e}"))?;
-        copied.insert(path.clone(), format!("media/{unique}"));
-    }
-    comp.map_paths(|path| copied.get(path).cloned().unwrap_or_else(|| path.to_string()));
-
-    // Shaders the show uses: imported ISF files and your own Shader Editor effects.
-    step(p, "Packing shaders…");
-    let used = comp.used_shader_ids();
-    let isf_dir = show.join("isf");
-    let fx_dir = show.join("effects");
-    for id in &used {
-        if let Some(slug) = id.strip_prefix(shaders::ISF_EFFECT).or_else(|| id.strip_prefix(shaders::ISF_GENERATOR)) {
-            if let Some(fs) = find_isf(slug) {
-                std::fs::create_dir_all(&isf_dir).map_err(|e| e.to_string())?;
-                let _ = std::fs::copy(&fs, isf_dir.join(format!("{slug}.fs")));
-                let vs = fs.with_extension("vs");
-                if vs.is_file() {
-                    let _ = std::fs::copy(&vs, isf_dir.join(format!("{slug}.vs")));
-                }
-            }
-        } else if let Some(slug) = id.strip_prefix(shaders::CUSTOM_EFFECT).or_else(|| id.strip_prefix(shaders::CUSTOM_GENERATOR)).or_else(|| id.strip_prefix(shaders::CUSTOM_BLEND)) {
-            let file = crate::show::storage_dir().map(|d| d.join("effects").join(format!("{slug}.wgsl")));
-            if let Some(file) = file.filter(|f| f.is_file()) {
-                std::fs::create_dir_all(&fx_dir).map_err(|e| e.to_string())?;
-                let _ = std::fs::copy(&file, fx_dir.join(format!("{slug}.wgsl")));
-            }
-        }
-    }
+    plan.point_at_copies(&mut comp);
+    let failed = plan.missing.clone();
 
     step(p, "Writing project…");
     std::fs::write(show.join(PROJECT), comp.to_json()).map_err(|e| e.to_string())?;
@@ -251,33 +162,122 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
     let mut g = p.lock().unwrap();
     g.output = Some(app);
     g.zip = zip;
-    g.media_files = copied.len();
-    g.bytes = bytes;
+    g.media_files = plan.media;
     if !failed.is_empty() {
         g.error = Some(crate::ui::plural(failed.len(), "{0} media file was missing and isn't in the show (listed in missing-media.txt)", "{0} media files were missing and aren't in the show (listed in missing-media.txt)"));
     }
     Ok(())
 }
 
-fn find_isf(slug: &str) -> Option<PathBuf> {
-    for dir in crate::isf_lib::folders() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for e in entries.flatten() {
-            let path = e.path();
-            if path.extension().is_some_and(|x| x == "fs")
-                && let Some(stem) = path.file_stem()
-            {
-                if phosphor_engine::custom::slug(&stem.to_string_lossy()) == slug {
-                    return Some(path);
-                }
+/// What a show carries: every file it needs, where each goes inside the show ("media/clip.mov", "isf/glow.fs"),
+/// and how the project's paths change to point there. One walk over the project for Export Show and packed shows.
+#[derive(Default)]
+pub struct Plan {
+    /// (file on this computer, path inside the show; always "/"-separated).
+    pub files: Vec<(PathBuf, String)>,
+    /// Project path → its copy's path inside the show (an image sequence keeps its pattern).
+    pub paths: HashMap<String, String>,
+    /// Media files that couldn't be found (left out).
+    pub missing: Vec<String>,
+    /// How many media files (a sequence counts once).
+    pub media: usize,
+}
+
+impl Plan {
+    /// Bytes to copy (reads each file's size).
+    pub fn bytes(&self) -> u64 {
+        self.files.iter().filter_map(|(f, _)| std::fs::metadata(f).ok()).map(|m| m.len()).sum()
+    }
+
+    /// Points the project's media at the copies (paths relative to the show's folder).
+    pub fn point_at_copies(&self, comp: &mut Composition) {
+        comp.map_paths(|path| self.paths.get(path).cloned().unwrap_or_else(|| path.to_string()));
+    }
+}
+
+/// Works out the `Plan` for a project: its media (each under a unique name, sequences in a folder of their own) and
+/// the shaders it uses that aren't built in (imported ISF / LUT files, your own Shader Editor effects).
+pub fn plan(comp: &Composition) -> Plan {
+    let mut plan = Plan::default();
+    // Names already taken in media/ (lower case: Mac and Windows disks don't tell "A.mov" from "a.mov").
+    let mut names: HashSet<String> = HashSet::new();
+    let mut unique = |wanted: String, ext: &str| {
+        let mut name = format!("{wanted}{ext}");
+        let mut n = 2;
+        while !names.insert(name.to_lowercase()) {
+            name = format!("{wanted} {n}{ext}");
+            n += 1;
+        }
+        name
+    };
+    for path in comp.media_paths() {
+        // An image sequence: all its frames into a folder of their own.
+        if crate::media::sequence::is_sequence(&path) {
+            let frames = crate::media::sequence::members(&path);
+            if frames.is_empty() {
+                plan.missing.push(path);
+                continue;
+            }
+            let folder = unique(crate::media::sequence::label(&path), "");
+            for f in frames {
+                let rel = format!("media/{folder}/{}", f.file_name().unwrap_or_default().to_string_lossy());
+                plan.files.push((f, rel));
+            }
+            let pattern = Path::new(&path).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            plan.paths.insert(path, format!("media/{folder}/{pattern}"));
+            plan.media += 1;
+            continue;
+        }
+        let src = PathBuf::from(&path);
+        if !src.is_file() {
+            plan.missing.push(path);
+            continue;
+        }
+        let stem = src.file_stem().map_or_else(|| "media".into(), |s| s.to_string_lossy().into_owned());
+        let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let rel = format!("media/{}", unique(stem, &ext));
+        plan.paths.insert(path, rel.clone());
+        plan.files.push((src, rel));
+        plan.media += 1;
+    }
+    for id in comp.used_shader_ids() {
+        if let Some(slug) = id.strip_prefix(shaders::ISF_EFFECT).or_else(|| id.strip_prefix(shaders::ISF_GENERATOR)) {
+            for f in find_isf(slug) {
+                let rel = format!("isf/{}", f.file_name().unwrap_or_default().to_string_lossy());
+                plan.files.push((f, rel));
+            }
+        } else if let Some(slug) = id.strip_prefix(shaders::CUSTOM_EFFECT).or_else(|| id.strip_prefix(shaders::CUSTOM_GENERATOR)).or_else(|| id.strip_prefix(shaders::CUSTOM_BLEND)) {
+            let file = crate::show::storage_dir().map(|d| d.join("effects").join(format!("{slug}.wgsl")));
+            if let Some(file) = file.filter(|f| f.is_file()) {
+                plan.files.push((file, format!("effects/{slug}.wgsl")));
             }
         }
     }
-    None
+    // (One shader used as an effect and a generator is still one file.)
+    let mut seen = HashSet::new();
+    plan.files.retain(|(_, rel)| seen.insert(rel.clone()));
+    plan
+}
+
+/// The file(s) behind an ISF id's slug anywhere in the shader folders: the `.fs` (and its `.vs`), a `.glsl`, or a
+/// LUT's `.cube` (`lut_<slug>`). Empty when nothing is found.
+pub fn find_isf(slug: &str) -> Vec<PathBuf> {
+    for dir in crate::isf_lib::folders() {
+        for path in crate::isf_lib::shader_files(dir) {
+            let (Some(stem), Some(ext)) = (path.file_stem(), path.extension()) else { continue };
+            let own = phosphor_engine::custom::slug(&stem.to_string_lossy());
+            let hit = if ext == "cube" { slug.strip_prefix("lut_") == Some(own.as_str()) } else { own == slug };
+            if hit {
+                let vs = path.with_extension("vs");
+                return std::iter::once(path).chain(vs.is_file().then_some(vs)).collect();
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// Local date and time, e.g. "2026-10-14 15:02" (UTC where there's no `date` command).
-fn chrono_now() -> String {
+pub(crate) fn chrono_now() -> String {
     let local = crate::os::command("date").arg("+%Y-%m-%d %H:%M").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| s.len() == 16);
     local.unwrap_or_else(|| {
         let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;

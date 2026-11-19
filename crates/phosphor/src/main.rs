@@ -90,6 +90,12 @@ mod pad_kit;
 #[cfg(not(target_arch = "wasm32"))]
 mod export;
 #[cfg(not(target_arch = "wasm32"))]
+mod job;
+#[cfg(not(target_arch = "wasm32"))]
+mod pack;
+#[cfg(not(target_arch = "wasm32"))]
+mod show_send;
+#[cfg(not(target_arch = "wasm32"))]
 mod import;
 mod history;
 mod menu;

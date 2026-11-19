@@ -34,7 +34,7 @@ impl PhosphorApp {
             }
             A::Open => {
                 #[cfg(not(target_arch = "wasm32"))]
-                st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project", &["phosphor"])));
+                st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project or packed show", &["phosphor", crate::pack::EXT])));
                 #[cfg(target_arch = "wasm32")]
                 crate::web_files::pick_text(".phosphor,.json");
             }
@@ -75,6 +75,10 @@ impl PhosphorApp {
             A::Snapshot => {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.save_snapshot();
+            }
+            A::SavePacked => {
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::panels::ask_save_pack(st);
             }
             A::ExportShow => {
                 #[cfg(not(target_arch = "wasm32"))]

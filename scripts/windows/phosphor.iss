@@ -55,6 +55,11 @@ Root: HKCU; Subkey: "Software\Classes\.phosphor"; ValueType: string; ValueData: 
 Root: HKCU; Subkey: "Software\Classes\Phosphor.Project"; ValueType: string; ValueData: "Phosphor project"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Phosphor.Project\DefaultIcon"; ValueType: string; ValueData: "{app}\Phosphor.exe,0"
 Root: HKCU; Subkey: "Software\Classes\Phosphor.Project\shell\open\command"; ValueType: string; ValueData: """{app}\Phosphor.exe"" ""%1"""
+; Packed shows (.phosphorpack) too: Phosphor asks where to unpack, then opens the show.
+Root: HKCU; Subkey: "Software\Classes\.phosphorpack"; ValueType: string; ValueData: "Phosphor.Pack"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\Phosphor.Pack"; ValueType: string; ValueData: "Phosphor packed show"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Phosphor.Pack\DefaultIcon"; ValueType: string; ValueData: "{app}\Phosphor.exe,0"
+Root: HKCU; Subkey: "Software\Classes\Phosphor.Pack\shell\open\command"; ValueType: string; ValueData: """{app}\Phosphor.exe"" ""%1"""
 
 [Run]
 Filename: "{app}\Phosphor.exe"; Description: "Open Phosphor now"; Flags: nowait postinstall skipifsilent

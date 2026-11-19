@@ -60,7 +60,7 @@ enum Found {
 }
 
 /// The shader, LUT and GLSL files in an ISF folder, two levels deep (MadMapper keeps each material in a folder).
-fn shader_files(dir: std::path::PathBuf) -> Vec<std::path::PathBuf> {
+pub(crate) fn shader_files(dir: std::path::PathBuf) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
     let mut stack = vec![(dir, 0u8)];
     while let Some((d, depth)) = stack.pop() {

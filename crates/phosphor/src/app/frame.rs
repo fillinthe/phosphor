@@ -82,6 +82,8 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         crate::panels::link_window(&ctx, &mut self.state);
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::panels::packs_window(&ctx, &mut self.state);
         crate::panels::modulator_windows(&ctx, &mut self.state);
         crate::panels::drag_ghost(&ctx, &self.state);
         #[cfg(not(target_arch = "wasm32"))]
