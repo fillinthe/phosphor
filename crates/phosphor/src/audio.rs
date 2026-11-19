@@ -159,6 +159,29 @@ mod native {
     /// The newest (left, right) samples; mono sources fill both.
     type Ring = Arc<Mutex<VecDeque<[f32; 2]>>>;
 
+    /// How many samples the ring keeps (made this big up front).
+    const RING_LEN: usize = FFT_SIZE * 2;
+    /// At most this many play-through samples wait for the next frame (about 1.4 s at 48 kHz): a stalled screen
+    /// thread can't make the sound thread's buffer grow.
+    const FRESH_MAX: usize = 1 << 16;
+
+    /// Adds samples to the ring, dropping the oldest first so it never grows past `RING_LEN` (no allocation on the
+    /// sound thread: the ring was made that big).
+    fn push_newest(q: &mut VecDeque<[f32; 2]>, frames: impl IntoIterator<Item = [f32; 2]>) {
+        for f in frames {
+            if q.len() >= RING_LEN {
+                q.pop_front();
+            }
+            q.push_back(f);
+        }
+    }
+
+    /// Locks a buffer the sound thread shares, even after a panic elsewhere (a poisoned lock must not panic there:
+    /// it would abort the app from inside the system's sound callback).
+    fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+        m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     fn device_name(d: &cpal::Device) -> Option<String> {
         d.description().ok().map(|desc| desc.name().to_string())
     }
@@ -200,6 +223,8 @@ mod native {
         through: Option<crate::media::video::sound::PlayThrough>,
         through_on: Arc<std::sync::atomic::AtomicBool>,
         fresh: Arc<Mutex<Vec<[f32; 2]>>>,
+        /// `fresh`'s twin: what the last frame handed to play-through (swapped with `fresh` each frame).
+        heard: Vec<[f32; 2]>,
         /// LTC (audio timecode) on the first two channels, decoded only while `ltc_on`.
         ltc: Arc<Mutex<Ltc>>,
         ltc_on: Arc<std::sync::atomic::AtomicBool>,
@@ -221,7 +246,7 @@ mod native {
             let window = (0..FFT_SIZE).map(|i| 0.5 - 0.5 * (TAU * i as f32 / FFT_SIZE as f32).cos()).collect();
             let mut input = Self {
                 stream: None,
-                ring: Arc::new(Mutex::new(VecDeque::with_capacity(FFT_SIZE * 2))),
+                ring: Arc::new(Mutex::new(VecDeque::with_capacity(RING_LEN))),
                 sample_rate: 48_000,
                 devices: Vec::new(),
                 current: None,
@@ -246,6 +271,7 @@ mod native {
                 through: None,
                 through_on: Default::default(),
                 fresh: Default::default(),
+                heard: Vec::new(),
                 ltc: Arc::new(Mutex::new(Ltc::new(48_000))),
                 ltc_on: Default::default(),
             };
@@ -324,11 +350,7 @@ mod native {
                 self.sample_rate = rate;
                 self.beats = BeatTracker::default();
             }
-            let mut q = self.ring.lock().unwrap();
-            q.extend(samples.chunks_exact(2).map(|lr| [lr[0], lr[1]]));
-            while q.len() > FFT_SIZE * 2 {
-                q.pop_front();
-            }
+            push_newest(&mut lock(&self.ring), samples.chunks_exact(2).map(|lr| [lr[0], lr[1]]));
         }
 
         /// Feeds viewer audio (mono, 48 kHz) into the analyzer.
@@ -336,11 +358,7 @@ mod native {
             if !self.network {
                 return;
             }
-            let mut q = self.ring.lock().unwrap();
-            q.extend(samples.iter().map(|v| [*v; 2]));
-            while q.len() > FFT_SIZE * 2 {
-                q.pop_front();
-            }
+            push_newest(&mut lock(&self.ring), samples.iter().map(|v| [*v; 2]));
         }
 
         pub fn spectrum(&self) -> &[f32] {
@@ -425,7 +443,8 @@ mod native {
             let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
             *self.ltc.lock().unwrap() = Ltc::new(self.sample_rate);
             let (ltc, ltc_on) = (self.ltc.clone(), self.ltc_on.clone());
-            // Keeps the first two channels (one channel = both sides) and only the newest samples.
+            // Keeps the first two channels (one channel = both sides) and only the newest samples. Runs on the
+            // system's sound thread: no allocations (buffers were made big enough), no panics.
             let push = move |data: &[f32]| {
                 if ltc_on.load(std::sync::atomic::Ordering::Relaxed)
                     && let Ok(mut l) = ltc.lock()
@@ -436,32 +455,37 @@ mod native {
                         l.clock.update(d);
                     }
                 }
-                let mut q = ring.lock().unwrap();
-                let start = q.len();
-                for frame in data.chunks(channels) {
-                    q.push_back([frame[0], frame.get(1).copied().unwrap_or(frame[0])]);
-                }
+                let frames = data.chunks(channels).map(|frame| [frame[0], frame.get(1).copied().unwrap_or(frame[0])]);
                 if through_on.load(std::sync::atomic::Ordering::Relaxed)
                     && let Ok(mut f) = fresh.lock()
                 {
-                    f.extend(q.range(start..).copied());
+                    let room = FRESH_MAX.saturating_sub(f.len());
+                    f.extend(frames.clone().take(room));
                 }
-                while q.len() > FFT_SIZE * 2 {
-                    q.pop_front();
-                }
+                push_newest(&mut lock(&ring), frames);
             };
             let err_fn = |e: cpal::Error| log::warn!("audio input: {e}");
+            // Whole numbers become floats in a buffer kept between calls (sized once, for the biggest block seen).
+            let mut floats: Vec<f32> = Vec::with_capacity(8192);
             let stream = match supported.sample_format() {
                 cpal::SampleFormat::F32 => device.build_input_stream(config, move |d: &[f32], _| push(d), err_fn, None),
                 cpal::SampleFormat::I16 => device.build_input_stream(
                     config,
-                    move |d: &[i16], _| push(&d.iter().map(|s| *s as f32 / 32768.0).collect::<Vec<_>>()),
+                    move |d: &[i16], _| {
+                        floats.clear();
+                        floats.extend(d.iter().map(|s| *s as f32 / 32768.0));
+                        push(&floats);
+                    },
                     err_fn,
                     None,
                 ),
                 cpal::SampleFormat::U16 => device.build_input_stream(
                     config,
-                    move |d: &[u16], _| push(&d.iter().map(|s| (*s as f32 - 32768.0) / 32768.0).collect::<Vec<_>>()),
+                    move |d: &[u16], _| {
+                        floats.clear();
+                        floats.extend(d.iter().map(|s| (*s as f32 - 32768.0) / 32768.0));
+                        push(&floats);
+                    },
                     err_fn,
                     None,
                 ),
@@ -479,11 +503,15 @@ mod native {
             self.through_on.store(on, std::sync::atomic::Ordering::Relaxed);
             if !on {
                 self.through = None;
-                self.fresh.lock().unwrap().clear();
+                lock(&self.fresh).clear();
                 return;
             }
             if self.through.is_none() {
                 self.through = crate::media::video::sound::PlayThrough::start();
+                let mut f = lock(&self.fresh);
+                let room = FRESH_MAX.saturating_sub(f.len());
+                f.reserve(room);
+                self.heard.reserve(FRESH_MAX);
             }
             if let Some(t) = &self.through {
                 t.set_gain(gain);
@@ -542,13 +570,10 @@ mod native {
                 if through_on.load(std::sync::atomic::Ordering::Relaxed)
                     && let Ok(mut f) = fresh.lock()
                 {
-                    f.extend_from_slice(frames);
+                    let room = FRESH_MAX.saturating_sub(f.len());
+                    f.extend_from_slice(&frames[..room.min(frames.len())]);
                 }
-                let mut q = ring.lock().unwrap();
-                q.extend(frames.iter().copied());
-                while q.len() > FFT_SIZE * 2 {
-                    q.pop_front();
-                }
+                push_newest(&mut lock(&ring), frames.iter().copied());
             }
         }
 
@@ -559,8 +584,10 @@ mod native {
             }
             // Play-through: what came in since the last frame goes to the sound output.
             if let Some(t) = &self.through {
-                let frames = std::mem::take(&mut *self.fresh.lock().unwrap());
-                t.push(&frames, self.sample_rate);
+                // Swap buffers (both keep their size), so the sound thread never has to grow an emptied one.
+                std::mem::swap(&mut *lock(&self.fresh), &mut self.heard);
+                t.push(&self.heard, self.sample_rate);
+                self.heard.clear();
             }
             #[cfg(any(target_os = "macos", windows))]
             if let Some(rate) = self.ndi.as_ref().map(|(_, r)| r.load(std::sync::atomic::Ordering::Relaxed)).filter(|r| *r > 0 && *r != self.sample_rate) {
@@ -624,6 +651,45 @@ mod native {
             let hit = self.beats.process(kick * kick, dt);
             self.beats.fill(&mut self.analysis, hit);
             self.analysis
+        }
+    }
+
+    #[cfg(test)]
+    mod ring_tests {
+        use super::*;
+
+        /// The ring keeps only the newest `RING_LEN` samples and never grows past the size it was made with (the
+        /// sound thread pushes into it: growing would allocate there), even for a block bigger than the ring.
+        #[test]
+        fn the_ring_keeps_the_newest_without_growing() {
+            let mut q = VecDeque::with_capacity(RING_LEN);
+            let cap = q.capacity();
+            for block in 0..10 {
+                push_newest(&mut q, (0..RING_LEN / 3 + 7).map(|i| [(block * 10_000 + i) as f32; 2]));
+            }
+            push_newest(&mut q, (0..RING_LEN * 3).map(|i| [i as f32, -(i as f32)]));
+            assert_eq!(q.len(), RING_LEN);
+            assert_eq!(q.capacity(), cap, "no new memory");
+            assert_eq!(q.back(), Some(&[(RING_LEN * 3 - 1) as f32, -((RING_LEN * 3 - 1) as f32)]), "newest last");
+            assert_eq!(q.front(), Some(&[(RING_LEN * 2) as f32, -((RING_LEN * 2) as f32)]), "oldest dropped");
+        }
+
+        /// Play-through waits at most `FRESH_MAX` samples and the buffers keep their memory between frames.
+        #[test]
+        fn play_through_buffer_is_bounded_and_kept() {
+            let mut input = AudioInput::new();
+            input.through_on.store(true, std::sync::atomic::Ordering::Relaxed);
+            lock(&input.fresh).reserve(FRESH_MAX);
+            input.heard.reserve(FRESH_MAX);
+            let feed = input.feeder();
+            let block = vec![[0.25f32; 2]; 4096];
+            for _ in 0..(FRESH_MAX / 4096 + 5) {
+                feed(&block);
+            }
+            assert_eq!(lock(&input.fresh).len(), FRESH_MAX, "a stalled frame can't grow it");
+            std::mem::swap(&mut *lock(&input.fresh), &mut input.heard);
+            input.heard.clear();
+            assert!(lock(&input.fresh).capacity() >= FRESH_MAX && input.heard.capacity() >= FRESH_MAX);
         }
     }
 }
