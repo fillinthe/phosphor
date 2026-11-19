@@ -279,3 +279,24 @@ void main() { gl_FragColor = at(inputImage, isf_FragNormCoord, 1.0) + textureLod
     let s = import("lod", fs, None).unwrap();
     validate_wgsl(&s.wgsl).unwrap();
 }
+
+/// Hostile headers: numbers written as "nan" / "inf" strings and min above max never panic (a shader pack can hold
+/// anything); unreadable numbers fall back to the defaults.
+#[test]
+fn odd_numbers_in_a_header_do_not_panic() {
+    for (min, max, default) in [("\"nan\"", "1.0", "0.5"), ("0.0", "\"NaN\"", "0.5"), ("\"-inf\"", "\"inf\"", "\"nan\""), ("2.0", "1.0", "5.0")] {
+        let fs = format!(
+            "/*{{ \"INPUTS\": [ {{ \"NAME\": \"a\", \"TYPE\": \"float\", \"MIN\": {min}, \"MAX\": {max}, \"DEFAULT\": {default} }} ] }}*/\nvoid main() {{ gl_FragColor = vec4(a); }}\n"
+        );
+        let s = import("odd", &fs, None).unwrap();
+        let IsfInputKind::Float { min, max, default } = s.inputs[0].kind else { panic!("a float") };
+        assert!(min.is_finite() && max.is_finite() && default.is_finite(), "{min} {max} {default}");
+    }
+}
+
+/// A non-ASCII letter right before a function definition doesn't cut a character in half.
+#[test]
+fn non_ascii_before_a_function_does_not_panic() {
+    let fs = "/*{ \"INPUTS\": [] }*/\nfloat g() { return 1; }\u{e9}float f(float x) { return 1; }\nvoid main() { gl_FragColor = vec4(f(0.5)); }\n";
+    let _ = import("accent", fs, None);
+}
