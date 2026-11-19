@@ -544,6 +544,23 @@ impl PhosphorApp {
     /// - several files or a folder elsewhere: one new layer with them as its clips, the first playing.
     ///
     /// Everything also goes into the media bin.
+    /// Projects and packed shows double-clicked in Finder or dropped on the Dock icon (`open_files`).
+    pub(crate) fn handle_opened_files(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        for path in crate::open_files::take() {
+            if self.bench.is_some() {
+                println!("OPENED_FILE {}", path.display());
+            }
+            match crate::open_files::kind(&path) {
+                crate::open_files::Opened::Project(p) => {
+                    let _ = self.state.open_project_file(&p.to_string_lossy());
+                }
+                crate::open_files::Opened::Pack(p) => crate::panels::open_pack(&mut self.state, p),
+                crate::open_files::Opened::Other => {}
+            }
+        }
+    }
+
     pub(crate) fn handle_dropped_files(&mut self, ctx: &egui::Context) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         if dropped.is_empty() {

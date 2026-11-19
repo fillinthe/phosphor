@@ -50,7 +50,13 @@ fn create_event_loop(native_options: &mut epi::NativeOptions) -> Result<EventLoo
     }
 
     profiling::scope!("EventLoopBuilder::build");
-    Ok(builder.build()?)
+    let event_loop = builder.build()?;
+    // PHOSPHOR PATCH: the app's hook runs once the platform's app delegate exists, before the app finishes launching
+    // (macOS: Phosphor adds `application:openURLs:` there so files opened from Finder reach it).
+    if let Some(hook) = crate::AFTER_EVENT_LOOP.get() {
+        hook();
+    }
+    Ok(event_loop)
 }
 
 /// Access a thread-local event loop.

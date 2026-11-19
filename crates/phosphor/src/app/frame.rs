@@ -11,6 +11,7 @@ impl PhosphorApp {
 
         if !self.lock.active {
             self.handle_dropped_files(&ctx);
+            self.handle_opened_files();
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(msg) = self.state.gpu_guard.as_ref().and_then(|g| g.poll()) {
