@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Morpholio Trace drawings** open in Phosphor (File › Import…, or drop the .morpholiotrace file on the window):
+  each drawing layer becomes a Phosphor layer with its picture placed as in Trace, its name, opacity and
+  hidden layers kept, in a new folder beside the drawing. (Pen strokes come across as pictures, not lines.)
 - When an update starts downloading, Phosphor sends one anonymous count (just "phosphor", the version you have and
   the new one; no account, no address, nothing about you) so the G Workshop download numbers can tell updates from
   new people. The update never waits for it.
