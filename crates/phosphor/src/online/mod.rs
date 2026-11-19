@@ -462,28 +462,37 @@ fn download_to(url: &str, path: &Path, size: Option<u64>, max: u64, progress: &i
     let part = path.with_extension("part");
     let result = (|| {
         let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
-        let mut reader = response.into_reader().take(max);
-        let mut buf = vec![0u8; 256 << 10];
-        let mut done = 0u64;
-        loop {
-            let n = reader.read(&mut buf).map_err(|e| format!("download stopped: {e}"))?;
-            if n == 0 {
-                break;
-            }
-            out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-            done += n as u64;
-            progress(done, total);
-        }
-        if done == 0 {
-            return Err("the file was empty".to_string());
-        }
-        Ok(())
+        copy_limited(response.into_reader(), &mut out, max, |done| progress(done, total)).map(|_| ())
     })();
     if let Err(e) = result {
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
     std::fs::rename(&part, path).map_err(|e| e.to_string())
+}
+
+/// Copies `reader` into `out` (`progress` with the bytes so far), refusing more than `max` bytes: a file that says no
+/// size and runs past it is an error (it was saved cut off, and looked finished, before). Returns the bytes copied.
+fn copy_limited(reader: impl Read, out: &mut impl Write, max: u64, progress: impl Fn(u64)) -> Result<u64, String> {
+    let mut reader = reader.take(max.saturating_add(1));
+    let mut buf = vec![0u8; 256 << 10];
+    let mut done = 0u64;
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| format!("download stopped: {e}"))?;
+        if n == 0 {
+            break;
+        }
+        done += n as u64;
+        if done > max {
+            return Err(format!("{TOO_BIG} {} MB: too big to bring in", max >> 20));
+        }
+        out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+        progress(done);
+    }
+    if done == 0 {
+        return Err("the file was empty".to_string());
+    }
+    Ok(done)
 }
 
 /// The show's credits: every media bin file that has one, as lines to paste into a programme or a video's notes.
@@ -521,6 +530,17 @@ mod tests {
         let mut milk = item(Kind::Visualizer);
         (milk.id, milk.title) = ("Dancer/Geiss - Spiral.milk".into(), "Geiss - Spiral (Dancer)".into());
         assert_eq!(file_name(&milk, "https://raw.githubusercontent.com/x/master/Dancer/Geiss%20-%20Spiral.milk"), "geiss-spiral-dancer-dancer-geiss-spiral.milk");
+    }
+
+    #[test]
+    fn a_download_past_the_limit_is_refused_not_cut_off() {
+        let mut out = Vec::new();
+        assert_eq!(copy_limited(&[7u8; 100][..], &mut out, 100, |_| {}), Ok(100), "exactly the limit is fine");
+        assert_eq!(out.len(), 100);
+        let mut out = Vec::new();
+        let e = copy_limited(&[7u8; 101][..], &mut out, 100, |_| {}).unwrap_err();
+        assert!(e.starts_with(TOO_BIG), "{e}: a smaller copy is tried then");
+        assert!(copy_limited(&[][..], &mut Vec::new(), 100, |_| {}).is_err(), "empty");
     }
 
     #[test]

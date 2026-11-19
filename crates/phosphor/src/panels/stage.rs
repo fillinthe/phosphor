@@ -256,10 +256,13 @@ fn draw_fixtures(ui: &egui::Ui, st: &mut State, lights: &[Light], rect_of: &dyn 
     {
         st.dmx.watching = true;
     }
+    // (Borrowed: every universe was copied each frame.)
     #[cfg(not(target_arch = "wasm32"))]
-    let sent = st.dmx.sent.clone();
+    let sent = &st.dmx.sent;
     #[cfg(target_arch = "wasm32")]
-    let sent = std::collections::BTreeMap::new();
+    let none = std::collections::BTreeMap::new();
+    #[cfg(target_arch = "wasm32")]
+    let sent = &none;
     let p = ui.painter();
     let snaps: Vec<(u64, [f32; 4])> = lights.iter().map(|l| (l.id, l.rect)).collect();
     let mut moved_to = None;
@@ -268,7 +271,7 @@ fn draw_fixtures(ui: &egui::Ui, st: &mut State, lights: &[Light], rect_of: &dyn 
         if !ui.clip_rect().intersects(screen) {
             continue;
         }
-        let colors = st.comp.dmx.fixtures.iter().find(|f| f.id == l.id).map(|f| f.read(&sent)).unwrap_or_default();
+        let colors = st.comp.dmx.fixtures.iter().find(|f| f.id == l.id).map(|f| f.read(sent)).unwrap_or_default();
         let r = (screen.width().min(screen.height()) * 0.35).clamp(1.0, 6.0);
         let step = (l.dots.len() / 2000).max(1);
         for (i, d) in l.dots.iter().enumerate().step_by(step) {

@@ -104,15 +104,13 @@ impl Engine {
         if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled && wanted(m)) {
             return;
         }
-        let ids: Vec<u64> = mapping.masks.iter().filter(|m| wanted(m)).map(|m| m.id).collect();
         let (key, entry) = match set {
             MaskSet::On(slice) => ((output, slice | 1 << 60), "fs_mask_cut"),
             _ => ((output, u64::MAX), "fs_mask"),
         };
         // Attached masks are placed on their slice first, then moved by their (maybe animated) transform: the hash
         // follows both, so the shape is rebuilt only on frames where it changed.
-        let mut placed = mapping.placed_masks_at(mods, size.0 as f32 / size.1.max(1) as f32);
-        placed.retain(|m| ids.contains(&m.id));
+        let placed = mapping.placed_masks_at_where(mods, size.0 as f32 / size.1.max(1) as f32, wanted);
         // Everything that changes the outline: points, handles, smooth, corners, invert, feather.
         let handles: Vec<[f32; 2]> = placed.iter().flat_map(|m| m.handles.iter().map(|h| h.unwrap_or([f32::NAN; 2]))).collect();
         let flags: Vec<u32> = placed

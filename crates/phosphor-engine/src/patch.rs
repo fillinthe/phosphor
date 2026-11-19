@@ -1281,7 +1281,7 @@ impl Patch {
     /// settings are written into the code as fixed numbers.
     pub fn param_slots(&self) -> Vec<(u32, usize)> {
         let mut slots = Vec::new();
-        for n in self.used().into_iter().filter(|n| !n.bypassed) {
+        for n in self.used().into_iter().filter(|n| !n.bypassed || block(&n.block).is_some_and(|b| b.number)) {
             let count = block(&n.block).map_or(0, |b| b.settings.len());
             slots.extend((0..count).filter(|i| self.setting_source(n.id, *i).is_none()).map(|i| (n.id, i)));
         }
@@ -1373,7 +1373,9 @@ impl Gen<'_> {
             });
         }
         let ret = if b.number { "f32" } else { "vec4f" };
-        if n.bypassed {
+        // (A number block can't be switched off: one marked so in a hand-edited or old patch is written as usual, since
+        // a picture passed through where a number is read doesn't compile.)
+        if n.bypassed && !b.number {
             let through = inputs.first().map_or("none", |s| s.as_str());
             self.funcs.push_str(&format!("\n// {} (switched off)\nfn {name}(uv: vec2f) -> vec4f {{\n    return {through}(uv);\n}}\n", b.name));
             self.visiting.retain(|v| *v != id);
@@ -1477,6 +1479,10 @@ mod tests {
         assert!(src.contains("clamp(n4(uv), 0.0, 1.0)"), "{src}");
         p.set_bypassed(lfo, true);
         assert!(!p.node(lfo).unwrap().bypassed, "number blocks don't switch off");
+        // One marked off anyway (a hand-edited patch line) still compiles and keeps its parameters.
+        let mut odd = p.clone();
+        odd.nodes.iter_mut().find(|n| n.id == lfo).unwrap().bypassed = true;
+        assert_eq!(crate::custom::parse_header(&check(&odd)).unwrap().params.len(), 4);
         // Brightness of: a picture in, a number out.
         let b = p.add("brightness", [0.0, 0.0]);
         p.connect(input, b, 0);

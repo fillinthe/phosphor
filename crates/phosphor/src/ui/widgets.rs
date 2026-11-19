@@ -136,10 +136,20 @@ pub(crate) fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
 /// Draws a QR code for `text` (no image needed: one filled square per dark module).
 /// QR modules for `text`: side length and the dark cells, row by row.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn qr_cells(text: &str) -> Option<(usize, Vec<bool>)> {
-    let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
-    let n = code.width();
-    Some((n, code.to_colors().iter().map(|c| *c == qrcode::Color::Dark).collect()))
+pub(crate) fn qr_cells(text: &str) -> Option<(usize, std::sync::Arc<Vec<bool>>)> {
+    // The Session panel draws two or three codes every frame: each is worked out once and kept (the last few).
+    type Kept = Vec<(String, Option<(usize, std::sync::Arc<Vec<bool>>)>)>;
+    static KEPT: std::sync::Mutex<Kept> = std::sync::Mutex::new(Vec::new());
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, cells)) = kept.iter().find(|(t, _)| t == text) {
+        return cells.clone();
+    }
+    let cells = qrcode::QrCode::new(text.as_bytes()).ok().map(|code| (code.width(), std::sync::Arc::new(code.to_colors().iter().map(|c| *c == qrcode::Color::Dark).collect())));
+    if kept.len() >= 8 {
+        kept.remove(0);
+    }
+    kept.push((text.to_string(), cells.clone()));
+    cells
 }
 
 /// The code as a picture about `size` px wide: `fg` modules on `bg` (transparent = [0,0,0,0]), quiet zone included.

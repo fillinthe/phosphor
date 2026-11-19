@@ -293,6 +293,8 @@ pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>
         }
         if Instant::now() > until {
             let _ = child.kill();
+            // (Waited for, or it stays behind as a zombie process until Phosphor quits.)
+            let _ = child.wait();
             return Err("the site took too long to answer: try again".into());
         }
         std::thread::sleep(Duration::from_millis(200));

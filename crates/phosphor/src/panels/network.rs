@@ -120,7 +120,7 @@ fn internet_row(ui: &mut egui::Ui, st: &mut State) {
             st.internet = on.then(|| {
                 let mut ports = vec![st.net.port];
                 if st.net.https {
-                    ports.push(st.net.port + 1);
+                    ports.extend(st.net.https_port());
                 }
                 crate::internet::Opening::open(ports)
             });

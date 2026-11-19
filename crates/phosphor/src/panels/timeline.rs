@@ -168,11 +168,11 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
                     }
                 });
             }
-            if let Some((ki, t)) = moved {
-                tr.move_key(ki, t);
-            }
-            if let Some(ki) = remove_key {
+            // (Removed first: moving re-sorts the keys, so the index to remove would point at another one.)
+            if let Some(ki) = remove_key.filter(|ki| *ki < tr.keys.len()) {
                 tr.keys.remove(ki);
+            } else if let Some((ki, t)) = moved {
+                tr.move_key(ki, t);
             }
             // Double-click the lane: a key there (on the curve).
             if resp.double_clicked()
@@ -318,10 +318,12 @@ fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full:
     let name = std::path::Path::new(&sound.path).file_name().map_or("Sound".into(), |n| n.to_string_lossy().to_string());
     p.text(egui::pos2(row.left() + 4.0, row.center().y), egui::Align2::LEFT_CENTER, &name, egui::FontId::proportional(11.0), ui.visuals().text_color());
     // The waveform: the loudest moment under each column of pixels.
-    let peaks = st.timeline_sound.as_ref().and_then(|s| s.peaks.lock().ok().and_then(|p| p.clone()));
+    // (Read under the lock: the whole list was copied every frame.)
+    let guard = st.timeline_sound.as_ref().and_then(|s| s.peaks.lock().ok());
+    let peaks = guard.as_ref().and_then(|p| p.as_ref());
     let per_sec = crate::media::video::sound::PEAKS_PER_SEC;
     let x_of = |t: f64| lane_x + (t / length) as f32 * lane_w;
-    match &peaks {
+    match peaks {
         Some(peaks) if !peaks.is_empty() => {
             let secs_per_px = length / lane_w as f64;
             let first = x_of(sound.start).max(lane.left()).floor() as i32;
@@ -341,6 +343,7 @@ fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full:
             p.text(lane.center(), egui::Align2::CENTER_CENTER, "reading the sound…", egui::FontId::proportional(10.0), Color32::GRAY);
         }
     }
+    drop(guard);
     if resp.dragged() {
         sound.start = (sound.start + (resp.drag_delta().x / lane_w) as f64 * length).clamp(0.0, length);
     }
