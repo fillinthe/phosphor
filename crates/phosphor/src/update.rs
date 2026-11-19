@@ -288,6 +288,9 @@ impl Updater {
             self.status = Status::Failed("This release has no Mac download; get it from the releases page.".into());
             return;
         };
+        if !self.test && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err() {
+            count_update(&r.version);
+        }
         self.status = Status::Downloading(r);
         let (tx, rx) = channel();
         self.install_rx = Some(rx);
@@ -305,6 +308,28 @@ impl Updater {
 
     #[cfg(target_arch = "wasm32")]
     pub fn install(&mut self) {}
+}
+
+/// Where an update starting is counted (G Workshop's download numbers: "downloads N, of which updates M"; GitHub
+/// can't tell an update from a new user fetching the same file).
+const UPDATE_COUNT_URL: &str = "https://gcarve.app/api/app/update-click";
+
+/// What the count is told: the app and the two versions, nothing about the person (no account, no id).
+fn update_count_body(from: &str, to: &str) -> String {
+    serde_json::json!({ "app": "phosphor", "from": from, "to": to }).to_string()
+}
+
+/// One anonymous request when an update starts downloading (the button or by itself): fire and forget on its own
+/// thread with a short timeout; the update never waits for it or fails because of it.
+#[cfg(not(target_arch = "wasm32"))]
+fn count_update(to: &str) {
+    let body = update_count_body(env!("CARGO_PKG_VERSION"), to);
+    let _ = std::thread::Builder::new().name("phosphor-update-count".into()).spawn(move || {
+        let _ = ureq::post(UPDATE_COUNT_URL).timeout(std::time::Duration::from_secs(5)).set("Content-Type", "application/json").send_string(&body);
+    });
+}
+
+impl Updater {
 
     pub fn progress(&self) -> String {
         self.progress.lock().unwrap().clone()
@@ -725,6 +750,12 @@ mod tests {
         assert!(!is_newer("0.1.0", "0.1.0"));
         assert!(!is_newer("v0.0.9", "0.1.0"));
         assert!(!is_newer("garbage", "0.1.0"));
+    }
+
+    #[test]
+    fn the_update_count_says_only_the_app_and_versions() {
+        let v: serde_json::Value = serde_json::from_str(&update_count_body("0.5.11", "0.5.12")).unwrap();
+        assert_eq!(v, serde_json::json!({ "app": "phosphor", "from": "0.5.11", "to": "0.5.12" }));
     }
 
     #[test]

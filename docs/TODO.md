@@ -189,6 +189,9 @@ source, or a proxy on your server.
 - [~] *(relay: later, owner 2026-11-18: maybe something online through the gworkshop site)* *(2026-11-18: Reach from the internet (router opens the port by UPnP, public address shown) + Show its picture (the output as a live layer) built; not tried across two networks. Left: a relay for routers that won't open a port or sit behind a phone / carrier network (needs a server, e.g. through the G Workshop account), encryption for that link)* **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
       network (`follow::{Link, Leader}`, the `/follow` socket); reach a Phosphor somewhere else (relay or invite
       link through the G Workshop account, NAT traversal, latency and media that isn't on the other machine).
+- [ ] **Web app start** (web hub note, 2026-10-30; the loading screen is done): fetch `/api/auth/me` (and layouts /
+      projects) from index.html while the wasm downloads and hand it to the app; a smaller wasm (opt-level "s"/"z",
+      wasm-opt -Oz). Needs the web build in CI to measure.
 - [ ] **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another
       Phosphor so someone can take over when you leave, ideally live (state sync, then the other one takes the
       outputs). Today: File › Export show (a folder with the media) and Follow on the same network.

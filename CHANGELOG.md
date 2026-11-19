@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- When an update starts downloading, Phosphor sends one anonymous count (just "phosphor", the version you have and
+  the new one; no account, no address, nothing about you) so the G Workshop download numbers can tell updates from
+  new people. The update never waits for it.
 - **Online downloads** with no stated size that run past the limit are now refused (a smaller copy is tried)
   instead of being kept cut off as if they were whole.
 - **Timeline**: removing a key you were dragging no longer removes a different key.
