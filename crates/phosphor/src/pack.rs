@@ -161,7 +161,9 @@ fn unpack_into(pack: &Path, into: &Path, p: &Shared) -> Result<PathBuf, String> 
 
 /// The project's relative media paths (as packed) made whole, inside `dir`.
 pub fn point_into(comp: &mut Composition, dir: &Path) {
-    comp.map_paths(|p| if Path::new(p).is_relative() { dir.join(p).to_string_lossy().into_owned() } else { p.to_string() });
+    // Only the pack's own paths ("media/x.mov") are rebased: a rooted path from another computer ("/Volumes/…", seen
+    // on Windows as relative because it has no drive letter) stays as it was.
+    comp.map_paths(|p| if Path::new(p).is_relative() && !Path::new(p).has_root() { dir.join(p).to_string_lossy().into_owned() } else { p.to_string() });
 }
 
 /// Shaders a show brought (isf/, effects/ in its folder) go into this computer's shader folders, unless one of
