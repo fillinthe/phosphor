@@ -782,6 +782,44 @@ impl PhosphorApp {
                 self.switch_workspace(3);
                 continue;
             }
+            if name == "datatext" {
+                // One Countdown into two Text boxes ("{min} minutes left", "{mm:ss}"), a Web list into a third
+                // (`PHOSPHOR_DATA_LIST` = its address, else empty).
+                use phosphor_engine::{DataFeed, DataKind, NodeKind, SourceSpec, TextStyle};
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Texts");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (first, out) = (net.nodes[0].id, net.nodes[1].id);
+                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [820.0, 60.0];
+                net.nodes.iter_mut().find(|n| n.id == first).unwrap().pos = [300.0, 60.0];
+                let down = net.add(NodeKind::Number, [40.0, 60.0]);
+                let second = net.add(NodeKind::Picture, [300.0, 400.0]);
+                let list = net.add(NodeKind::Number, [40.0, 400.0]);
+                let third = net.add(NodeKind::Picture, [560.0, 400.0]);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let part = |id: u32| net.node(id).unwrap().parts[0];
+                for (b, template) in [(first, "{min} minutes left"), (second, "{mm:ss}"), (third, "{text}")] {
+                    comp.layer_mut(part(b)).unwrap().source = SourceSpec::Text(TextStyle { text: "Hello".into(), live_source: template.into(), size: 0.1, ..crate::text::default_style() });
+                }
+                let url = std::env::var("PHOSPHOR_DATA_LIST").unwrap_or_default();
+                for (b, kind) in [(down, DataKind::Timer { seconds: 300.0, down: true }), (list, DataKind::List { url, path: String::new(), every: 300.0, seconds: 2.0 })] {
+                    if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == part(b)) {
+                        m.signal.source = phosphor_engine::ModSource::Hand;
+                        m.data = Some(DataFeed { kind, ..Default::default() });
+                    }
+                }
+                let mut wired = comp.connect_boxes(cid, &[], down, first, 0);
+                wired &= comp.connect_boxes(cid, &[], down, second, 0);
+                wired &= comp.connect_boxes(cid, &[], list, third, 0);
+                wired &= comp.connect_boxes(cid, &[], first, out, 0);
+                comp.sync_network(cid);
+                println!("QUICK datatext: wired={wired}");
+                self.switch_workspace(3);
+                continue;
+            }
             if name == "data" {
                 // Designer phase 5: a Clock → a Text box ("It's {raw}") → Output; a Timer into an effect; an Event.
                 use phosphor_engine::NodeKind;
@@ -804,7 +842,7 @@ impl PhosphorApp {
                 comp.layer_mut(part(pic)).unwrap().source = phosphor_engine::SourceSpec::Text(phosphor_engine::TextStyle { text: "Hello".into(), live_source: "It's {raw}".into(), ..crate::text::default_style() });
                 let e = comp.new_effect("zoom_rotate").or_else(|| comp.new_effect("invert")).unwrap();
                 comp.layer_mut(part(fx)).unwrap().effects = vec![e];
-                for (id, data, ev) in [(clock, Some(phosphor_engine::DataKind::Clock), false), (timer, Some(phosphor_engine::DataKind::Timer { seconds: 8.0 }), false), (event, None, true)] {
+                for (id, data, ev) in [(clock, Some(phosphor_engine::DataKind::Clock), false), (timer, Some(phosphor_engine::DataKind::Timer { seconds: 8.0, down: false }), false), (event, None, true)] {
                     if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == part(id)) {
                         m.signal.source = phosphor_engine::ModSource::Hand;
                         m.data = data.map(|kind| phosphor_engine::DataFeed { kind, ..Default::default() });

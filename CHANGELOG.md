@@ -8,6 +8,17 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 - **A projector unplugged mid-show** no longer lands its output on another screen (or over your control screen):
   the output hides and a notice says so; plug the projector back in and the output fills it again by itself.
+- **One number, many texts** (Designer): wire one Number box into as many Text boxes as you like; each shows it
+  its own way: `{n} points`, `{min} minutes left`, `{mm:ss}`, `{h:mm:ss}`, `{n.1}`, `{text}`. Any text layer can
+  show a number too (Inspector › Live text › A number).
+- **Countdown box** (Designer › Data › Countdown): counts down from the time you set (Restart starts it again);
+  wire it into Text boxes for "5 minutes left" and "04:59" at once. A Timer box can count down too (Count down).
+- **Web list box** (Designer › Data › Web list): paste a link to a news feed (RSS / Atom) or to JSON (with the
+  path to the list, like `articles.*.title`) and wire it into a Text box: it shows one item after another, every
+  few seconds (you pick), and asks the website again every few minutes (5 by default). If the website doesn't
+  answer, it keeps showing the last list and says so in the box. Long items wrap onto more lines.
+- Designer: letting go of a number wire on empty canvas now offers a Text box, and the box you pick there comes
+  wired (a Number picked that way used to come unwired).
 
 ## 0.5.11 (2026-11-18)
 

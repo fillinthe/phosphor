@@ -16,6 +16,11 @@ Clock, Table}` + 0-at / 1-at) is filled each frame by the app (`phosphor::data::
 `live_data::Feeds`, JSON fetched on a thread when due, timers and tables from a start time, `Modulator.live` = the raw
 number and its words); `Modulator.event: Option<Trigger>` fires `State::set_control` on a crossing. A Text box is a
 Picture box with a Text source whose `LiveText::Number(id)` fills `live_source` as a template (`data::fill_template`).
+Many Text boxes (or any text layer: Inspector › Live text › A number) can follow one number, each with its own
+template (`{n}`, `{n.1}`, `{mm:ss}`, `{h:mm:ss}`, `{min}`, `{text}`; the number is `DataLive.raw`). A Timer with
+`down` is a countdown (raw = seconds left). `DataKind::List` (Web list) fetches through the same per-address `Web`
+cache as Json (answers are JSON or a news feed, `read_answer`), works the items out once per answer
+(`json_list`, `*` = each item), steps with `list_step`, and keeps the last good answer when an ask fails.
 
 ## What TouchDesigner is, in short
 

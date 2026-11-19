@@ -232,7 +232,10 @@ impl State {
                     LiveText::Number(mid) => {
                         let value = self.mod_inputs.shared.iter().find(|(id, _)| *id == mid).map_or(0.0, |x| x.1);
                         let live = self.comp.modulators.iter().find(|m| m.id == mid).map(|m| m.live.clone()).unwrap_or_default();
-                        Some(phosphor_engine::fill_template(&style.live_source, value, &live))
+                        let words = phosphor_engine::fill_template(&style.live_source, value, &live);
+                        // A long one (a headline from a Web list) wraps like the headlines do; lines typed stay.
+                        let fit = (aspect / (style.size.max(0.01) * 0.55) * 0.9) as usize;
+                        Some(if !words.contains('\n') && words.chars().count() > fit.max(8) { wrap_words(&words, fit) } else { words })
                     }
                     live => live.words(tod, now - style.live_start),
                 };

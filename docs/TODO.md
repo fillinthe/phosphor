@@ -93,8 +93,12 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       canvas). **Next:** a live readout on each box (size, cost: needs per-box timing from the engine first); number
       boxes for MIDI / OSC in (a Number box set to Hand / MIDI knob can be mapped already); more than four pictures
       into a Switch.
-- [ ] **Designer** (owner said yes, 2026-11-18): one Number box driving several Text templates (a countdown / score shown in
-      many text layers); a web box reading a list (headlines, a song list) and showing the next item every few seconds.
+- [~] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner
+      approved 2026-11-18). **Built 2026-11-18**: templates `{n}` `{n.1}` `{mm:ss}` `{h:mm:ss}` `{min}` `{text}` in
+      every Text (`data::fill_template`), Countdown box (Timer › Count down), Web list box (`DataKind::List`: JSON
+      path with `*`, or RSS / Atom; keeps the last list on a failed ask), Inspector › Live text › A number, a
+      number wire let go on canvas offers a Text box (and now wires what it adds). Not tried with a real mouse or a
+      real website yet.
 - [ ] *(skipped for now, 2026-11-18)* **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
       add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.

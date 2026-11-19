@@ -66,6 +66,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let bpm = st.comp.bpm;
         let st_chapters = st.media.chapters(sel);
         let inherited = st.comp.inherited_effects(sel);
+        let numbers = if matches!(st.comp.layer(sel).map(|l| &l.source), Some(SourceSpec::Text(_))) { number_choices(&st.comp) } else { Vec::new() };
         let favorite = st.comp.layer(sel).is_some_and(|l| super::clips::is_favorite(st, &l.source));
         let mut star = false;
         let mut seek_to: Option<f64> = None;
@@ -144,7 +145,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one."));
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default() };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default(), numbers };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len, clip_slot);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
@@ -236,6 +237,13 @@ pub(crate) struct LayerMedia<'a> {
     pub favorite: Option<bool>,
     /// Set when the star by the file name is clicked (the caller stars or unstars the file).
     pub star: std::cell::Cell<bool>,
+    /// Every number a text layer can show (`number_choices`).
+    pub numbers: Vec<(u64, String)>,
+}
+
+/// Every number (shared modulator: a Designer Number box, an LFO) by id and name, for a text layer to show.
+pub(crate) fn number_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String)> {
+    comp.modulators.iter().map(|m| (m.id, if m.name.trim().is_empty() { format!("Number {}", m.id) } else { m.name.clone() })).collect()
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -268,7 +276,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             ui.separator();
         }
         if let SourceSpec::Text(style) = &mut layer.source {
-            if text_editor(ui, style, layer.id) {
+            if text_editor(ui, style, layer.id, &media.numbers) {
                 media.text_file.set(true);
             }
             // Ready-made movement (it sets the layer's move / size / opacity motion, on the tempo).
@@ -854,7 +862,7 @@ pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
 /// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, color,
 /// alignment, outline and line spacing. Changes redraw the layer in the background.
 /// Returns true when "From a file…" was pressed (the caller opens the file dialog).
-pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
+pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64, numbers: &[(u64, String)]) -> bool {
     let mut from_file = false;
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
@@ -892,14 +900,14 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     // Live words and parts: folded away until they're in use (most text layers are just words).
     let live = !matches!(style.live, phosphor_engine::LiveText::Off) || !style.parts.is_empty();
     crate::ui::subsection(ui, ("text_live_parts", id), "Live text and parts", live, |ui| {
-        from_file = live_and_parts(ui, style, id);
+        from_file = live_and_parts(ui, style, id, numbers);
     });
     from_file
 }
 
 /// Live: the words follow the clock, a feed or the camera. Parts: one line / sentence / word at a time.
 /// Returns true when "From a file…" was pressed.
-fn live_and_parts(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
+fn live_and_parts(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64, numbers: &[(u64, String)]) -> bool {
     let mut from_file = false;
     // Live: the words follow the clock.
     crate::ui::field(ui, "Live", |ui| {
@@ -913,11 +921,11 @@ fn live_and_parts(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id:
             (LiveText::Headlines(8), "Headlines"),
             (LiveText::Code, "QR code seen"),
             (LiveText::Read, "Text seen"),
+            (LiveText::Number(numbers.first().map_or(0, |n| n.0)), "A number (countdown, score, web list)"),
         ];
-        // (A list: eight buttons wrapped into a tall column in a narrow Inspector.)
+        // (A list: nine buttons wrapped into a tall column in a narrow Inspector.)
         let same = |k: &LiveText| std::mem::discriminant(&style.live) == std::mem::discriminant(k);
-        let from_designer = "A number (Designer)";
-        let current = kinds.iter().find(|(k, _)| same(k)).map_or(from_designer, |(_, n)| *n);
+        let current = kinds.iter().find(|(k, _)| same(k)).map_or("Off", |(_, n)| *n);
         let mut picked = None;
         crate::ui::dropdown(ui, ("text_live", id), (ui.available_width() - 24.0).clamp(80.0, 200.0)).selected_text(current).show_ui(ui, |ui| {
             for (k, name) in &kinds {
@@ -927,10 +935,30 @@ fn live_and_parts(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id:
             }
         });
         if let Some(k) = picked {
+            // (The template is kept in `live_source`, which also holds a feed's address or a town.)
+            if matches!(k, LiveText::Number(_)) && !matches!(style.live, LiveText::Number(_)) {
+                style.live_source = "{text}".into();
+            }
             style.live = k;
             style.live_start = ui.input(|i| i.time);
         }
         match &mut style.live {
+            // Any number (a Designer Number box, an LFO), shown through this layer's own template: several text
+            // layers can show one number, each its own way.
+            LiveText::Number(mid) => {
+                let shown = numbers.iter().find(|(n, _)| n == mid).map_or_else(|| "Pick a number…".to_string(), |(_, name)| name.clone());
+                crate::ui::dropdown(ui, ("text_number", id), 150.0).selected_text(shown).show_ui(ui, |ui| {
+                    for (n, name) in numbers {
+                        if crate::ui::pick_item(ui, mid == n, name).clicked() {
+                            *mid = *n;
+                        }
+                    }
+                    if numbers.is_empty() {
+                        hint(ui, "No numbers yet: add a Countdown, Web list or Number box in the Designer, or an LFO");
+                    }
+                });
+                crate::ui::text_field(ui, &mut style.live_source, "Words with {n}, {mm:ss} or {text}", Some(180.0)).on_hover_text(phosphor_engine::TEMPLATE_HELP);
+            }
             LiveText::Countdown(at) => {
                 let mut minutes = (*at / 60) as f64;
                 if guarded!(ui, minutes, egui::DragValue::new(&mut minutes).range(0.0..=1439.0).speed(1.0).prefix("to ").custom_formatter(|v, _| format!("{:02}:{:02}", v as u32 / 60, v as u32 % 60)).custom_parser(|s| {
