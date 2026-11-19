@@ -353,10 +353,26 @@ static FAILED_DEVICES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// devices that couldn't be opened), else that device.
 fn output_for(device: Option<&str>) -> Option<String> {
     let d = device?;
-    if output_device().as_deref() == Some(d) || FAILED_DEVICES.lock().is_ok_and(|f| f.iter().any(|x| x == d)) {
+    if on_main(d) {
         return None;
     }
     Some(d.to_string())
+}
+
+/// A clip set to device `d` plays on the main output (it is the main device, or it couldn't be opened).
+/// Allocates nothing (the sound thread asks).
+fn on_main(d: &str) -> bool {
+    OUT_DEVICE.lock().is_ok_and(|m| m.as_deref() == Some(d)) || FAILED_DEVICES.lock().is_ok_and(|f| f.iter().any(|x| x == d))
+}
+
+/// `output_for(device) == output` without making strings (the sound thread asks for every clip, every block).
+fn plays_on(device: Option<&str>, output: Option<&str>) -> bool {
+    match (device, output) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some(d), None) => on_main(d),
+        (Some(d), Some(o)) => d == o && !on_main(d),
+    }
 }
 
 /// Starts an output on `name` for the clips set to it (once; it stops by itself when none are left).
@@ -415,7 +431,7 @@ fn run_device_output(name: &str) -> Result<(), String> {
         mix_clips_for(&mut blocks, pairs, Some(&who));
         stretched.clear();
         for block in blocks.chunks(take.max(1) * 2) {
-            stretched.extend(stretch(block, frames));
+            stretch_into(block, frames, &mut stretched);
         }
         stretched.resize(frames * 2 * pairs, 0.0);
         to_device(&stretched, frames, out, channels);
@@ -455,14 +471,22 @@ fn run_device_output(name: &str) -> Result<(), String> {
 }
 
 /// A stereo block (interleaved) stretched or squeezed to exactly `frames` frames (linear).
+#[cfg(test)]
 fn stretch(block: &[f32], frames: usize) -> Vec<f32> {
+    let mut out = Vec::new();
+    stretch_into(block, frames, &mut out);
+    out
+}
+
+/// `stretch`, added to the end of `out` (the sound thread keeps one buffer: no allocation once it's big enough).
+fn stretch_into(block: &[f32], frames: usize, out: &mut Vec<f32>) {
     let n = block.len() / 2;
     if n == frames || n == 0 {
-        let mut v = block.to_vec();
-        v.resize(frames * 2, 0.0);
-        return v;
+        let start = out.len();
+        out.extend_from_slice(&block[..(frames * 2).min(block.len())]);
+        out.resize(start + frames * 2, 0.0);
+        return;
     }
-    let mut out = Vec::with_capacity(frames * 2);
     for i in 0..frames {
         let pos = i as f64 * (n - 1) as f64 / (frames.max(2) - 1) as f64;
         let (k, f) = (pos.floor() as usize, (pos - pos.floor()) as f32);
@@ -471,7 +495,6 @@ fn stretch(block: &[f32], frames: usize) -> Vec<f32> {
             out.push(block[k * 2 + c] + (block[k1 * 2 + c] - block[k * 2 + c]) * f);
         }
     }
-    out
 }
 
 impl Drop for ClipAudio {
@@ -956,13 +979,12 @@ fn mix_clips(out: &mut [f32], pairs: usize) {
 /// Adds the next samples of the clips that play on output `device` (None = the main one) into their pair's block
 /// of `out` (`pairs` stereo blocks), ramping gain changes.
 fn mix_clips_for(out: &mut [f32], pairs: usize, device: Option<&str>) {
-    let clips: Vec<Arc<Clip>> = match CLIPS.try_lock() {
-        Ok(c) => c.iter().filter_map(Weak::upgrade).filter(|clip| clip.device.lock().is_ok_and(|d| output_for(d.as_deref()).as_deref() == device)).collect(),
-        Err(_) => return,
-    };
+    // Runs on the sound thread: no allocations (the list is walked under its lock: nobody takes CLIPS while holding a
+    // clip's own locks, so this can't deadlock, and the lock is only tried).
+    let Ok(list) = CLIPS.try_lock() else { return };
     let frames = out.len() / 2 / pairs.max(1);
     let level = AUTO_LEVEL.load(Ordering::Relaxed);
-    for clip in clips {
+    for clip in list.iter().filter_map(Weak::upgrade).filter(|clip| clip.device.lock().is_ok_and(|d| plays_on(d.as_deref(), device))) {
         let mut target = f32::from_bits(clip.gain.load(Ordering::Relaxed));
         if level {
             target *= level_gain(f32::from_bits(clip.loudness.load(Ordering::Relaxed)));
@@ -1017,6 +1039,16 @@ mod level_tests {
         let s = stretch(&block, 3);
         assert_eq!(s, vec![0.0, 0.0, 0.5, 0.5, 1.0, 1.0]);
         assert_eq!(stretch(&block, 2), block.to_vec());
+        // The sound thread's string-free check agrees with `output_for`.
+        for d in [None, Some(dev)] {
+            for o in [None, Some(dev), Some("Another test device (not real)")] {
+                assert_eq!(plays_on(d, o), output_for(d).as_deref() == o, "{d:?} on {o:?}");
+            }
+        }
+        // Stretching into a kept buffer adds to it.
+        let mut kept = vec![9.0, 9.0];
+        stretch_into(&block, 3, &mut kept);
+        assert_eq!(kept, vec![9.0, 9.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0]);
         drop((mine, other));
     }
 
