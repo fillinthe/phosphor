@@ -691,7 +691,9 @@ pub fn font_files(list: &[u8]) -> Result<Vec<(String, String)>, String> {
         .flatten()
         .map(|f| (text(&f["filename"]), text(&f["url"])))
         .filter(|(n, u)| (n.ends_with(".ttf") || n.ends_with(".otf")) && u.starts_with("https://"))
-        .map(|(n, u)| (n.rsplit('/').next().unwrap_or(&n).to_string(), u))
+        // Only the file's own name (the answer could hold a folder, even "..\" on Windows).
+        .map(|(n, u)| (n.rsplit(['/', '\\']).next().unwrap_or(&n).to_string(), u))
+        .filter(|(n, _)| !n.starts_with('.'))
         .collect();
     let styles: Vec<(String, String)> = ["-Regular.", "-Bold.", "-Italic.", "-Black."].iter().filter_map(|s| all.iter().find(|(n, _)| n.contains(s)).cloned()).collect();
     let pick = if styles.is_empty() { all.into_iter().take(1).collect::<Vec<_>>() } else { styles };
@@ -931,6 +933,8 @@ mod tests {
         assert_eq!(font_files(list).unwrap(), [("Roboto-Regular.ttf".to_string(), "https://fonts.gstatic.com/r.ttf".to_string()), ("Roboto-Bold.ttf".into(), "https://fonts.gstatic.com/b.ttf".into())]);
         let variable = br#"{"manifest":{"fileRefs":[{"filename":"Inter[opsz,wght].ttf","url":"https://fonts.gstatic.com/i.ttf"}]}}"#;
         assert_eq!(font_files(variable).unwrap().len(), 1, "a variable font alone");
+        let sneaky = br#"{"manifest":{"fileRefs":[{"filename":"..\\..\\x-Regular.ttf","url":"https://fonts.gstatic.com/x.ttf"},{"filename":"static/..ttf","url":"https://fonts.gstatic.com/y.ttf"}]}}"#;
+        assert_eq!(font_files(sneaky).unwrap(), [("x-Regular.ttf".to_string(), "https://fonts.gstatic.com/x.ttf".to_string())], "file names only, never a folder");
 
         let isf = br#"{"numberOfResults":2,"shaders":[{"id":"5e7a","title":"Square Tunnel.fs","username":"joshpbatty","thumbnailCloudinaryId":"z9tk","private":false},{"id":"x","title":"Mine","private":true}]}"#;
         let sh = Source::IsfOnline.parse(Kind::Shader, isf).unwrap();

@@ -6,6 +6,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Online downloads** with no stated size that run past the limit are now refused (a smaller copy is tried)
+  instead of being kept cut off as if they were whole.
+- **Timeline**: removing a key you were dragging no longer removes a different key.
+- **Session on port 65535** no longer opens its secure link on a random port.
+- The Session, Stage, Timeline and patch editor panels do less work every frame (smoother with big shows,
+  long sounds or long undo histories).
 - **Double-click a project or packed show in Finder** (or drop it on Phosphor's Dock icon) and it opens in Phosphor,
   whether Phosphor is already running or not.
 - **A projector unplugged mid-show** no longer lands its output on another screen (or over your control screen):

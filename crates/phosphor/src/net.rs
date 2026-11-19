@@ -554,7 +554,12 @@ impl NetSession {
     /// The secure link (phones share their mic only on https; they warn once about the certificate).
     pub fn https_url(&self) -> String {
         let ip = crate::control::local_ip().unwrap_or_else(|| "localhost".into());
-        format!("https://{ip}:{}/", self.port + 1)
+        format!("https://{ip}:{}/", self.https_port().unwrap_or(self.port))
+    }
+
+    /// The secure listener's port: the next one up (none when the Session is on the last port there is).
+    pub fn https_port(&self) -> Option<u16> {
+        self.port.checked_add(1)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -568,7 +573,7 @@ impl NetSession {
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         // HTTPS on the next port (phones only share their mic on a secure page); a self-signed certificate.
         let tls = match crate::net_tls::server_config() {
-            Ok(cfg) => crate::net_util::bind_retrying(|| std::net::TcpListener::bind(("0.0.0.0", self.port + 1))).ok().and_then(|l| l.set_nonblocking(true).ok().map(|_| (l, cfg))),
+            Ok(cfg) => self.https_port().and_then(|port| crate::net_util::bind_retrying(|| std::net::TcpListener::bind(("0.0.0.0", port))).ok()).and_then(|l| l.set_nonblocking(true).ok().map(|_| (l, cfg))),
             Err(e) => {
                 eprintln!("session: no HTTPS ({e})");
                 None

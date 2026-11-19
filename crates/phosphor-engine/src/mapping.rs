@@ -1870,7 +1870,13 @@ impl Mapping {
     /// The enabled masks as they show at `mods`: placed, then moved / stretched / turned by their transform
     /// (`aspect` = the output's width per height).
     pub fn placed_masks_at(&self, mods: &crate::ModInputs, aspect: f32) -> Vec<Mask> {
-        let mut masks = self.placed_masks();
+        self.placed_masks_at_where(mods, aspect, |_| true)
+    }
+
+    /// `placed_masks_at` for the masks `keep` says yes to (asked of each mask as saved: `attached` still set), so the
+    /// others aren't copied and placed only to be thrown away (the renderer asks once per slice, every frame).
+    pub fn placed_masks_at_where(&self, mods: &crate::ModInputs, aspect: f32, keep: impl Fn(&Mask) -> bool) -> Vec<Mask> {
+        let mut masks = self.placed_masks_where(keep);
         for m in &mut masks {
             let t = std::mem::take(&mut m.transform);
             t.apply(m, mods, aspect);
@@ -1916,9 +1922,13 @@ impl Mapping {
     /// The enabled masks with their points on the output (attached ones placed on their slice), faded by their
     /// groups; masks in a group that's off are left out.
     pub fn placed_masks(&self) -> Vec<Mask> {
+        self.placed_masks_where(|_| true)
+    }
+
+    fn placed_masks_where(&self, keep: impl Fn(&Mask) -> bool) -> Vec<Mask> {
         self.masks
             .iter()
-            .filter(|m| m.enabled)
+            .filter(|m| m.enabled && keep(m))
             .filter_map(|m| {
                 let (on, fade) = self.group_mix(m.group);
                 on.then(|| Mask { opacity: m.opacity * fade, ..m.placed(&self.surfaces) })
@@ -2327,6 +2337,21 @@ mod feather_motion_tests {
         assert!(slice.windows(2).any(|w| (w[0] - w[1]).abs() > 1e-3), "slice edge moves: {slice:?}");
         assert!(mask.windows(2).any(|w| (w[0] - w[1]).abs() > 1e-3), "mask edge moves: {mask:?}");
         assert!(slice.iter().all(|f| (0.0..=SLICE_FEATHER_MAX).contains(f)) && mask.iter().all(|f| (0.0..=MASK_FEATHER_MAX).contains(f)));
+    }
+
+    #[test]
+    fn only_the_wanted_masks_are_placed() {
+        let mut m = Mapping::default();
+        m.add_surface(1);
+        m.add_mask(2);
+        m.add_mask(3);
+        m.add_mask(4);
+        m.masks[0].attached = Some(1);
+        m.masks[2].enabled = false;
+        let ids = |keep: &dyn Fn(&Mask) -> bool| m.placed_masks_at_where(&Default::default(), 1.0, keep).iter().map(|k| k.id).collect::<Vec<_>>();
+        assert_eq!(ids(&|k| k.attached == Some(1)), [2], "the slice's own (asked before placing clears `attached`)");
+        assert_eq!(ids(&|k| k.attached.is_none()), [3], "loose ones that are on");
+        assert_eq!(ids(&|_| true), m.placed_masks_at(&Default::default(), 1.0).iter().map(|k| k.id).collect::<Vec<_>>());
     }
 }
 

@@ -236,6 +236,21 @@ fn deliver(packet: rosc::OscPacket, from: &str, tx: &mpsc::Sender<Incoming>, tex
 
 /// The LAN address other devices should talk to.
 pub fn local_ip() -> Option<String> {
+    // Asked a few times every frame while the Session panel shows its links: a socket each time was wasted work.
+    // Kept a few seconds (a new Wi-Fi shows up soon after).
+    static KEPT: std::sync::Mutex<Option<(std::time::Instant, Option<String>)>> = std::sync::Mutex::new(None);
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, ip)) = kept.as_ref()
+        && at.elapsed() < std::time::Duration::from_secs(3)
+    {
+        return ip.clone();
+    }
+    let ip = ask_local_ip();
+    *kept = Some((std::time::Instant::now(), ip.clone()));
+    ip
+}
+
+fn ask_local_ip() -> Option<String> {
     let s = UdpSocket::bind("0.0.0.0:0").ok()?;
     s.connect("8.8.8.8:80").ok()?;
     Some(s.local_addr().ok()?.ip().to_string())

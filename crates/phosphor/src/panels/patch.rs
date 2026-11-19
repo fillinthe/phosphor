@@ -243,9 +243,13 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
     let key = format!("patch:{key}");
     // Undo / redo: the patch as it was after each change (a drag counts once, when it's let go), kept per patch
     // while the app runs. Cmd+Z / Shift+Cmd+Z with the pointer over the canvas, or the buttons.
+    // (Shared, not copied: egui hands temp data out by value, and the whole history was copied twice a frame.)
     let hist_id = egui::Id::new(("patch_history", &key));
-    let mut hist: History = ui.ctx().data(|d| d.get_temp(hist_id)).unwrap_or_default();
-    let committed = hist.committed.get_or_insert_with(|| patch.clone()).clone();
+    let shared = ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<std::sync::Arc<std::sync::Mutex<History>>>(hist_id).clone());
+    let mut hist = shared.lock().unwrap_or_else(|e| e.into_inner());
+    if hist.committed.is_none() {
+        hist.committed = Some(patch.clone());
+    }
     let (mut undo, mut redo) = (false, false);
     crate::ui::toolbar(ui, |ui| {
         crate::ui::nodes::zoom_controls(ui, &key);
@@ -260,24 +264,23 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
     }
     let mut changed = node_canvas(ui, patch, &key);
     if undo && let Some(prev) = hist.undo.pop() {
-        hist.redo.push(committed.clone());
         *patch = prev;
-        hist.committed = Some(patch.clone());
+        let was = hist.committed.replace(patch.clone());
+        hist.redo.extend(was);
         changed = true;
     } else if redo && let Some(next) = hist.redo.pop() {
-        hist.undo.push(committed.clone());
         *patch = next;
-        hist.committed = Some(patch.clone());
+        let was = hist.committed.replace(patch.clone());
+        hist.undo.extend(was);
         changed = true;
     } else if changed {
-        hist.undo.push(committed);
+        let was = hist.committed.replace(patch.clone());
+        hist.undo.extend(was);
         if hist.undo.len() > 50 {
             hist.undo.remove(0);
         }
         hist.redo.clear();
-        hist.committed = Some(patch.clone());
     }
-    ui.ctx().data_mut(|d| d.insert_temp(hist_id, hist));
     changed
 }
 
