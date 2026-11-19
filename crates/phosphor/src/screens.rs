@@ -137,19 +137,21 @@ pub fn displays() -> Vec<Display> {
 }
 
 /// Windows: every monitor (EnumDisplayMonitors), in points (each monitor's own DPI scale), primary first-class.
+/// The id comes from the monitor's device name (`\\.\DISPLAY2`…), which stays the same when another monitor is
+/// unplugged or this one is plugged back into the same port (an index would shift).
 #[cfg(windows)]
 pub fn displays() -> Vec<Display> {
     use windows_sys::Win32::Foundation::{LPARAM, RECT};
-    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO};
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW};
     use windows_sys::Win32::UI::WindowsAndMessaging::MONITORINFOF_PRIMARY;
     use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
     unsafe extern "system" fn each(monitor: HMONITOR, _dc: HDC, _rect: *mut RECT, data: LPARAM) -> i32 {
         // SAFETY: `data` is the Vec we passed below; the monitor handle comes from the enumeration.
         unsafe {
-            let out = &mut *(data as *mut Vec<(HMONITOR, MONITORINFO, f32)>);
-            let mut info: MONITORINFO = std::mem::zeroed();
-            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-            if GetMonitorInfoW(monitor, &mut info) != 0 {
+            let out = &mut *(data as *mut Vec<(HMONITOR, MONITORINFOEXW, f32)>);
+            let mut info: MONITORINFOEXW = std::mem::zeroed();
+            info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+            if GetMonitorInfoW(monitor, &mut info as *mut MONITORINFOEXW as *mut MONITORINFO) != 0 {
                 let (mut dx, mut dy) = (96u32, 96u32);
                 let scale = if GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dx, &mut dy) == 0 { dx as f32 / 96.0 } else { 1.0 };
                 out.push((monitor, info, scale.max(0.5)));
@@ -157,18 +159,21 @@ pub fn displays() -> Vec<Display> {
         }
         1
     }
-    let mut found: Vec<(HMONITOR, MONITORINFO, f32)> = Vec::new();
+    let mut found: Vec<(HMONITOR, MONITORINFOEXW, f32)> = Vec::new();
     // SAFETY: the callback only writes into `found`, which outlives the call.
     unsafe { EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), Some(each), &mut found as *mut _ as LPARAM) };
     found
         .iter()
         .enumerate()
-        .map(|(i, (_, info, scale))| {
+        .map(|(i, (_, ex, scale))| {
+            let info = &ex.monitorInfo;
             let r = info.rcMonitor;
+            // FNV-1a of the device name; never 0.
+            let id = ex.szDevice.iter().take_while(|&&c| c != 0).fold(0x811c_9dc5u32, |h, &c| (h ^ c as u32).wrapping_mul(0x0100_0193)).max(1);
             let (pw, ph) = ((r.right - r.left) as u32, (r.bottom - r.top) as u32);
             let main = info.dwFlags & MONITORINFOF_PRIMARY != 0;
             Display {
-                id: i as u32 + 1,
+                id,
                 name: if main { format!("Display {} (main)", i + 1) } else { format!("Display {}", i + 1) },
                 x: r.left as f32 / scale,
                 y: r.top as f32 / scale,

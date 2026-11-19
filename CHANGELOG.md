@@ -4,6 +4,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **A projector unplugged mid-show** no longer lands its output on another screen (or over your control screen):
+  the output hides and a notice says so; plug the projector back in and the output fills it again by itself.
+
 ## 0.5.11 (2026-11-18)
 
 - **Record DMX from another program or a desk** (LED / DMX › Record DMX › what comes in): LightJams, a console,

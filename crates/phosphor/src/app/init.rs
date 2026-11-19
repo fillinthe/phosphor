@@ -275,6 +275,8 @@ impl PhosphorApp {
                 monitor_drawn: HashMap::new(),
                 monitor_textures: HashMap::new(),
                 displays: crate::screens::displays(),
+                #[cfg(not(target_arch = "wasm32"))]
+                screen_watch: Default::default(),
                 new_monitor: None,
                 snapshot_requested: false,
                 snapshot_source: None,

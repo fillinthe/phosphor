@@ -465,6 +465,9 @@ pub struct State {
     /// texture is replaced).
     monitor_textures: HashMap<u8, (egui::TextureId, egui_wgpu::wgpu::Texture)>,
     pub displays: Vec<crate::screens::Display>,
+    /// Screens unplugged / plugged back in: hides an output whose screen went away, restores it when it's back.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub screen_watch: crate::screen_watch::ScreenWatch,
     /// Set by panels: open a new monitor with this source.
     pub new_monitor: Option<panels::MonitorSource>,
     pub snapshot_requested: bool,
