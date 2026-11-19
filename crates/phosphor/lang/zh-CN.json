@@ -5423,5 +5423,21 @@
 "Texts": "文本",
 "{0}: screen back, output restored": "{0}：屏幕已恢复，输出已还原",
 "{0} minutes left": "还剩 {0} 分钟",
-"{0}: screen unplugged, output hidden": "{0}：屏幕已断开，输出已隐藏"
+"{0}: screen unplugged, output hidden": "{0}：屏幕已断开，输出已隐藏",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "一个新文件夹，包含每个绘图图层的图片（按 Trace 中的位置放置）以及每个图层对应一个图层的项目：名称、隐藏图层和不透明度都会保留。它会替换当前项目打开。",
+"A show is being opened already": "已经在打开一个演出",
+"Drew {0} of {1} layers": "已绘制 {0}/{1} 个图层",
+"Import Resolume / VDMX / MadMapper / Trace…": "导入 Resolume / VDMX / MadMapper / Trace…",
+"Made": "已创建",
+"Make and open": "创建并打开",
+"Make it in": "创建位置",
+"Not a Trace drawing ({0})": "不是 Trace 绘图（{0}）",
+"Not a Trace drawing: there's no layer list in it": "不是 Trace 绘图：其中没有图层列表",
+"Opened it (the files are in {0})": "已打开（文件位于 {0}）",
+"Reading the drawing…": "正在读取绘图…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume、VDMX、MadMapper 或 Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "不是 Trace 绘图（其中没有绘图）",
+"not a Trace drawing (no layers)": "不是 Trace 绘图（没有图层）",
+"not a Trace drawing ({0})": "不是 Trace 绘图（{0}）",
+"{0} Open Morpholio Trace Drawing": "{0} 打开 Morpholio Trace 绘图"
 }

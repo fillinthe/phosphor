@@ -1,9 +1,10 @@
 //! Bringing other VJ apps' projects into Phosphor: Resolume Arena / Avenue compositions, VDMX projects, MadMapper
-//! projects.
+//! projects, Morpholio Trace drawings.
 
 mod keyed;
 pub mod looks;
 pub mod madmapper;
+pub mod morpholio;
 mod qt_stream;
 pub mod resolume;
 pub mod resolume_output;

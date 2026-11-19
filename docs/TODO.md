@@ -165,7 +165,7 @@ source, or a proxy on your server.
       lets go by itself; Kit for 3D artists… writes Documents/Phosphor Pad Kit (README, Unity `PhosphorPad.cs`,
       Unreal `PhosphorPadComponent`; A = boost, B = trigger). Bench `--quick pad` (+ `PHOSPHOR_PAD_PORT`).
       Left: glTF models inside Phosphor (step 3 of the plan), several players each with their own camera.
-- [ ] **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
+- [~] *(2026-11-19: layers built: File › Import / drop → a folder of layer pictures placed as in Trace + a project (name, hidden, opacity); left: the strokes as lines that draw themselves on, Trace blend modes other than normal (only "1" seen))* **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
       zip of `data-books.plist` (the layers in order: title, hidden, opacity, blend, a 4×4 transform, `drawingToken`),
       one 4096×4096 transparent PNG per layer (`<token>_original.png`), and a SQLite file with each layer's pen
       strokes (`stroke_<token>`: NSKeyedArchiver blobs, readable with `import::keyed::unarchive`) and tiles. Plan: each
@@ -192,7 +192,7 @@ source, or a proxy on your server.
 - [ ] **Web app start** (web hub note, 2026-10-30; the loading screen is done): fetch `/api/auth/me` (and layouts /
       projects) from index.html while the wasm downloads and hand it to the app; a smaller wasm (opt-level "s"/"z",
       wasm-opt -Oz). Needs the web build in CI to measure.
-- [ ] **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another
+- [x] *(2026-11-18: packed show + Session › Send this show built)* **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another
       Phosphor so someone can take over when you leave, ideally live (state sync, then the other one takes the
       outputs). Today: File › Export show (a folder with the media) and Follow on the same network.
       **Owner, 2026-11-18: both:** one packed show file (media inside) first, then sending a show to another Phosphor on the network.

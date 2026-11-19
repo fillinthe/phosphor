@@ -5423,5 +5423,21 @@
 "Texts": "Teksten",
 "{0}: screen back, output restored": "{0}: scherm terug, uitvoer hersteld",
 "{0} minutes left": "Nog {0} minuten",
-"{0}: screen unplugged, output hidden": "{0}: scherm losgekoppeld, uitvoer verborgen"
+"{0}: screen unplugged, output hidden": "{0}: scherm losgekoppeld, uitvoer verborgen",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "Een nieuwe map met een afbeelding van elke tekenlaag (geplaatst zoals in Trace) en een project met een laag voor elk: namen, verborgen lagen en dekking blijven behouden. Het opent in plaats van dit project.",
+"A show is being opened already": "Er wordt al een show geopend",
+"Drew {0} of {1} layers": "{0} van {1} lagen getekend",
+"Import Resolume / VDMX / MadMapper / Trace…": "Resolume / VDMX / MadMapper / Trace importeren…",
+"Made": "Gemaakt",
+"Make and open": "Maken en openen",
+"Make it in": "Maken in",
+"Not a Trace drawing ({0})": "Geen Trace-tekening ({0})",
+"Not a Trace drawing: there's no layer list in it": "Geen Trace-tekening: er staat geen lagenlijst in",
+"Opened it (the files are in {0})": "Geopend (de bestanden staan in {0})",
+"Reading the drawing…": "Tekening lezen…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume, VDMX, MadMapper of Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "geen Trace-tekening (er staat geen tekening in)",
+"not a Trace drawing (no layers)": "geen Trace-tekening (geen lagen)",
+"not a Trace drawing ({0})": "geen Trace-tekening ({0})",
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace-tekening openen"
 }

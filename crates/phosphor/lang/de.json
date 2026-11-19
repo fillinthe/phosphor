@@ -5423,5 +5423,21 @@
 "Texts": "Texte",
 "{0}: screen back, output restored": "{0}: Bildschirm wieder da, Ausgabe zurück",
 "{0} minutes left": "{0} Minuten übrig",
-"{0}: screen unplugged, output hidden": "{0}: Bildschirm getrennt, Ausgabe ausgeblendet"
+"{0}: screen unplugged, output hidden": "{0}: Bildschirm getrennt, Ausgabe ausgeblendet",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "Ein neuer Ordner mit einem Bild jeder Zeichenebene (platziert wie in Trace) und ein Projekt mit einer Ebene für jede: Namen, ausgeblendete Ebenen und Deckkraft bleiben erhalten. Es öffnet sich anstelle dieses Projekts.",
+"A show is being opened already": "Es wird bereits eine Show geöffnet",
+"Drew {0} of {1} layers": "{0} von {1} Ebenen gezeichnet",
+"Import Resolume / VDMX / MadMapper / Trace…": "Resolume / VDMX / MadMapper / Trace importieren…",
+"Made": "Erstellt",
+"Make and open": "Erstellen und öffnen",
+"Make it in": "Erstellen in",
+"Not a Trace drawing ({0})": "Keine Trace-Zeichnung ({0})",
+"Not a Trace drawing: there's no layer list in it": "Keine Trace-Zeichnung: Es enthält keine Ebenenliste",
+"Opened it (the files are in {0})": "Geöffnet (die Dateien liegen in {0})",
+"Reading the drawing…": "Zeichnung wird gelesen…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume, VDMX, MadMapper oder Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "keine Trace-Zeichnung (keine Zeichnung darin)",
+"not a Trace drawing (no layers)": "keine Trace-Zeichnung (keine Ebenen)",
+"not a Trace drawing ({0})": "keine Trace-Zeichnung ({0})",
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio-Trace-Zeichnung öffnen"
 }

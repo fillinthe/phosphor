@@ -566,9 +566,9 @@ impl PhosphorApp {
         if dropped.is_empty() {
             return;
         }
-        // A packed show dropped on the window: asks where to unpack it, then opens it.
+        // A packed show (or a Trace drawing) dropped on the window: asks where to unpack it, then opens it.
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(pack) = dropped.iter().map(|f| f.path().to_path_buf()).find(|p| crate::pack::is_pack(p)) {
+        if let Some(pack) = dropped.iter().map(|f| f.path().to_path_buf()).find(|p| crate::pack::is_pack(p) || crate::import::morpholio::is_trace(p)) {
             crate::panels::open_pack(&mut self.state, pack);
             return;
         }

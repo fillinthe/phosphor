@@ -64,10 +64,11 @@ pub(crate) fn save_pack(st: &mut State, dest: PathBuf) {
     st.packs.saving = Some(job::spawn("phosphor-pack", move |p| crate::pack::write(comp, &name, &dest, p)));
 }
 
-/// A packed show to open: asks where to unpack it first (beside it, or a folder you pick).
+/// A packed show (or a Morpholio Trace drawing) to open: asks where to unpack it first (beside it, or a folder you
+/// pick).
 pub(crate) fn open_pack(st: &mut State, file: PathBuf) {
     if st.packs.opening.as_ref().is_some_and(|o| o.job.is_some()) {
-        st.notice = Some("A packed show is being opened already".into());
+        st.notice = Some("A show is being opened already".into());
         return;
     }
     let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
@@ -197,18 +198,27 @@ fn opening_window(ctx: &egui::Context, st: &mut State) {
         return;
     }
     let (file, into, size) = (o.file.clone(), o.into.clone(), o.size);
+    let trace = crate::import::morpholio::is_trace(&file);
     let (mut start, mut close, mut change) = (false, false, false);
-    crate::ui::dialog(ctx, format!("{} Open Packed Show", icon::PACKAGE)).id(egui::Id::new("pack_opening")).resizable(false).default_width(440.0).show(ctx, |ui| {
+    let title = if trace { format!("{} Open Morpholio Trace Drawing", icon::PENCIL_SIMPLE) } else { format!("{} Open Packed Show", icon::PACKAGE) };
+    crate::ui::dialog(ctx, title).id(egui::Id::new("pack_opening")).resizable(false).default_width(440.0).show(ctx, |ui| {
         ui.label(egui::RichText::new(file.file_name().unwrap_or_default().to_string_lossy()).strong());
         match &progress {
             None => {
                 crate::ui::hint(ui, size_text(size));
-                crate::ui::field(ui, "Unpack into", |ui| {
+                crate::ui::field(ui, if trace { "Make it in" } else { "Unpack into" }, |ui| {
                     ui.monospace(into.to_string_lossy());
-                    crate::ui::help(ui, "A new folder with the project, its media and shaders. The project in it opens, in place of this one.");
+                    crate::ui::help(
+                        ui,
+                        if trace {
+                            "A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one."
+                        } else {
+                            "A new folder with the project, its media and shaders. The project in it opens, in place of this one."
+                        },
+                    );
                 });
                 crate::ui::toolbar(ui, |ui| {
-                    start = crate::ui::action_button(ui, crate::ui::Act::Go, label(icon::FOLDER_OPEN, "Unpack and open")).clicked();
+                    start = crate::ui::action_button(ui, crate::ui::Act::Go, label(icon::FOLDER_OPEN, if trace { "Make and open" } else { "Unpack and open" })).clicked();
                     change = crate::ui::command(ui, "Another folder…").clicked();
                     close = crate::ui::command(ui, "Cancel").clicked();
                 });
@@ -220,7 +230,7 @@ fn opening_window(ctx: &egui::Context, st: &mut State) {
                     job::cancel(j);
                 }
             }
-            Some(p) => close = job_end(ui, p, "Unpacked"),
+            Some(p) => close = job_end(ui, p, if trace { "Made" } else { "Unpacked" }),
         }
     });
     if change {
@@ -230,7 +240,11 @@ fn opening_window(ctx: &egui::Context, st: &mut State) {
         st.packs.opening = None;
     } else if start && let Some(o) = st.packs.opening.as_mut() {
         let (file, into) = (o.file.clone(), o.into.clone());
-        o.job = Some(job::spawn("phosphor-unpack", move |p| crate::pack::unpack(&file, &into, p).map(|_| ())));
+        o.job = Some(if crate::import::morpholio::is_trace(&file) {
+            job::spawn("phosphor-trace", move |p| crate::import::morpholio::convert(&file, &into, p).map(|_| ()))
+        } else {
+            job::spawn("phosphor-unpack", move |p| crate::pack::unpack(&file, &into, p).map(|_| ()))
+        });
     }
 }
 
@@ -241,7 +255,7 @@ fn finish_open(st: &mut State, project: &Path, from: Option<&str>) {
         let folder = project.parent().unwrap_or(project).display();
         st.notice = Some(match from {
             Some(who) => format!("Opened the show from {who} (it's in {folder})"),
-            None => format!("Opened the packed show (unpacked into {folder})"),
+            None => format!("Opened it (the files are in {folder})"),
         });
     }
 }

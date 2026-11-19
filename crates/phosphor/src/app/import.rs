@@ -71,8 +71,13 @@ pub type Relinked = (Vec<(String, String)>, usize);
 
 impl State {
     /// Reads a Resolume composition (.avc) or VDMX project (.vdmx5) and opens the deck / page chooser, or a
-    /// MadMapper project (.mad) and opens its summary.
+    /// MadMapper project (.mad) and opens its summary, or a Morpholio Trace drawing (asks where its layers go).
     pub fn begin_import(&mut self, path: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::import::morpholio::is_trace(std::path::Path::new(path)) {
+            crate::panels::open_pack(self, path.into());
+            return;
+        }
         if path.to_lowercase().ends_with(".mad") {
             match crate::import::madmapper::read(path) {
                 Ok(file) => {

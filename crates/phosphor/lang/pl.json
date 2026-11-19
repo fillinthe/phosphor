@@ -5423,5 +5423,21 @@
 "Texts": "Teksty",
 "{0}: screen back, output restored": "{0}: ekran wrócił, wyjście przywrócone",
 "{0} minutes left": "Zostało {0} min",
-"{0}: screen unplugged, output hidden": "{0}: ekran odłączony, wyjście ukryte"
+"{0}: screen unplugged, output hidden": "{0}: ekran odłączony, wyjście ukryte",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "Nowy folder z obrazem każdej warstwy rysunku (umieszczonym jak w Trace) i projekt z warstwą dla każdej z nich: nazwy, ukryte warstwy i krycie zostają zachowane. Otwiera się zamiast tego projektu.",
+"A show is being opened already": "Pokaz jest już otwierany",
+"Drew {0} of {1} layers": "Narysowano {0} z {1} warstw",
+"Import Resolume / VDMX / MadMapper / Trace…": "Importuj Resolume / VDMX / MadMapper / Trace…",
+"Made": "Utworzono",
+"Make and open": "Utwórz i otwórz",
+"Make it in": "Utwórz w",
+"Not a Trace drawing ({0})": "To nie jest rysunek Trace ({0})",
+"Not a Trace drawing: there's no layer list in it": "To nie jest rysunek Trace: brak listy warstw",
+"Opened it (the files are in {0})": "Otwarto (pliki są w {0})",
+"Reading the drawing…": "Odczytywanie rysunku…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume, VDMX, MadMapper lub Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "to nie jest rysunek Trace (brak rysunku)",
+"not a Trace drawing (no layers)": "to nie jest rysunek Trace (brak warstw)",
+"not a Trace drawing ({0})": "to nie jest rysunek Trace ({0})",
+"{0} Open Morpholio Trace Drawing": "{0} Otwórz rysunek Morpholio Trace"
 }

@@ -5423,5 +5423,21 @@
 "Texts": "Metinler",
 "{0}: screen back, output restored": "{0}: ekran geri geldi, çıkış geri yüklendi",
 "{0} minutes left": "{0} dakika kaldı",
-"{0}: screen unplugged, output hidden": "{0}: ekran çıkarıldı, çıkış gizlendi"
+"{0}: screen unplugged, output hidden": "{0}: ekran çıkarıldı, çıkış gizlendi",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "Her çizim katmanının bir resmini (Trace'teki gibi yerleştirilmiş) ve her biri için bir katman içeren bir proje barındıran yeni bir klasör: adlar, gizli katmanlar ve opaklık korunur. Bu projenin yerine açılır.",
+"A show is being opened already": "Bir gösteri zaten açılıyor",
+"Drew {0} of {1} layers": "{1} katmandan {0} tanesi çizildi",
+"Import Resolume / VDMX / MadMapper / Trace…": "Resolume / VDMX / MadMapper / Trace içe aktar…",
+"Made": "Oluşturuldu",
+"Make and open": "Oluştur ve aç",
+"Make it in": "Oluşturulacak yer",
+"Not a Trace drawing ({0})": "Trace çizimi değil ({0})",
+"Not a Trace drawing: there's no layer list in it": "Trace çizimi değil: içinde katman listesi yok",
+"Opened it (the files are in {0})": "Açıldı (dosyalar {0} içinde)",
+"Reading the drawing…": "Çizim okunuyor…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume, VDMX, MadMapper veya Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "Trace çizimi değil (içinde çizim yok)",
+"not a Trace drawing (no layers)": "Trace çizimi değil (katman yok)",
+"not a Trace drawing ({0})": "Trace çizimi değil ({0})",
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace çizimini aç"
 }

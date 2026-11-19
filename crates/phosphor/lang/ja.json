@@ -5423,5 +5423,21 @@
 "Texts": "テキスト",
 "{0}: screen back, output restored": "{0}: 画面が戻り、出力を復元しました",
 "{0} minutes left": "残り{0}分",
-"{0}: screen unplugged, output hidden": "{0}: 画面が外れたため、出力を隠しました"
+"{0}: screen unplugged, output hidden": "{0}: 画面が外れたため、出力を隠しました",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "描画レイヤーごとの画像（Traceと同じ配置）と、それぞれのレイヤーを持つプロジェクトが入った新しいフォルダー。名前、非表示レイヤー、不透明度はそのまま。このプロジェクトの代わりに開きます。",
+"A show is being opened already": "ショーはすでに開いています",
+"Drew {0} of {1} layers": "{1}レイヤー中{0}を描画しました",
+"Import Resolume / VDMX / MadMapper / Trace…": "Resolume / VDMX / MadMapper / Trace を読み込む…",
+"Made": "作成済み",
+"Make and open": "作成して開く",
+"Make it in": "作成先",
+"Not a Trace drawing ({0})": "Traceの描画ではありません（{0}）",
+"Not a Trace drawing: there's no layer list in it": "Traceの描画ではありません：レイヤー一覧がありません",
+"Opened it (the files are in {0})": "開きました（ファイルは{0}にあります）",
+"Reading the drawing…": "描画を読み込み中…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume、VDMX、MadMapper、Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "Traceの描画ではありません（描画が入っていません）",
+"not a Trace drawing (no layers)": "Traceの描画ではありません（レイヤーがありません）",
+"not a Trace drawing ({0})": "Traceの描画ではありません（{0}）",
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Traceの描画を開く"
 }

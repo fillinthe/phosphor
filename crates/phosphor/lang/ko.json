@@ -5423,5 +5423,21 @@
 "Texts": "텍스트",
 "{0}: screen back, output restored": "{0}: 화면이 돌아와 출력을 복원했습니다",
 "{0} minutes left": "{0}분 남음",
-"{0}: screen unplugged, output hidden": "{0}: 화면 연결이 끊겨 출력을 숨겼습니다"
+"{0}: screen unplugged, output hidden": "{0}: 화면 연결이 끊겨 출력을 숨겼습니다",
+"A new folder with a picture of each drawing layer (placed as in Trace) and a project with a layer for each: names, hidden layers and opacity kept. It opens in place of this one.": "각 드로잉 레이어의 그림(Trace와 같은 위치)과 레이어마다 하나씩 레이어가 있는 프로젝트가 담긴 새 폴더. 이름, 숨긴 레이어, 불투명도가 유지됩니다. 이 프로젝트 대신 열립니다.",
+"A show is being opened already": "이미 쇼를 여는 중입니다",
+"Drew {0} of {1} layers": "레이어 {1}개 중 {0}개를 그렸습니다",
+"Import Resolume / VDMX / MadMapper / Trace…": "Resolume / VDMX / MadMapper / Trace 가져오기…",
+"Made": "만들었음",
+"Make and open": "만들고 열기",
+"Make it in": "만들 위치",
+"Not a Trace drawing ({0})": "Trace 드로잉이 아닙니다 ({0})",
+"Not a Trace drawing: there's no layer list in it": "Trace 드로잉이 아닙니다: 레이어 목록이 없습니다",
+"Opened it (the files are in {0})": "열었습니다 (파일 위치: {0})",
+"Reading the drawing…": "드로잉을 읽는 중…",
+"Resolume, VDMX, MadMapper or Morpholio Trace": "Resolume, VDMX, MadMapper 또는 Morpholio Trace",
+"not a Trace drawing (no drawing in it)": "Trace 드로잉이 아닙니다 (드로잉이 없음)",
+"not a Trace drawing (no layers)": "Trace 드로잉이 아닙니다 (레이어 없음)",
+"not a Trace drawing ({0})": "Trace 드로잉이 아닙니다 ({0})",
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace 드로잉 열기"
 }
