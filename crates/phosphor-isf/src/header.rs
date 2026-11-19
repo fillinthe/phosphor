@@ -141,13 +141,15 @@ fn str_of(v: &Value) -> String {
     }
 }
 
+/// A number (or a number written as text / a bool); "nan", "inf" and numbers too big for an f32 don't count.
 fn f32_of(v: Option<&Value>) -> Option<f32> {
-    match v? {
+    let f = match v? {
         Value::Number(n) => n.as_f64().map(|f| f as f32),
         Value::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
         Value::String(s) => s.trim().parse().ok(),
         _ => None,
-    }
+    }?;
+    f.is_finite().then_some(f)
 }
 
 fn f32_array<const N: usize>(v: Option<&Value>, fallback: [f32; N]) -> [f32; N] {

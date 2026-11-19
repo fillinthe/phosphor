@@ -685,7 +685,8 @@ fn fix_int_returns(body: &str) -> String {
 /// If a top-level function definition starts at `i`: its return type and the index of its `{`.
 fn function_at(src: &str, i: usize) -> Option<(&str, usize)> {
     let b = src.as_bytes();
-    if i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_') {
+    // (Callers step byte by byte: inside a multi-byte letter is never a definition.)
+    if !src.is_char_boundary(i) || (i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_')) {
         return None;
     }
     let rest = &src[i..];

@@ -35,6 +35,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   without a yes. It needs your Session password when you have one. Both sides see how far it got and can cancel;
   the show opens there when it arrives (in Documents › Phosphor Shows).
 - Export Show now also carries LUTs and shaders kept in subfolders.
+- An ISF shader with an accented letter in odd places, or a setting written as "nan" or "inf", no longer stops
+  the shader from loading.
 
 ## 0.5.11 (2026-11-18)
 
