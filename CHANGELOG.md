@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Help** (the ? button at the top, or Help › User Manual) opens the user manual on phosphorfx.com, in the
+  language Phosphor shows, so the answers are always the latest.
 - **Morpholio Trace drawings** open in Phosphor (File › Import…, or drop the .morpholiotrace file on the window):
   each drawing layer becomes a Phosphor layer with its picture placed as in Trace, its name, opacity and
   hidden layers kept, in a new folder beside the drawing. (Pen strokes come across as pictures, not lines.)

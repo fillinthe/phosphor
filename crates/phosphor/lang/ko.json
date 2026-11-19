@@ -5439,5 +5439,7 @@
 "not a Trace drawing (no drawing in it)": "Trace 드로잉이 아닙니다 (드로잉이 없음)",
 "not a Trace drawing (no layers)": "Trace 드로잉이 아닙니다 (레이어 없음)",
 "not a Trace drawing ({0})": "Trace 드로잉이 아닙니다 ({0})",
-"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace 드로잉 열기"
+"{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace 드로잉 열기",
+"User Manual": "사용자 매뉴얼",
+"Help: the user manual on phosphorfx.com, always up to date": "도움말: phosphorfx.com의 사용자 설명서, 항상 최신"
 }

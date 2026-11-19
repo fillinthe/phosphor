@@ -47,6 +47,8 @@ pub enum Action {
     WebControl,
     MuteAll,
     Ndi,
+    /// Help › User Manual: the manual on the website, in the app's language.
+    Manual,
     Notes,
     Roadmap,
     Website,
@@ -217,6 +219,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "Help",
         &[
+            I(A::Manual, "User Manual", None),
+            S,
             I(A::Notes, "What's New", None),
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),

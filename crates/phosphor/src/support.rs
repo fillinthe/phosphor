@@ -10,6 +10,29 @@ use phosphor_engine::SourceSpec;
 pub const DONATE_URL: &str = "https://donate.stripe.com/eVqdRb8kv3XW08LcNaaEE04";
 pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
 
+/// Help › User Manual: the manual on the website, in the language the app shows (the site keeps a folder per
+/// language: /docs/ for English, /es/docs/, /pt/docs/, /zh/docs/…).
+pub fn manual_url() -> String {
+    manual_url_for(crate::i18n::chosen().resolved().code())
+}
+
+fn manual_url_for(code: &str) -> String {
+    match code.split('-').next().unwrap_or("en").to_ascii_lowercase().as_str() {
+        "en" | "auto" | "" => "https://phosphorfx.com/docs/".to_string(),
+        lang => format!("https://phosphorfx.com/{lang}/docs/"),
+    }
+}
+
+#[cfg(test)]
+mod manual_tests {
+    #[test]
+    fn the_manual_opens_in_the_apps_language() {
+        use super::manual_url_for as url;
+        assert_eq!(url("en"), "https://phosphorfx.com/docs/");
+        assert_eq!((url("pt-BR"), url("zh-CN"), url("de")), ("https://phosphorfx.com/pt/docs/".into(), "https://phosphorfx.com/zh/docs/".into(), "https://phosphorfx.com/de/docs/".into()));
+    }
+}
+
 /// Donate's orange, the same as GCarve's (the one orange in either app).
 pub const DONATE_ORANGE: egui::Color32 = crate::theme::DONATE;
 
