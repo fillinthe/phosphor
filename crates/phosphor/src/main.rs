@@ -74,6 +74,8 @@ mod presets;
 mod recovery;
 mod remote;
 mod screens;
+#[cfg(not(target_arch = "wasm32"))]
+mod screen_watch;
 mod stats;
 mod support;
 #[cfg(any(target_os = "macos", windows))]

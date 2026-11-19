@@ -21,6 +21,57 @@ impl PhosphorApp {
         }
     }
 
+    /// A screen unplugged mid-show hides the output filling it (rather than letting the system drop it onto another
+    /// screen); plugged back in, the output fills it again. Reads the display list only when due (see `ScreenWatch`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn watch_screens(&mut self, now: f64) {
+        use crate::screen_watch::{Act, Placed};
+        let placed: Vec<Placed> = {
+            let map = self.state.output.lock().unwrap();
+            self.state
+                .comp
+                .outputs
+                .iter()
+                .map(|o| {
+                    let w = map.get(&o.id);
+                    let filling = w.and_then(|w| w.place.as_ref().map(|p| p.0.id).or(if w.fullscreen { w.display } else { None }));
+                    Placed { output: o.id, name: o.name.clone(), open: w.is_some_and(|w| w.open), filling, screen: o.screen.clone() }
+                })
+                .collect()
+        };
+        let watching = placed.iter().any(|p| p.open);
+        if !self.state.screen_watch.due(now, watching) {
+            return;
+        }
+        let displays = crate::screens::displays();
+        let acts = self.state.screen_watch.update(&displays, &placed);
+        if !displays.is_empty() && displays != self.state.displays {
+            self.state.displays = displays;
+        }
+        if acts.is_empty() {
+            return;
+        }
+        for act in &acts {
+            match act {
+                Act::Hide(away) => {
+                    log::warn!(target: "phosphor::action", "screen \"{}\" unplugged: output \"{}\" hidden until it's back", away.key, away.name);
+                    if let Some(w) = self.state.output.lock().unwrap().get_mut(&away.output) {
+                        w.open = false;
+                        w.fullscreen = false;
+                        w.place = None;
+                    }
+                }
+                Act::Restore { output, name, display } => {
+                    log::info!(target: "phosphor::action", "screen \"{}\" back: output \"{name}\" fills it again", display.name);
+                    if self.state.comp.outputs.iter().any(|o| o.id == *output && o.enabled) {
+                        self.state.send_output_id_to(*output, display.clone());
+                    }
+                }
+            }
+        }
+        self.state.notice = crate::screen_watch::notice(&acts);
+    }
+
     /// Phone/tablet remote: apply what remotes sent, then publish the state (≈20 times a second).
     pub(crate) fn remote_sync(&mut self, now: f64) {
         if !self.state.net.running() {
