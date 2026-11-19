@@ -617,23 +617,17 @@ impl NetSession {
                             native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow, shows);
                         });
                     };
-                    match listener.accept() {
-                        Ok((stream, from)) => {
-                            idle = false;
-                            take(stream, from, None);
-                        }
-                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                        Err(_) => break,
+                    // A failed accept (a phone that hung up before it was taken, or too many files open for a
+                    // moment) is that one connection's problem: the session keeps listening (it used to stop for good).
+                    if let Ok((stream, from)) = listener.accept() {
+                        idle = false;
+                        take(stream, from, None);
                     }
-                    if let Some((l, cfg)) = &tls {
-                        match l.accept() {
-                            Ok((stream, from)) => {
-                                idle = false;
-                                take(stream, from, Some(cfg.clone()));
-                            }
-                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                            Err(_) => break,
-                        }
+                    if let Some((l, cfg)) = &tls
+                        && let Ok((stream, from)) = l.accept()
+                    {
+                        idle = false;
+                        take(stream, from, Some(cfg.clone()));
                     }
                     if idle {
                         std::thread::sleep(std::time::Duration::from_millis(30));

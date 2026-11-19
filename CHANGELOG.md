@@ -37,6 +37,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Export Show now also carries LUTs and shaders kept in subfolders.
 - An ISF shader with an accented letter in odd places, or a setting written as "nan" or "inf", no longer stops
   the shader from loading.
+- The Session keeps answering phones after one hangs up at the wrong moment (it could stop taking new
+  connections until restarted), and its HTTPS key is now readable by your user only.
+- TouchOSC and other apps browsing Phosphor's controls (OSC Query) no longer wait on a slow or silent device.
+- Fewer chances of crackles: the sound and audio-input threads no longer ask for memory while they run.
 
 ## 0.5.11 (2026-11-18)
 
