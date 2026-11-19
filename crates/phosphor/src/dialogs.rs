@@ -29,6 +29,10 @@ pub enum Purpose {
     /// The timeline's sound track.
     TimelineSound,
     ExportShow,
+    /// Where File › Save Packed Show writes the pack.
+    SavePackedShow,
+    /// A folder to unpack a packed show into (instead of beside it).
+    UnpackInto,
     TouchOsc,
     /// A TouchOSC layout to bring in as Control Surface pages.
     ImportTouchOsc,

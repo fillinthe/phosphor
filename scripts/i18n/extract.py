@@ -24,7 +24,9 @@ def shown(text):
         return False
     if re.fullmatch(r"[A-Z0-9_]+", t) and len(t) > 4 and "_" in t:  # ENV_NAMES
         return False
-    if t.startswith(("/", "http", "#", "--", "fs_", "vs_", "isf:", "ffgl", "wgsl", "@", "{\"", "<", "PHOSPHOR_")):
+    if t.startswith(("/", "http", "HTTP/", "X-", "#", "--", "fs_", "vs_", "isf:", "ffgl", "wgsl", "@", "{\"", "<", "PHOSPHOR_")):
+        return False
+    if re.fullmatch(r"[1-5]\d\d (OK|Accepted|Created|Bad Request|Unauthorized|Forbidden|Not Found|Gone|Too Many Requests|Service Unavailable)", t):  # HTTP statuses
         return False
     if re.search(r"\.(rs|wgsl|glsl|json|ron|png|mov|mp4|txt|fs|vs)$", t):
         return False

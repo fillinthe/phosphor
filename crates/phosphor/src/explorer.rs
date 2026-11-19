@@ -900,13 +900,25 @@ pub fn load_user_shaders(st: &mut State) {
     }
     st.editor.loaded = true;
     #[cfg(not(target_arch = "wasm32"))]
+    load_new_user_shaders(st);
+}
+
+/// Compiles the saved user shaders that aren't loaded yet (all of them at start; later, ones a packed show brought).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_new_user_shaders(st: &mut State) {
+    if st.engine.is_none() {
+        return;
+    }
     for dir in effects_dir().into_iter().chain(crate::show::shader_dir("effects")) {
         let Ok(entries) = std::fs::read_dir(dir) else { continue };
         let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "wgsl")).collect();
         files.sort();
         for path in files {
-            let (Some(stem), Ok(source)) = (path.file_stem(), std::fs::read_to_string(&path)) else { continue };
-            let slug = stem.to_string_lossy().to_string();
+            let Some(slug) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
+            if st.editor.shaders.iter().any(|s| s.slug == slug) {
+                continue;
+            }
+            let Ok(source) = std::fs::read_to_string(&path) else { continue };
             st.editor.shaders.push(UserShader::new(slug, source));
             let i = st.editor.shaders.len() - 1;
             compile(st, i, false);

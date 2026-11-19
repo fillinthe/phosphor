@@ -367,6 +367,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 link_import: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                packs: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 online: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 feeds: Default::default(),
@@ -496,6 +498,13 @@ impl PhosphorApp {
         {
             let _ = app.state.open_project_file(&path);
         }
+        // A packed show the same way: asks where to unpack it.
+        #[cfg(not(target_arch = "wasm32"))]
+        if app.bench.is_none()
+            && let Some(path) = std::env::args().nth(1).filter(|a| !a.starts_with("--") && crate::pack::is_pack(std::path::Path::new(a)))
+        {
+            crate::panels::open_pack(&mut app.state, std::path::PathBuf::from(path));
+        }
         if app.bench.is_none() {
             app.state.outputs_on_open();
         }
@@ -544,6 +553,10 @@ impl PhosphorApp {
             app.state.following = Some(crate::follow::Link::connect(&addr, &password));
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
+            // Two benches on one computer: PHOSPHOR_NET_PORT gives the second its own port.
+            if let Some(port) = std::env::var("PHOSPHOR_NET_PORT").ok().and_then(|p| p.parse().ok()) {
+                app.state.net.port = port;
+            }
             if let Err(e) = app.state.net.start() {
                 eprintln!("net: {e}");
             }

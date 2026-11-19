@@ -5,6 +5,8 @@ use super::*;
 pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     follow_section(ui, st);
+    #[cfg(not(target_arch = "wasm32"))]
+    send_section(ui, st);
     // The router's opening goes with the Session.
     #[cfg(not(target_arch = "wasm32"))]
     if !st.net.running() {

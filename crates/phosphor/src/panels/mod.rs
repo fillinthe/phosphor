@@ -42,6 +42,8 @@ mod layer_windows;
 mod layers;
 #[cfg(not(target_arch = "wasm32"))]
 mod link_import;
+#[cfg(not(target_arch = "wasm32"))]
+mod packed;
 mod inputs;
 #[cfg(not(target_arch = "wasm32"))]
 mod online;
@@ -115,6 +117,8 @@ pub(crate) use layer_windows::*;
 pub(crate) use layers::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use link_import::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use packed::*;
 pub(crate) use modulator_window::*;
 pub(crate) use macros::*;
 pub(crate) use inputs::*;

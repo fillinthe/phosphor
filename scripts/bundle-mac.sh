@@ -94,6 +94,10 @@ ${TEST_BUILD}
     <key>CFBundleTypeName</key><string>Phosphor Project</string>
     <key>CFBundleTypeExtensions</key><array><string>phosphor</string></array>
     <key>CFBundleTypeRole</key><string>Editor</string>
+  </dict><dict>
+    <key>CFBundleTypeName</key><string>Phosphor Packed Show</string>
+    <key>CFBundleTypeExtensions</key><array><string>phosphorpack</string></array>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
   </dict></array>
 </dict>
 </plist>

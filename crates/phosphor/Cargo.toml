@@ -67,6 +67,8 @@ socket2 = "0.6"
 # Reaching a Session from the internet: asks the router to open its port (UPnP IGD; MIT).
 igd-next = "0.18"
 flate2 = "1"
+# Packed shows: one zip with the project and its media (stored entries; only the deflate backend already used).
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 rusty_link = "0.4"
 tungstenite = "0.26"
 str0m = { version = "0.24", default-features = false, features = ["rust-crypto"] }

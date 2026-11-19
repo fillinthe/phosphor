@@ -70,6 +70,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                         crate::net::PeerKind::Audio => (icon::MICROPHONE, "sending audio"),
                         crate::net::PeerKind::Guest => (icon::GAME_CONTROLLER, "audience (play page)"),
                         crate::net::PeerKind::Follower => (icon::MONITOR_PLAY, "following this show"),
+                        crate::net::PeerKind::Receiver => (icon::PACKAGE, "taking the show you sent"),
                     };
                     ui.label(format!("{glyph} {}", p.device));
                     ui.monospace(&p.ip);
@@ -204,7 +205,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             if players.is_empty() {
                 hint(ui, "None heard on this network.");
             }
-            for p in &players {
+            for p in players.iter().filter(|p| p.port != 0) {
                 crate::ui::toolbar(ui, |ui| {
                     ui.label(&p.name);
                     hint(ui, format!("OSC {}:{}{}", p.address, p.port, if p.version.is_empty() { String::new() } else { format!(" · {}", p.version) }));

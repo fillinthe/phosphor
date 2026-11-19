@@ -18,6 +18,8 @@ pub enum Action {
     FindMissing,
     WatchFolder,
     Snapshot,
+    /// One file with the project and everything it uses, to carry the show to another computer.
+    SavePacked,
     ExportShow,
     Quit,
     Undo,
@@ -139,6 +141,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::WatchFolder, "Watch Folder…", None),
             S,
             I(A::Snapshot, "Save Snapshot (PNG)…", None),
+            I(A::SavePacked, "Save Packed Show…", None),
             I(A::ExportShow, "Export Show…", Some((true, Key::E))),
             S,
             I(A::Quit, "Quit Phosphor VJ", Some((false, Key::Q))),
