@@ -217,6 +217,10 @@ impl Sender {
 
     /// Copies one RGBA frame into the shared texture (as BGRA) under the access lock.
     fn send(&mut self, width: u32, height: u32, mut rgba: Vec<u8>) -> Result<(), String> {
+        // A frame shorter than its size says would be read past its end by UpdateSubresource.
+        if (rgba.len() as u64) < width as u64 * height as u64 * 4 {
+            return Ok(());
+        }
         self.ensure_texture(width, height)?;
         for px in rgba.chunks_exact_mut(4) {
             px.swap(0, 2);
