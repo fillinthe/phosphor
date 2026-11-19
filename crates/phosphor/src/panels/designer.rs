@@ -31,10 +31,12 @@ const POINTS_BOXES: [(&str, &str, bool); 9] = [
 
 /// The Data submenu: (name, preset id). "data:N" = a Number box with `DataKind::ALL[N]`, "event" = a Number box
 /// with an event, "text" = a Picture box showing words (with a Value input).
-const DATA_BOXES: [(&str, &str); 7] = [
+const DATA_BOXES: [(&str, &str); 9] = [
     ("Live reading (weather, ISS, earthquakes)", "data:0"),
     ("Web (JSON)", "data:1"),
+    ("Web list (news, songs: one after another)", "data:5"),
     ("Timer", "data:2"),
+    ("Countdown (wire it into Text boxes)", "countdown"),
     ("Clock", "data:3"),
     ("Table file (CSV)…", "data:4"),
     ("Text (words, with a number in them)", "text"),
@@ -116,10 +118,10 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id) && *id != cid).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
-    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None, targets, restart: None, pick_table: None, hovered: false };
+    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, wire_after: None, action: None, targets, restart: None, pick_table: None, hovered: false };
     let canvas_changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
     view.hovered = ui.ui_contains_pointer();
-    let View { net, resync, go, error, preset, action, restart, pick_table, hovered, .. } = view;
+    let View { net, resync, go, error, preset, wire_after, action, restart, pick_table, hovered, .. } = view;
     if let Some(step) = step {
         ui.ctx().data_mut(|d| d.insert_temp(path_id, path.clone()));
         st.undo_step(step);
@@ -163,7 +165,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
             if shader == crate::models::FORMAT {
                 action = Some((l.id, super::layers::LayerAction::OpenModel));
             } else if shader == "text" {
-                l.source = SourceSpec::Text(phosphor_engine::TextStyle { text: "Hello".into(), live_source: "{raw}".into(), ..crate::text::default_style() });
+                l.source = SourceSpec::Text(phosphor_engine::TextStyle { text: "Hello".into(), live_source: "{text}".into(), ..crate::text::default_style() });
             } else if generator {
                 l.set_generator(shader);
             } else if let Some(fx) = fx {
@@ -178,6 +180,10 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 if matches!(m.data.as_ref().map(|d| &d.kind), Some(DataKind::Table { .. })) {
                     pick_table_now = Some(m.id);
                 }
+            } else if shader == "countdown" {
+                m.data = Some(DataFeed { kind: DataKind::Timer { seconds: 300.0, down: true }, ..Default::default() });
+                m.signal.source = ModSource::Hand;
+                m.name = "Countdown".into();
             } else if shader == "event" {
                 m.event = Some(Trigger::default());
             } else if let Some(n) = shader.strip_prefix("op:").and_then(|n| n.parse::<usize>().ok()) {
@@ -185,6 +191,13 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 m.name = m.op.as_ref().map_or(m.name.clone(), |o| o.name().to_string());
             }
         }
+        comp.sync_network(cid);
+    }
+    // A number wire let go on empty canvas: the box it made is wired now that it has its inputs (a Text box's Value,
+    // an operator's A).
+    if let Some((from, to)) = wire_after
+        && comp.connect_boxes(cid, &path, from, to, 0)
+    {
         comp.sync_network(cid);
     }
     // A box's source picker asked for a file or the browser.
@@ -238,6 +251,7 @@ fn data_rows(kind: &DataKind) -> f32 {
         DataKind::Timer { .. } => 2.0,
         DataKind::Clock => 1.0,
         DataKind::Table { .. } => 4.0,
+        DataKind::List { .. } => 4.0,
     }
 }
 
@@ -260,6 +274,8 @@ struct View<'a> {
     error: Option<String>,
     /// A box just added from the Points menu: (box, shader id, true = a generator) to set once it has its layer.
     preset: Option<(u32, &'static str, bool)>,
+    /// A number wire let go on empty canvas: (from, the box made for it), wired once that box has its inputs.
+    wire_after: Option<(u32, u32)>,
     /// What a box's source picker asked for (a file, the browser), for its layer.
     action: Option<(u64, super::layers::LayerAction)>,
     /// Every control an Event box may set (empty while no box has an event).
@@ -392,11 +408,23 @@ impl View<'_> {
                         guarded!(ui, d.max, egui::DragValue::new(&mut d.max).speed(0.1).prefix("1 at ")).on_hover_text("The number that means 1");
                     });
                 }
-                DataKind::Timer { seconds } => {
-                    Level::range(seconds, 0.1, 600.0, "Seconds").log().default(10.0).width(width).show(ui);
-                    if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
-                        self.restart = Some(mid);
+                DataKind::Timer { seconds, down } => {
+                    Level::range(seconds, 0.1, 7200.0, "Seconds").log().default(10.0).width(width).show(ui);
+                    crate::ui::toolbar(ui, |ui| {
+                        if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
+                            self.restart = Some(mid);
+                        }
+                        crate::ui::toggle(ui, down, "Count down").on_hover_text("1 to 0, and its number is the seconds left: a Text box shows it with {mm:ss} or {min}");
+                    });
+                }
+                DataKind::List { url, path, every, seconds } => {
+                    crate::ui::text_field(ui, url, "https://… (JSON or a news feed)", Some(width));
+                    crate::ui::text_field(ui, path, "JSON: path to the list (articles.*.title)", Some(width)).on_hover_text("Where the list is in a JSON answer: articles, or articles.*.title (* = each item). Not needed for a news feed (RSS / Atom)");
+                    let mut minutes = *every / 60.0;
+                    if Level::range(&mut minutes, 1.0, 120.0, "Ask again every (min)").log().default(5.0).width(width).show(ui).changed() {
+                        *every = minutes * 60.0;
                     }
+                    Level::range(seconds, 1.0, 120.0, "Seconds an item").log().default(5.0).width(width).show(ui);
                 }
                 DataKind::Clock => {}
                 DataKind::Table { path, column, seconds } => {
@@ -417,6 +445,7 @@ impl View<'_> {
             }
             let status = match &m.live.problem {
                 Some(p) => p.clone(),
+                None if !m.live.shown.is_empty() && !m.live.note.is_empty() => format!("Now: {} ({})", m.live.shown, m.live.note),
                 None if !m.live.shown.is_empty() => format!("Now: {}", m.live.shown),
                 None => "Waiting for data…".to_string(),
             };
@@ -632,7 +661,7 @@ impl Graph for View<'_> {
                     // Words: the text itself, or (with a Value wired in) a template the number fills.
                     if let SourceSpec::Text(style) = &mut l.source {
                         if matches!(style.live, LiveText::Number(_)) {
-                            crate::ui::text_field(ui, &mut style.live_source, "Words with {value}, {percent} or {raw}", Some(width)).on_hover_text("{value} = 0 to 1, {percent} = 0 to 100, {raw} = the reading itself (21 °C, a table cell)");
+                            crate::ui::text_field(ui, &mut style.live_source, "Words with {n}, {mm:ss} or {text}", Some(width)).on_hover_text(phosphor_engine::TEMPLATE_HELP);
                         } else {
                             crate::ui::text_field(ui, &mut style.text, "Words", Some(width));
                         }
@@ -870,7 +899,7 @@ impl Graph for View<'_> {
             }
         });
         ui.menu_button("Data", |ui| {
-            hint(ui, "Numbers from the world: a live reading, a web address, a timer, the clock or a table; words that show a number; an event when a number crosses a line");
+            hint(ui, "Numbers from the world: a live reading, a web address or list, a timer or countdown, the clock or a table; words that show a number (one number can feed many Text boxes); an event when a number crosses a line");
             for (name, preset) in DATA_BOXES {
                 if crate::ui::command(ui, name).clicked() {
                     let kind = if preset == "text" { NodeKind::Picture } else { NodeKind::Number };
@@ -909,7 +938,7 @@ impl Graph for View<'_> {
                 NodeKind::Output => !has_output,
                 k => matches!(k, NodeKind::Mix | NodeKind::Switch),
             },
-            PortKind::Number => b.0 == NodeKind::Number && (b.1.is_empty() || b.1.starts_with("op:")),
+            PortKind::Number => (b.0 == NodeKind::Number && (b.1.is_empty() || b.1.starts_with("op:"))) || b.1 == "text",
             PortKind::Points => b.0 == NodeKind::Effect && shaders::points_in(b.1),
             PortKind::Light => false,
         };
@@ -919,7 +948,8 @@ impl Graph for View<'_> {
         if !searching {
             let listed: Vec<((NodeKind, &'static str, bool), String, String)> = match kind {
                 PortKind::Picture => [NodeKind::Effect, NodeKind::Mix, NodeKind::Switch, NodeKind::Output].into_iter().map(|k| ((k, "", false), k.name().to_string(), k.about().to_string())).collect(),
-                PortKind::Number => std::iter::once(((NodeKind::Number, "", false), "Number (chained)".to_string(), NodeKind::Number.about().to_string()))
+                PortKind::Number => std::iter::once(((NodeKind::Picture, "text", true), "Text (shows the number in words)".to_string(), "A Text box: its words show this number ({n}, {mm:ss}, {text}). Wire one number into as many as you like".to_string()))
+                    .chain(std::iter::once(((NodeKind::Number, "", false), "Number (chained)".to_string(), NodeKind::Number.about().to_string())))
                     .chain(NumberOp::all().iter().zip(OP_BOXES).map(|(op, preset)| ((NodeKind::Number, preset, false), op.name().to_string(), op.about().to_string())))
                     .collect(),
                 PortKind::Points => POINTS_BOXES.iter().map(|(name, shader, generator)| ((if *generator { NodeKind::Picture } else { NodeKind::Effect }, *shader, *generator), name.to_string(), shaders::info(shader).1.to_string())).collect(),
@@ -938,7 +968,12 @@ impl Graph for View<'_> {
         let Some((box_kind, preset, generator)) = pick else { return false };
         if let Some(l) = self.level_mut() {
             let id = l.add(box_kind, at);
-            l.connect(from, id, 0);
+            // (A number wire is wired by the comp once the box has its inputs.)
+            if kind == PortKind::Number {
+                self.wire_after = Some((from, id));
+            } else {
+                l.connect(from, id, 0);
+            }
             if !preset.is_empty() {
                 self.preset = Some((id, preset, generator));
             }
