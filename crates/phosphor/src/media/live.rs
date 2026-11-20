@@ -1,4 +1,5 @@
-//! Live inputs as layer sources: cameras and capture cards (macOS AVFoundation through FFmpeg),
+//! Live inputs as layer sources: cameras and capture cards (through FFmpeg: AVFoundation on the Mac, DirectShow
+//! on Windows, Video4Linux on Linux),
 //! and network streams (RTSP, SRT, HTTP/HLS, RTMP…). Decoded by the same player as movies, in
 //! live mode (newest frame always wins, so there's no build-up of delay).
 
@@ -6,7 +7,7 @@ use phosphor_engine::SourceSpec;
 
 use super::video::VideoPlayer;
 
-/// A camera or capture device on this Mac.
+/// A camera or capture device on this computer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Camera {
     pub name: String,
@@ -44,12 +45,85 @@ pub fn cameras() -> Vec<Camera> {
     out
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows: the DirectShow video devices (cameras, capture cards, virtual cameras), as the bundled FFmpeg lists them.
+#[cfg(windows)]
+pub fn cameras() -> Vec<Camera> {
+    let Some(ffmpeg) = crate::stream::ffmpeg_path() else { return Vec::new() };
+    let Ok(out) = crate::os::command(ffmpeg).args(["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"]).stdin(std::process::Stdio::null()).output() else {
+        return Vec::new();
+    };
+    dshow_devices(&String::from_utf8_lossy(&out.stderr)).into_iter().map(|name| Camera { name }).collect()
+}
+
+/// The video devices in FFmpeg's `-list_devices` answer for DirectShow: lines like `[in#0 @ 0x…] "Cam Link 4K"
+/// (video)` (older FFmpeg: a "DirectShow video devices" heading, then the names).
+#[cfg(any(windows, test))]
+fn dshow_devices(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut in_video = false;
+    for line in text.lines() {
+        if line.contains("DirectShow video devices") {
+            in_video = true;
+            continue;
+        }
+        if line.contains("DirectShow audio devices") {
+            in_video = false;
+            continue;
+        }
+        if line.contains("Alternative name") {
+            continue;
+        }
+        let Some(start) = line.find('"') else { continue };
+        let Some(len) = line[start + 1..].find('"') else { continue };
+        let name = &line[start + 1..start + 1 + len];
+        let tail = &line[start + 2 + len..];
+        let video = if tail.contains('(') { tail.contains("video") } else { in_video };
+        if video && !name.is_empty() && !out.iter().any(|n| n == name) {
+            out.push(name.to_string());
+        }
+    }
+    out
+}
+
+/// Linux: the Video4Linux capture devices (/dev/video*, each device's first node), by the name the driver gives.
+#[cfg(target_os = "linux")]
+pub fn cameras() -> Vec<Camera> {
+    v4l2_devices().into_iter().map(|(name, _)| Camera { name }).collect()
+}
+
+/// (name, /dev path) of each Video4Linux capture device, in number order.
+#[cfg(target_os = "linux")]
+fn v4l2_devices() -> Vec<(String, String)> {
+    let Ok(entries) = std::fs::read_dir("/sys/class/video4linux") else { return Vec::new() };
+    let mut found: Vec<(u32, String, String)> = entries
+        .flatten()
+        .filter_map(|e| {
+            let node = e.file_name().to_string_lossy().into_owned();
+            let n: u32 = node.strip_prefix("video")?.parse().ok()?;
+            // A device has several nodes (pictures, metadata): its first (index 0) is the picture.
+            let index = std::fs::read_to_string(e.path().join("index")).map_or(0, |i| i.trim().parse().unwrap_or(0));
+            (index == 0).then_some(())?;
+            let name = std::fs::read_to_string(e.path().join("name")).map_or_else(|_| node.clone(), |n| n.trim().to_string());
+            Some((n, name, format!("/dev/{node}")))
+        })
+        .collect();
+    found.sort_by_key(|(n, ..)| *n);
+    let mut out: Vec<(String, String)> = Vec::new();
+    for (_, name, dev) in found {
+        // Two of the same card: told apart by their device.
+        let name = if out.iter().any(|(n, _)| *n == name) { format!("{name} ({dev})") } else { name };
+        out.push((name, dev));
+    }
+    out
+}
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
 pub fn cameras() -> Vec<Camera> {
     Vec::new()
 }
 
-/// The source for a camera.
+/// The source for a camera (the saved project keeps "avfoundation" as the kind on every system: a project made on a
+/// Mac opens the same-named camera on Windows or Linux; `open` picks this system's way).
 pub fn camera_source(cam: &Camera) -> SourceSpec {
     SourceSpec::Live { name: cam.name.clone(), format: "avfoundation".into(), url: cam.name.clone() }
 }
@@ -181,6 +255,21 @@ pub fn cameras_cached(ctx: &eframe::egui::Context, refresh: bool) -> Vec<String>
 }
 
 pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> {
+    // A camera on Windows: DirectShow by its name (a big buffer, so a 4K capture card doesn't drop frames while the
+    // first ones decode); the card's own frame rate, else 30.
+    #[cfg(windows)]
+    if format == "avfoundation" {
+        let device = format!("video={url}");
+        let tries: &[&[(&str, &str)]] = &[&[("rtbufsize", "256M")], &[("rtbufsize", "256M"), ("framerate", "30")]];
+        return VideoPlayer::open_live(name, "dshow", &device, tries);
+    }
+    // Linux: Video4Linux, by the device the name belongs to now (numbers change when cards are plugged in).
+    #[cfg(target_os = "linux")]
+    if format == "avfoundation" {
+        let device = v4l2_devices().into_iter().find(|(n, _)| n == url).map_or_else(|| url.to_string(), |(_, d)| d);
+        let tries: &[&[(&str, &str)]] = &[&[], &[("framerate", "30")]];
+        return VideoPlayer::open_live(name, "v4l2", &device, tries);
+    }
     if format == "avfoundation" {
         // Cameras only open at a frame rate they support; try the common ones. NV12 is what
         // the GPU path uploads directly.
@@ -201,6 +290,16 @@ pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn capture_cards_on_windows_are_read_from_ffmpegs_device_list() {
+        // FFmpeg 5 and later: one line a device, with its kind.
+        let now = "[in#0 @ 000001] \"Cam Link 4K\" (video)\n[in#0 @ 000001]   Alternative name \"@device_pnp_\\\\?\\usb#vid_0fd9\"\n[in#0 @ 000001] \"USB Video\" (video)\n[in#0 @ 000001] \"Microphone (Cam Link 4K)\" (audio)\n[in#0 @ 000001] \"OBS Virtual Camera\" (none)\n[in#0 @ 000001] \"Elgato HD60 X\" (audio, video)\ndummy: Immediate exit requested\n";
+        assert_eq!(super::dshow_devices(now), ["Cam Link 4K", "USB Video", "Elgato HD60 X"]);
+        // Older FFmpeg: headings, then names.
+        let old = "[dshow @ 0x1] DirectShow video devices (some may be both video and audio devices)\n[dshow @ 0x1]  \"Integrated Camera\"\n[dshow @ 0x1]     Alternative name \"@device_pnp_x\"\n[dshow @ 0x1] DirectShow audio devices\n[dshow @ 0x1]  \"Microphone\"\n";
+        assert_eq!(super::dshow_devices(old), ["Integrated Camera"]);
+    }
+
     /// Lists cameras (no permission needed) so the test log shows what this Mac has.
     #[test]
     fn lists_cameras() {
