@@ -95,6 +95,9 @@ pub struct BugReport {
     pub sending: bool,
     /// macOS version, read once.
     os: Option<String>,
+    /// The cameras and capture cards this computer has (looked up once, on a thread: listing can take a moment).
+    cameras: std::sync::Arc<std::sync::Mutex<Option<Vec<String>>>>,
+    cameras_asked: bool,
     /// The diagnostics shown in the window, and when they were put together (redone every few seconds, not each frame).
     shown: Option<(f64, String)>,
 }
@@ -195,6 +198,24 @@ pub fn shown_diagnostics(st: &mut State, now: f64) -> String {
     text
 }
 
+/// "Cameras and capture cards: Cam Link 4K, FaceTime HD Camera" (what Phosphor can see, for "my card doesn't show").
+#[cfg(not(target_arch = "wasm32"))]
+fn cameras_line(st: &mut State) -> String {
+    if !st.bug.cameras_asked {
+        st.bug.cameras_asked = true;
+        let found = st.bug.cameras.clone();
+        let _ = std::thread::Builder::new().name("bug-cameras".into()).spawn(move || {
+            let names: Vec<String> = crate::media::live::cameras().into_iter().map(|c| c.name).collect();
+            *found.lock().unwrap() = Some(names);
+        });
+    }
+    match st.bug.cameras.lock().unwrap().as_deref() {
+        None => "Cameras and capture cards: looking…\n".into(),
+        Some([]) => "Cameras and capture cards: none found\n".into(),
+        Some(names) => format!("Cameras and capture cards: {}\n", names.join(", ")),
+    }
+}
+
 pub fn diagnostics(st: &mut State) -> String {
     diagnostics_from(st, false)
 }
@@ -230,6 +251,11 @@ fn diagnostics_named(st: &mut State, crash: bool) -> String {
     out.push_str(&format!("GPU {:.2} ms a frame · longest gap {:.0} ms · {} passes\n", s.gpu_ms, s.worst_ms, s.passes));
     out.push_str(&gpu_lines(st));
     out.push_str(&movies_line(st));
+    // (Device names can carry a person's name, "Jane's iPhone Camera": only in reports people write and see first.)
+    #[cfg(not(target_arch = "wasm32"))]
+    if !crash {
+        out.push_str(&cameras_line(st));
+    }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(path) = crate::recovery::crash_log_path()
         && let Ok(log) = std::fs::read_to_string(&path)
