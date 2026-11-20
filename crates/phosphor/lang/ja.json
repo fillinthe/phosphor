@@ -5441,5 +5441,7 @@
 "not a Trace drawing ({0})": "Traceの描画ではありません（{0}）",
 "{0} Open Morpholio Trace Drawing": "{0} Morpholio Traceの描画を開く",
 "User Manual": "ユーザーマニュアル",
-"Help: the user manual on phosphorfx.com, always up to date": "ヘルプ：phosphorfx.com のユーザーマニュアル（常に最新）"
+"Help: the user manual on phosphorfx.com, always up to date": "ヘルプ：phosphorfx.com のユーザーマニュアル（常に最新）",
+"Send problem reports": "問題レポートを送信",
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "予期しない終了やフリーズの後、診断情報が自動的に非公開で Phosphor チームに送られます：バージョン、システム、プロジェクトの構成、直前に起きたこと（プロジェクトの内容、ファイル・レイヤー・デバイスの名前は含みません）。各レポートは（サインインしている場合）G Workshop アカウントにも1行残るので、こちらから連絡できます。"
 }

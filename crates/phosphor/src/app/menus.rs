@@ -390,6 +390,8 @@ impl PhosphorApp {
                                 crate::support::set_donate_shown(donate);
                             }
                             let mut tips = theme::tooltips_on();
+                            #[cfg(not(target_arch = "wasm32"))]
+                            crate::support::problem_reports_toggle(ui, &mut self.state);
                             if crate::ui::toggle(ui, &mut tips, "Tooltips").on_hover_text("Off: no hover text over buttons (for people who know the app). (i) help still opens on a click").changed() {
                                 theme::set_tooltips(ui.ctx(), tips);
                             }

@@ -5441,5 +5441,7 @@
 "not a Trace drawing ({0})": "Trace çizimi değil ({0})",
 "{0} Open Morpholio Trace Drawing": "{0} Morpholio Trace çizimini aç",
 "User Manual": "Kullanım Kılavuzu",
-"Help: the user manual on phosphorfx.com, always up to date": "Yardım: phosphorfx.com'daki kullanım kılavuzu, her zaman güncel"
+"Help: the user manual on phosphorfx.com, always up to date": "Yardım: phosphorfx.com'daki kullanım kılavuzu, her zaman güncel",
+"Send problem reports": "Sorun raporları gönder",
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Beklenmedik bir kapanma veya donmadan sonra tanılama bilgileri kendiliğinden ve gizli olarak Phosphor ekibine gider: sürüm, sistem, projenin yapısı ve hemen öncesinde olanlar (proje içeriği, dosya, katman veya cihaz adları yok). Her rapor ayrıca G Workshop hesabına (oturum açtıysan) bir satır bırakır, böylece seninle iletişime geçebiliriz."
 }

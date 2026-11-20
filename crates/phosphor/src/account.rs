@@ -204,6 +204,12 @@ impl Account {
         self.push_doc(ctx, DocKind::Layouts, text);
     }
 
+    /// Where a problem report's line goes (this account server), with the sign-in token when signed in (the
+    /// dashboard then shows whose report it is); signed out = anonymous.
+    pub fn reporter(&self) -> crate::crash_report::Reporter {
+        crate::crash_report::Reporter { api: self.base.clone(), token: (!self.token.is_empty()).then(|| self.token.clone()) }
+    }
+
     fn request(&mut self, ctx: &egui::Context, method: &str, path: &str, body: Option<serde_json::Value>, on: impl 'static + Send + FnOnce(u16, &str) -> Reply) {
         let url = format!("{}{}", self.base, path);
         let mut req = match body {

@@ -86,8 +86,9 @@ pub struct BugReport {
     pub detached: bool,
     pub text: String,
     pub include_diagnostics: bool,
-    /// Send a report by itself after a crash (`crash_report`; off unless chosen).
-    pub send_crashes: bool,
+    /// "Send problem reports" (on unless turned off): a report goes by itself after a crash or freeze, and every
+    /// report leaves its one line (with the account when signed in) on the account server's Problems list.
+    pub send_problems: bool,
     /// What happened to the last automatic report, for the banner.
     pub sent: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
     /// What happened to the report sent from the window (None = none sent / sending).
@@ -103,9 +104,9 @@ pub struct BugReport {
 }
 
 impl BugReport {
-    /// `send_crashes`: the saved "Send crash reports by themselves" choice.
-    pub fn new(send_crashes: bool) -> Self {
-        Self { include_diagnostics: true, send_crashes, ..Default::default() }
+    /// `send_problems`: the saved "Send problem reports" choice.
+    pub fn new(send_problems: bool) -> Self {
+        Self { include_diagnostics: true, send_problems, ..Default::default() }
     }
 }
 
@@ -214,6 +215,13 @@ fn cameras_line(st: &mut State) -> String {
         Some([]) => "Cameras and capture cards: none found\n".into(),
         Some(names) => format!("Cameras and capture cards: {}\n", names.join(", ")),
     }
+}
+
+/// The "Send problem reports" switch (Report a Bug window and the settings menu).
+pub fn problem_reports_toggle(ui: &mut egui::Ui, st: &mut State) -> egui::Response {
+    crate::ui::toggle(ui, &mut st.bug.send_problems, "Send problem reports").on_hover_text(
+        "After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.",
+    )
 }
 
 pub fn diagnostics(st: &mut State) -> String {
@@ -436,9 +444,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
         {
             let ready = crate::crash_report::endpoint().is_some();
             ui.add_enabled_ui(ready, |ui| {
-                crate::ui::toggle(ui, &mut st.bug.send_crashes, "Send crash reports by themselves")
-                    .on_hover_text("After an unexpected quit, the diagnostics go privately to the Phosphor team: version, macOS, the project's shape and what kind of things happened just before (no project content, no file, layer or device names)")
-                    .on_disabled_hover_text("Not available yet: the crash server isn't set up");
+                problem_reports_toggle(ui, st).on_disabled_hover_text("Not available yet: the crash server isn't set up");
             });
         }
         if st.bug.include_diagnostics {
@@ -470,7 +476,8 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
                 let text = report_text(st);
                 st.bug.sending = true;
                 let out = st.bug.bug_sent.clone();
-                crate::crash_report::send_bug(text, move |r| {
+                let to = st.bug.send_problems.then(|| st.account.reporter());
+                crate::crash_report::send_bug(text, to, move |r| {
                     *out.lock().unwrap() = Some(r);
                 });
             }
