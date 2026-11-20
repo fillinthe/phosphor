@@ -206,7 +206,7 @@ impl PhosphorApp {
                 jam: Default::default(),
                 pad: Default::default(),
                 auto_run: Default::default(),
-                bug: crate::support::BugReport::new(stored(KEY_SEND_CRASHES).is_some_and(|v| v == "1")),
+                bug: crate::support::BugReport::new(stored(KEY_SEND_PROBLEMS).is_none_or(|v| v != "0")),
                 #[cfg(not(target_arch = "wasm32"))]
                 rhythm: Default::default(),
                 updater: crate::update::Updater::with_settings(stored(KEY_UPDATE_SKIP).unwrap_or_default(), stored(KEY_UPDATE_AUTO).is_none_or(|v| v != "0")),

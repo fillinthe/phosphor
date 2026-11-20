@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Send problem reports** (on by default; switch it off in the brightness menu or in Help › Report a Bug): after a
+  crash or a freeze Phosphor sends the diagnostics to the team by itself (no project content, no file, layer or
+  device names). If you're signed in to your G Workshop account, the report is linked to it so we can follow up.
+  Report addresses (IP) are no longer kept.
 - **Cameras and capture cards on Windows and Linux**: they now show in Inputs and the layer camera menu (they
   only worked on the Mac before). A project made on a Mac opens the same-named camera on the other computer.
   Help › Report a Bug lists the cameras and capture cards Phosphor can see.

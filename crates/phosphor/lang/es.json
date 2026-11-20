@@ -5441,5 +5441,7 @@
 "not a Trace drawing ({0})": "no es un dibujo de Trace ({0})",
 "{0} Open Morpholio Trace Drawing": "{0} Abrir dibujo de Morpholio Trace",
 "User Manual": "Manual de usuario",
-"Help: the user manual on phosphorfx.com, always up to date": "Ayuda: el manual de usuario en phosphorfx.com, siempre al día"
+"Help: the user manual on phosphorfx.com, always up to date": "Ayuda: el manual de usuario en phosphorfx.com, siempre al día",
+"Send problem reports": "Enviar informes de problemas",
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Tras un cierre inesperado o un bloqueo, el diagnóstico llega en privado al equipo de Phosphor por sí solo: versión, sistema, la forma del proyecto y lo que pasó justo antes (sin contenido del proyecto ni nombres de archivos, capas o dispositivos). Cada informe también deja una línea en tu cuenta de G Workshop (si has iniciado sesión) para que podamos hacer seguimiento."
 }
