@@ -276,34 +276,80 @@ fn stuck_at(_pid: u32) -> Option<String> {
     None
 }
 
-/// From a `sample` report: the main thread's busiest stack (the first child at each level), as the Phosphor source
-/// lines on it ("frame.rs:289").
+/// From a `sample` report: the main thread's busiest stack (the first child at each level), outermost first, as
+/// the Phosphor places on it: source lines ("frame.rs:289") when the build has them, else function names
+/// ("PhosphorApp::render"; released builds carry no line tables). Ends with what the innermost frame waits in when
+/// that's outside Phosphor ("in libsystem_kernel.dylib: __psynch_cvwait": a lock, the graphics card…).
 fn main_thread_path(report: &str) -> Vec<String> {
     let mut lines = report.lines().skip_while(|l| !l.contains("com.apple.main-thread")).skip(1);
     let mut out: Vec<String> = Vec::new();
     let mut depth = 0;
+    let mut innermost: Option<(String, String)> = None;
     for line in lines.by_ref() {
         let Some(d) = line.find(|c: char| c.is_ascii_digit()) else { break };
         if d <= depth {
             break;
         }
         depth = d;
-        if !line.contains("phosphor") {
+        // "1287 name  (in image) + 3  [0x3]  frame.rs:289"
+        let body = &line[d..];
+        let rest = body.split_once(' ').map_or("", |(_, r)| r);
+        let (symbol, after) = rest.split_once("  (in ").unwrap_or((rest, ""));
+        let image = after.split(')').next().unwrap_or("");
+        innermost = Some((symbol.trim().to_string(), image.to_string()));
+        let ours = symbol.contains("phosphor") || image.eq_ignore_ascii_case("phosphor");
+        if !ours {
             continue;
         }
-        let Some(at) = line.split_whitespace().last().filter(|w| w.contains(".rs:")) else { continue };
-        // Rust's own plumbing (closures, boxes, unwinding, sorting) says nothing about where.
-        const PLUMBING: [&str; 9] = ["rt.rs", "backtrace.rs", "function.rs", "panic.rs", "panicking.rs", "unwind_safe.rs", "boxed.rs", "slice.rs", "mod.rs:135"];
-        if PLUMBING.iter().any(|p| at.starts_with(p)) {
-            continue;
-        }
-        if out.last().map(String::as_str) != Some(at) {
-            out.push(at.to_string());
+        let at = match line.split_whitespace().last().filter(|w| w.contains(".rs:")) {
+            Some(at) => {
+                // Rust's own plumbing (closures, boxes, unwinding, sorting) says nothing about where.
+                const PLUMBING: [&str; 9] = ["rt.rs", "backtrace.rs", "function.rs", "panic.rs", "panicking.rs", "unwind_safe.rs", "boxed.rs", "slice.rs", "mod.rs:135"];
+                if PLUMBING.iter().any(|p| at.starts_with(p)) {
+                    continue;
+                }
+                at.to_string()
+            }
+            None => match short_symbol(symbol) {
+                Some(name) => name,
+                None => continue,
+            },
+        };
+        if out.last() != Some(&at) {
+            out.push(at);
         }
     }
     // The innermost dozen.
     let skip = out.len().saturating_sub(12);
-    out.split_off(skip)
+    let mut out = out.split_off(skip);
+    if let Some((symbol, image)) = innermost.filter(|(s, i)| !s.contains("phosphor") && !i.eq_ignore_ascii_case("phosphor") && !s.is_empty()) {
+        out.push(format!("in {image}: {symbol}"));
+    }
+    out
+}
+
+/// A Rust function name as `sample` prints it without line tables, made short: "phosphor::app::render::_$LT$impl$u20$
+/// phosphor..app..PhosphorApp$GT$::render::h0123456789abcdef" → "PhosphorApp::render". None for Rust's own
+/// plumbing (std / core / alloc, closures' call shims).
+fn short_symbol(symbol: &str) -> Option<String> {
+    let s = symbol.trim();
+    if !s.contains("phosphor") || s.starts_with("std::") || s.starts_with("core::") || s.starts_with("alloc::") {
+        return None;
+    }
+    let s = s.replace("$LT$", "<").replace("$GT$", ">").replace("$u20$", " ").replace("$u7b$", "{").replace("$u7d$", "}").replace("..", "::");
+    // Without the hash on the end.
+    let s = match s.rsplit_once("::h") {
+        Some((head, hash)) if hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit()) => head.to_string(),
+        _ => s,
+    };
+    let parts: Vec<&str> = s.split("::").filter(|p| !p.is_empty() && !p.starts_with("{{closure")).collect();
+    let n = parts.len();
+    if n == 0 {
+        return None;
+    }
+    let tail = parts[n.saturating_sub(2)..].join("::");
+    let tail: String = tail.replace("_<impl ", "").replace(['<', '>'], "");
+    Some(tail.trim_start_matches('_').to_string())
 }
 
 /// Ends the frozen process we watch.
@@ -373,5 +419,12 @@ mod tests {
     fn a_freeze_sample_reads_as_source_lines() {
         let report = "Call graph:\n    1290 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 1290 start  (in dyld) + 6992  [0x1]\n    + ! 1290 main  (in phosphor) + 36  [0x2]  main.rs:214\n    + !   1290 f  (in phosphor) + 3  [0x3]  function.rs:250\n    + !     1287 run  (in phosphor) + 3  [0x3]  frame.rs:289\n    + !     : 900 media  (in phosphor) + 60  [0x4]  media.rs:202\n    + !     : 387 other  (in phosphor) + 60  [0x5]  layers.rs:9\n    + !     3 idle  (in AppKit) + 1\n    1 Thread_2\n";
         assert_eq!(super::main_thread_path(report), ["main.rs:214", "frame.rs:289", "media.rs:202"]);
+    }
+
+    #[test]
+    fn a_freeze_sample_from_a_released_build_reads_as_function_names() {
+        // Released builds have no line tables: the names, and the system call it's waiting in.
+        let report = "Call graph:\n    2600 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 2600 start  (in dyld) + 6992  [0x1]\n    + ! 2600 main  (in Phosphor) + 36  [0x2]\n    + !   2600 phosphor::app::render::_$LT$impl$u20$phosphor..app..PhosphorApp$GT$::render::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !     2600 core::ops::function::FnOnce::call_once::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !       2600 phosphor_engine::engine::encode::_$LT$impl$u20$phosphor_engine..engine..Engine$GT$::read_target::hfedcba9876543210  (in Phosphor) + 60  [0x4]\n    + !         2600 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x5]\n    1 Thread_2\n";
+        assert_eq!(super::main_thread_path(report), ["PhosphorApp::render", "Engine::read_target", "in libsystem_kernel.dylib: __psynch_cvwait"]);
     }
 }
