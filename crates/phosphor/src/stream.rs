@@ -360,7 +360,7 @@ pub fn list_audio_devices() -> Vec<(i32, String)> {
 /// The FFmpeg command line used for streaming and ProRes / H.264 recording: the copy inside the app bundle
 /// first (scripts/bundle-mac.sh ships one), then Homebrew / MacPorts, then whatever is on the PATH.
 pub fn ffmpeg_path() -> Option<String> {
-    let bundled = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("ffmpeg"))).filter(|p| p.exists());
+    let bundled = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join(format!("ffmpeg{}", std::env::consts::EXE_SUFFIX)))).filter(|p| p.exists());
     bundled
         .map(|p| p.to_string_lossy().to_string())
         .or_else(|| ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/local/bin/ffmpeg"].iter().find(|p| std::path::Path::new(p).exists()).map(|p| p.to_string()))
