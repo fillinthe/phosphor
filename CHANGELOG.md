@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.13 (2026-11-21)
 
 - **Linux: cameras and capture cards play** (they were listed, but opening one said its input type wasn't
   available).
