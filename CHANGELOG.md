@@ -12,7 +12,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   Report addresses (IP) are no longer kept.
 - **Cameras and capture cards on Windows and Linux**: they now show in Inputs and the layer camera menu (they
   only worked on the Mac before). A project made on a Mac opens the same-named camera on the other computer.
-  Help › Report a Bug lists the cameras and capture cards Phosphor can see.
+  Help › Report a Bug lists the cameras and capture cards Phosphor can see. Cameras, capture cards and streams
+  open in the background: one that doesn't answer leaves its layer empty instead of freezing Phosphor.
 - **Freeze reports** now say where Phosphor was stuck (the downloaded app couldn't before), so freezes people
   report can be found and fixed.
 - **Help** (the ? button at the top, or Help › User Manual) opens the user manual on phosphorfx.com, in the

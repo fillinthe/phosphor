@@ -445,15 +445,13 @@ impl MediaManager {
                 // A live web page: its stream is looked up and opened on a thread (seconds), like a movie.
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { format, .. } if format == live::PAGE => self.open_page(layer.id, &layer.source),
+                // Cameras, capture cards and streams open in the background like movies: a device that never answers
+                // (a capture card stuck on its driver) leaves its layer empty instead of freezing the app.
                 #[cfg(not(target_arch = "wasm32"))]
-                SourceSpec::Live { name, format, url } => match live::open(name, format, url) {
-                    Ok(player) => {
-                        self.players.insert(layer.id, player);
-                    }
-                    Err(e) => {
-                        self.errors.insert(layer.id, e);
-                    }
-                },
+                SourceSpec::Live { name, format, url } => {
+                    let (name, format, url) = (name.clone(), format.clone(), url.clone());
+                    self.preload.open_with(layer.id, layer.source.clone(), move || live::open(&name, &format, &url));
+                }
                 _ => {}
             }
             self.loaded.insert(layer.id, layer.source.clone());
