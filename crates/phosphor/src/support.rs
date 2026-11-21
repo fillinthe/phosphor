@@ -224,6 +224,16 @@ pub fn problem_reports_toggle(ui: &mut egui::Ui, st: &mut State) -> egui::Respon
     )
 }
 
+/// Bench: starts the camera lookup and waits (up to `secs`) until it's in, so a snapshot lists them.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn wait_for_cameras(st: &mut State, secs: f64) {
+    let _ = cameras_line(st);
+    let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
+    while st.bug.cameras.lock().unwrap().is_none() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 pub fn diagnostics(st: &mut State) -> String {
     diagnostics_from(st, false)
 }
