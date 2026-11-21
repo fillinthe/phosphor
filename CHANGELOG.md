@@ -8,6 +8,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 - **Linux: cameras and capture cards play** (they were listed, but opening one said its input type wasn't
   available).
+- **Windows: a webcam that's busy for a moment** ("Input/output error" when it starts) is tried again, and the
+  camera list doesn't disturb a camera that's starting.
 
 ## 0.5.12 (2026-11-21)
 

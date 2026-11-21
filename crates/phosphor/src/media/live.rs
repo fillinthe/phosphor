@@ -46,8 +46,28 @@ pub fn cameras() -> Vec<Camera> {
 }
 
 /// Windows: the DirectShow video devices (cameras, capture cards, virtual cameras), as the bundled FFmpeg lists them.
+/// Windows: cameras being opened right now. Some webcams refuse to start ("Input/output error") while the device list
+/// is being read, so the list isn't read again then (the last one is used) and an opening that fails that way tries
+/// again.
+#[cfg(windows)]
+static OPENING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[cfg(windows)]
+static LAST_LIST: std::sync::Mutex<Vec<Camera>> = std::sync::Mutex::new(Vec::new());
+
 #[cfg(windows)]
 pub fn cameras() -> Vec<Camera> {
+    if OPENING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+        return LAST_LIST.lock().map(|l| l.clone()).unwrap_or_default();
+    }
+    let found = list_dshow();
+    if let Ok(mut l) = LAST_LIST.lock() {
+        *l = found.clone();
+    }
+    found
+}
+
+#[cfg(windows)]
+fn list_dshow() -> Vec<Camera> {
     let Some(ffmpeg) = crate::stream::ffmpeg_path() else { return Vec::new() };
     let Ok(out) = crate::os::command(ffmpeg).args(["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"]).stdin(std::process::Stdio::null()).output() else {
         return Vec::new();
@@ -85,6 +105,13 @@ fn dshow_devices(text: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// A camera that answered "busy" when asked to start ("Input/output error", "I/O error").
+#[cfg(any(windows, test))]
+fn busy(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.contains("input/output error") || e.contains("i/o error")
 }
 
 /// Linux: the Video4Linux capture devices (/dev/video*, each device's first node), by the name the driver gives.
@@ -261,9 +288,28 @@ pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> 
     // first ones decode); the card's own frame rate, else 30.
     #[cfg(windows)]
     if format == "avfoundation" {
+        struct Opening;
+        impl Drop for Opening {
+            fn drop(&mut self) {
+                OPENING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        OPENING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _opening = Opening;
         let device = format!("video={url}");
         let tries: &[&[(&str, &str)]] = &[&[("rtbufsize", "256M")], &[("rtbufsize", "256M"), ("framerate", "30")]];
-        return VideoPlayer::open_live(name, "dshow", &device, tries);
+        let mut result = VideoPlayer::open_live(name, "dshow", &device, tries);
+        // Busy for a moment (another program, or the list being read when it started): twice more, a second apart.
+        for _ in 0..2 {
+            match &result {
+                Err(e) if busy(e) => {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    result = VideoPlayer::open_live(name, "dshow", &device, tries);
+                }
+                _ => break,
+            }
+        }
+        return result;
     }
     // Linux: Video4Linux, by the device the name belongs to now (numbers change when cards are plugged in).
     #[cfg(target_os = "linux")]
@@ -303,6 +349,9 @@ mod tests {
         // Older FFmpeg: headings, then names.
         let old = "[dshow @ 0x1] DirectShow video devices (some may be both video and audio devices)\n[dshow @ 0x1]  \"Integrated Camera\"\n[dshow @ 0x1]     Alternative name \"@device_pnp_x\"\n[dshow @ 0x1] DirectShow audio devices\n[dshow @ 0x1]  \"Microphone\"\n";
         assert_eq!(super::dshow_devices(old), ["Integrated Camera"]);
+        // A laptop's own webcam on Windows 11 also says "(none)".
+        assert_eq!(super::dshow_devices("[in#0 @ 01] \"Integrated Webcam\" (none)\n[in#0 @ 01] \"Microphone (Realtek(R) Audio)\" (audio)\n"), ["Integrated Webcam"]);
+        assert!(super::busy("Live: can't open (Input/output error)") && !super::busy("can't open (No such file or directory)"));
     }
 
     /// Lists cameras (no permission needed) so the test log shows what this Mac has.
