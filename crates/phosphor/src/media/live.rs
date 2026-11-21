@@ -77,7 +77,9 @@ fn dshow_devices(text: &str) -> Vec<String> {
         let Some(len) = line[start + 1..].find('"') else { continue };
         let name = &line[start + 1..start + 1 + len];
         let tail = &line[start + 2 + len..];
-        let video = if tail.contains('(') { tail.contains("video") } else { in_video };
+        // "(none)": FFmpeg couldn't tell its kind without opening it (OBS Virtual Camera, some capture cards): audio
+        // devices always say "(audio)", so it's taken as video.
+        let video = if tail.contains('(') { tail.contains("video") || tail.contains("(none)") } else { in_video };
         if video && !name.is_empty() && !out.iter().any(|n| n == name) {
             out.push(name.to_string());
         }
@@ -294,7 +296,10 @@ mod tests {
     fn capture_cards_on_windows_are_read_from_ffmpegs_device_list() {
         // FFmpeg 5 and later: one line a device, with its kind.
         let now = "[in#0 @ 000001] \"Cam Link 4K\" (video)\n[in#0 @ 000001]   Alternative name \"@device_pnp_\\\\?\\usb#vid_0fd9\"\n[in#0 @ 000001] \"USB Video\" (video)\n[in#0 @ 000001] \"Microphone (Cam Link 4K)\" (audio)\n[in#0 @ 000001] \"OBS Virtual Camera\" (none)\n[in#0 @ 000001] \"Elgato HD60 X\" (audio, video)\ndummy: Immediate exit requested\n";
-        assert_eq!(super::dshow_devices(now), ["Cam Link 4K", "USB Video", "Elgato HD60 X"]);
+        assert_eq!(super::dshow_devices(now), ["Cam Link 4K", "USB Video", "OBS Virtual Camera", "Elgato HD60 X"]);
+        // As a Windows 11 machine answered (webcam + OBS Virtual Camera + a microphone and line in).
+        let real = "[in#0 @ 000001fb685af840] \"Razer Kiyo Pro\" (video)\n[in#0 @ 000001fb685af840]   Alternative name \"@device_pnp_x\"\n[in#0 @ 000001fb685af840] \"OBS Virtual Camera\" (none)\n[in#0 @ 000001fb685af840] \"Microphone (Razer Kiyo Pro)\" (audio)\n[in#0 @ 000001fb685af840] \"Line In (High Definition Audio Device)\" (audio)\nError opening input file dummy.\n";
+        assert_eq!(super::dshow_devices(real), ["Razer Kiyo Pro", "OBS Virtual Camera"]);
         // Older FFmpeg: headings, then names.
         let old = "[dshow @ 0x1] DirectShow video devices (some may be both video and audio devices)\n[dshow @ 0x1]  \"Integrated Camera\"\n[dshow @ 0x1]     Alternative name \"@device_pnp_x\"\n[dshow @ 0x1] DirectShow audio devices\n[dshow @ 0x1]  \"Microphone\"\n";
         assert_eq!(super::dshow_devices(old), ["Integrated Camera"]);
