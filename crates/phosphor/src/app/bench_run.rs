@@ -367,6 +367,7 @@ impl PhosphorApp {
             if name == "snapshot" {
                 if let Some(out) = std::env::var_os("PHOSPHOR_SNAPSHOT_OUT") {
                     // (The camera list is looked up on a thread: the bench waits for it, up to 15 s.)
+                    #[cfg(not(target_arch = "wasm32"))]
                     crate::support::wait_for_cameras(&mut self.state, 15.0);
                     let text = crate::support::snapshot_text(&mut self.state);
                     println!("REPORT_SNAPSHOT {} bytes, {} lines, saved={}", text.len(), text.lines().count(), std::fs::write(out, &text).is_ok());
