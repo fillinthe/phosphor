@@ -295,6 +295,9 @@ fn main_thread_path(report: &str) -> Vec<String> {
         let body = &line[d..];
         let rest = body.split_once(' ').map_or("", |(_, r)| r);
         let (symbol, after) = rest.split_once("  (in ").unwrap_or((rest, ""));
+        // Newer Rust names ("_RNvNtCs…_8phosphor3app6render") come out of `sample` undecoded: decoded here.
+        let decoded = rustc_demangle::try_demangle(symbol.trim()).map(|d| format!("{d:#}")).ok();
+        let symbol = decoded.as_deref().unwrap_or(symbol);
         let image = after.split(')').next().unwrap_or("");
         innermost = Some((symbol.trim().to_string(), image.to_string()));
         let ours = symbol.contains("phosphor") || image.eq_ignore_ascii_case("phosphor");
@@ -426,5 +429,11 @@ mod tests {
         // Released builds have no line tables: the names, and the system call it's waiting in.
         let report = "Call graph:\n    2600 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 2600 start  (in dyld) + 6992  [0x1]\n    + ! 2600 main  (in Phosphor) + 36  [0x2]\n    + !   2600 phosphor::app::render::_$LT$impl$u20$phosphor..app..PhosphorApp$GT$::render::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !     2600 core::ops::function::FnOnce::call_once::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !       2600 phosphor_engine::engine::encode::_$LT$impl$u20$phosphor_engine..engine..Engine$GT$::read_target::hfedcba9876543210  (in Phosphor) + 60  [0x4]\n    + !         2600 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x5]\n    1 Thread_2\n";
         assert_eq!(super::main_thread_path(report), ["PhosphorApp::render", "Engine::read_target", "in libsystem_kernel.dylib: __psynch_cvwait"]);
+    }
+
+    #[test]
+    fn newer_rust_names_in_a_freeze_sample_are_decoded() {
+        let report = "Call graph:\n    2600 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 2600 start  (in dyld) + 6992  [0x1]\n    + ! 2600 _RNvNtCs1234_8phosphor3app6render  (in Phosphor) + 3  [0x3]\n    + !   2600 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x5]\n    1 Thread_2\n";
+        assert_eq!(super::main_thread_path(report), ["app::render", "in libsystem_kernel.dylib: __psynch_cvwait"]);
     }
 }

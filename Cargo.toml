@@ -22,3 +22,6 @@ epaint = { path = "vendor/epaint" }
 # egui_dock with one patch ("PHOSPHOR PATCH", widgets/dock_area/show/leaf.rs): a tab's close X takes the tab's text
 # colour (black on the focused tab's colour fill). Re-apply when upgrading egui_dock.
 egui_dock = { path = "vendor/egui_dock" }
+# winit with one patch ("PHOSPHOR PATCH", platform_impl/windows/monitor.rs): a monitor that was just unplugged or
+# went to sleep gives no name / a 0×0 size instead of panicking (egui-winit asks every frame). Re-apply on upgrade.
+winit = { path = "vendor/winit" }

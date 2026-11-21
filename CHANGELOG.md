@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **Windows: no more crash when a screen goes away** (a projector unplugged, a monitor going to sleep or display
+  settings changing could close Phosphor with "invalid monitor handle").
+- Freeze reports name where Phosphor was stuck in plain words on every Mac.
+
 ## 0.5.13 (2026-11-21)
 
 - **Linux: cameras and capture cards play** (they were listed, but opening one said its input type wasn't
