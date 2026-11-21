@@ -70,6 +70,11 @@ pub(super) struct Decoder {
     live_start: Option<(f64, std::time::Instant)>,
 }
 
+/// An FFmpeg input type known by several names answers to each ("video4linux2,v4l2" is "v4l2" on Linux).
+fn answers_to(names: &str, wanted: &str) -> bool {
+    names.split(',').any(|n| n.trim() == wanted)
+}
+
 impl Decoder {
     pub(super) fn open(path: &str) -> Result<Self, String> {
         let input = super::open_input(path).map_err(|e| format!("can't open ({e})"))?;
@@ -88,7 +93,7 @@ impl Decoder {
         } else {
             let fmt = ff::device::input::video()
                 .find(|f| match f {
-                    ff::Format::Input(i) => i.name() == format,
+                    ff::Format::Input(i) => answers_to(i.name(), format),
                     _ => false,
                 })
                 .ok_or_else(|| format!("input type \"{format}\" isn't available"))?;
@@ -1074,4 +1079,14 @@ fn thread_cpu_ns() -> Option<u64> {
 #[cfg(not(any(unix, windows)))]
 fn thread_cpu_ns() -> Option<u64> {
     None
+}
+
+#[cfg(test)]
+mod name_tests {
+    #[test]
+    fn an_input_type_answers_to_each_of_its_names() {
+        assert!(super::answers_to("video4linux2,v4l2", "v4l2") && super::answers_to("video4linux2,v4l2", "video4linux2"));
+        assert!(super::answers_to("dshow", "dshow") && super::answers_to("avfoundation", "avfoundation"));
+        assert!(!super::answers_to("video4linux2,v4l2", "v4l") && !super::answers_to("dshow", "avfoundation"));
+    }
 }
