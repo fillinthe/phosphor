@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.12 (2026-11-21)
 
 - **Send problem reports** (on by default; switch it off in the brightness menu or in Help › Report a Bug): after a
   crash or a freeze Phosphor sends the diagnostics to the team by itself (no project content, no file, layer or
