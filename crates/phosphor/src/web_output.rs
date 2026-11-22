@@ -99,7 +99,7 @@ impl WebOutputs {
         if !frames.is_empty() {
             rs.queue.submit([encoder.finish()]);
             for f in frames {
-                f.present();
+                rs.queue.present(f);
             }
         }
         shown
