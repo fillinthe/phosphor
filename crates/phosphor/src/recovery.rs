@@ -59,6 +59,10 @@ const FROZEN_AFTER: f64 = 20.0;
 pub struct Heartbeat {
     last: f64,
     count: u64,
+    /// The control window's state at the last frame (minimized, focused, occluded, fullscreen) and the outputs open:
+    /// written with each beat, so when drawing stops the watchdog can say what the window was doing.
+    pub window: [Option<bool>; 4],
+    pub outputs: usize,
 }
 
 impl Heartbeat {
@@ -69,9 +73,25 @@ impl Heartbeat {
         self.last = now;
         self.count += 1;
         if let Some(p) = heartbeat_path() {
-            let _ = std::fs::write(p, self.count.to_string());
+            let _ = std::fs::write(p, format!("{} {}", self.count, self.state()));
         }
     }
+
+    /// "window minimized=no focused=yes occluded=? fullscreen=no, 1 output open"
+    fn state(&self) -> String {
+        let f = |b: Option<bool>| match b {
+            Some(true) => "yes",
+            Some(false) => "no",
+            None => "?",
+        };
+        let [m, foc, occ, full] = self.window;
+        format!("window minimized={} focused={} occluded={} fullscreen={}, {} outputs open", f(m), f(foc), f(occ), f(full), self.outputs)
+    }
+}
+
+/// What the last heartbeat said about the window ("" for an old-style heartbeat).
+fn beat_state(beat: &str) -> &str {
+    beat.split_once(' ').map_or("", |(_, rest)| rest)
 }
 
 fn crashes_path() -> Option<PathBuf> {
@@ -219,7 +239,8 @@ pub fn run_watchdog(pid: u32) {
             if stuck.as_deref().is_some_and(waiting_for_events) {
                 if !noted_idle {
                     noted_idle = true;
-                    log_line(&format!("[{}] no frames for {FROZEN_AFTER} s, but not stuck (waiting for events): left running\n", unix_now()));
+                    let last = last_beat.as_deref().map(beat_state).filter(|s| !s.is_empty()).map_or(String::new(), |s| format!(" (last frame: {s})"));
+                    log_line(&format!("[{}] no frames for {FROZEN_AFTER} s, but not stuck (waiting for events): left running{last}\n", unix_now()));
                 }
                 stale = 0.0;
                 continue;
@@ -479,6 +500,14 @@ mod tests {
         // Released builds have no line tables: the names, and the system call it's waiting in.
         let report = "Call graph:\n    2600 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 2600 start  (in dyld) + 6992  [0x1]\n    + ! 2600 main  (in Phosphor) + 36  [0x2]\n    + !   2600 phosphor::app::render::_$LT$impl$u20$phosphor..app..PhosphorApp$GT$::render::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !     2600 core::ops::function::FnOnce::call_once::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !       2600 phosphor_engine::engine::encode::_$LT$impl$u20$phosphor_engine..engine..Engine$GT$::read_target::hfedcba9876543210  (in Phosphor) + 60  [0x4]\n    + !         2600 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x5]\n    1 Thread_2\n";
         assert_eq!(super::main_thread_path(report), ["PhosphorApp::render", "Engine::read_target", "in libsystem_kernel.dylib: __psynch_cvwait"]);
+    }
+
+    #[test]
+    fn the_heartbeat_carries_the_window_state() {
+        let hb = super::Heartbeat { window: [Some(true), Some(false), None, Some(false)], outputs: 2, ..Default::default() };
+        let line = format!("7 {}", hb.state());
+        assert_eq!(super::beat_state(&line), "window minimized=yes focused=no occluded=? fullscreen=no, 2 outputs open");
+        assert_eq!(super::beat_state("7"), "", "an old heartbeat says nothing more");
     }
 
     #[test]

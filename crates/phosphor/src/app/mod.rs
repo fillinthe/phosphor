@@ -1160,7 +1160,7 @@ pub struct PhosphorApp {
     /// The first-launch card is showing.
     welcome_open: bool,
     #[cfg(not(target_arch = "wasm32"))]
-    heartbeat: crate::recovery::Heartbeat,
+    pub(crate) heartbeat: crate::recovery::Heartbeat,
 }
 
 /// A bench point in window points: "x,y", "studio" (the middle of the Mapping Studio canvas) or "studio-menu" (just
@@ -1233,6 +1233,12 @@ impl eframe::App for PhosphorApp {
     /// (eframe then skips `ui`). The outputs, Syphon, NDI and streams must keep going then, so
     /// render here when the UI hasn't drawn recently.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // For the watchdog's note if drawing ever stops: what the control window was doing (a few flags, no work).
+        self.heartbeat.window = ctx.input(|i| {
+            let v = i.viewport();
+            [v.minimized, v.focused, v.occluded, v.fullscreen]
+        });
+        self.heartbeat.outputs = self.state.output.lock().map_or(0, |m| m.values().filter(|o| o.open).count());
         let (at, time) = self.last_ui;
         let idle = at.elapsed().as_secs_f64();
         if idle > 0.05 {
