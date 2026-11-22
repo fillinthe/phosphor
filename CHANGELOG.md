@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **Links work:** the ? help button, Help › User Manual, Donate, the release notes in the Update window and the
+  account pages open in your browser again (they did nothing before).
+- **Two copies of Phosphor open at once** no longer trip each other's freeze check (one copy kept being closed and
+  reopened as the other).
+
 ## 0.5.17 (2026-11-22)
 
 - **Privacy:** Phosphor now tells you, once, what it sends by itself to help fix problems (crash and freeze

@@ -42,12 +42,32 @@ fn snapshot_path() -> Option<PathBuf> {
     dir().map(|d| d.join("recovery.json"))
 }
 
-fn lock_path() -> Option<PathBuf> {
-    dir().map(|d| d.join("running.lock"))
+// Each running copy has its own marker and heartbeat, named by its process id: two copies open at once (say an old one
+// from a disk image next to the updated one) shared one heartbeat, so one copy's watchdog judged the other and restarted
+// the old version over and over (reports 2026-11-22). Up to 0.5.17 these were "running.lock" and "heartbeat".
+fn lock_path(pid: u32) -> Option<PathBuf> {
+    dir().map(|d| d.join(format!("running-{pid}.lock")))
 }
 
-fn heartbeat_path() -> Option<PathBuf> {
-    dir().map(|d| d.join("heartbeat"))
+fn heartbeat_path(pid: u32) -> Option<PathBuf> {
+    dir().map(|d| d.join(format!("heartbeat-{pid}")))
+}
+
+/// Markers left by runs that are no longer running (crashed, or killed): the pid in the name is gone. The old shared
+/// "running.lock" counts too.
+fn stale_locks(dir: &std::path::Path, alive: impl Fn(u32) -> bool) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name == "running.lock" {
+                return true;
+            }
+            name.strip_prefix("running-").and_then(|n| n.strip_suffix(".lock")).and_then(|n| n.parse().ok()).is_some_and(|pid| !alive(pid))
+        })
+        .collect()
 }
 
 /// Seconds without a heartbeat (while the watchdog itself was awake) before Phosphor counts as frozen.
@@ -72,7 +92,7 @@ impl Heartbeat {
         }
         self.last = now;
         self.count += 1;
-        if let Some(p) = heartbeat_path() {
+        if let Some(p) = heartbeat_path(std::process::id()) {
             let _ = std::fs::write(p, format!("{} {}", self.count, self.state()));
         }
     }
@@ -108,9 +128,24 @@ fn unix_now() -> u64 {
 
 /// Marks this run as live. Returns the last snapshot if the previous run ended without a clean quit.
 pub fn begin_session() -> Option<Snapshot> {
-    let lock = lock_path()?;
+    let lock = lock_path(std::process::id())?;
     let _ = std::fs::create_dir_all(lock.parent()?);
-    let unclean = lock.exists();
+    // Another copy that's still running isn't a crash; a marker whose run is gone is.
+    let stale = stale_locks(lock.parent()?, process_alive);
+    let unclean = !stale.is_empty();
+    for old in stale {
+        let _ = std::fs::remove_file(old);
+    }
+    // Heartbeats of runs that are gone (their watchdog normally removes them), and the old shared one.
+    if let Ok(entries) = std::fs::read_dir(lock.parent()?) {
+        for p in entries.flatten().map(|e| e.path()) {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let gone = name == "heartbeat" || name.strip_prefix("heartbeat-").and_then(|n| n.parse().ok()).is_some_and(|pid| !process_alive(pid));
+            if gone {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
     let _ = std::fs::write(&lock, std::process::id().to_string());
     if !unclean {
         return None;
@@ -126,8 +161,9 @@ pub fn last_snapshot() -> Option<Snapshot> {
 
 /// A normal quit: the watchdog won't relaunch and the next start won't restore.
 pub fn end_session() {
-    if let Some(lock) = lock_path() {
-        let _ = std::fs::remove_file(lock);
+    let pid = std::process::id();
+    for p in [lock_path(pid), heartbeat_path(pid)].into_iter().flatten() {
+        let _ = std::fs::remove_file(p);
     }
 }
 
@@ -219,7 +255,7 @@ pub fn run_watchdog(pid: u32) {
         let in_grace = grace_until.is_some_and(|g| tick < g);
         let alive = process_alive(pid);
         if alive {
-            let beat = heartbeat_path().and_then(|p| std::fs::read_to_string(p).ok());
+            let beat = heartbeat_path(pid).and_then(|p| std::fs::read_to_string(p).ok());
             if beat.is_some() && beat != last_beat {
                 last_beat = beat;
                 stale = 0.0;
@@ -256,7 +292,11 @@ pub fn run_watchdog(pid: u32) {
             kill_process(pid);
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
-        let Some(lock) = lock_path() else { return };
+        // Gone: its heartbeat goes too (the marker stays when it didn't quit cleanly: the next start sees the crash).
+        if let Some(p) = heartbeat_path(pid) {
+            let _ = std::fs::remove_file(p);
+        }
+        let Some(lock) = lock_path(pid) else { return };
         if !lock.exists() {
             return;
         }
@@ -463,6 +503,9 @@ fn relaunch() {
 
 #[cfg(test)]
 mod tests {
+    use super::stale_locks;
+    use std::path::PathBuf;
+
     /// The snapshot is written whole by the writer thread, only when it changed, and quitting waits for it.
     #[test]
     fn snapshots_are_written_off_the_ui_thread() {
@@ -508,6 +551,25 @@ mod tests {
         let line = format!("7 {}", hb.state());
         assert_eq!(super::beat_state(&line), "window minimized=yes focused=no occluded=? fullscreen=no, 2 outputs open");
         assert_eq!(super::beat_state("7"), "", "an old heartbeat says nothing more");
+    }
+
+    #[test]
+    fn only_markers_of_runs_that_are_gone_count_as_crashes() {
+        let dir = std::env::temp_dir().join(format!("phosphor-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["running-100.lock", "running-200.lock", "heartbeat-100", "running-x.lock"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        // 100 is still running (another copy open at the same time); 200 crashed.
+        let names = |v: Vec<PathBuf>| v.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect::<Vec<_>>();
+        assert_eq!(names(stale_locks(&dir, |pid| pid == 100)), ["running-200.lock"]);
+        // The shared marker of 0.5.17 and before is an unclean end too.
+        std::fs::write(dir.join("running.lock"), "1").unwrap();
+        let mut stale = names(stale_locks(&dir, |pid| pid == 100));
+        stale.sort();
+        assert_eq!(stale, ["running-200.lock", "running.lock"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
