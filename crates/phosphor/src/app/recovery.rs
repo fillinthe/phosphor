@@ -11,12 +11,11 @@ impl PhosphorApp {
         let st = &mut self.state;
         self.recovered = Some(streaming);
         // "Send problem reports" on: the crash report goes by itself (once: this runs once per crash).
-        if st.bug.send_problems {
-            let report = crate::support::crash_diagnostics(st);
-            let sent = st.bug.sent.clone();
-            crate::crash_report::send(report, Some(st.account.reporter()), move |r| {
-                *sent.lock().unwrap() = Some(r);
-            });
+        // Not before the one-time notice has been answered: it waits for "Keep sharing".
+        if st.bug.send_problems && st.bug.notice_seen {
+            crate::support::send_crash_report(st);
+        } else if st.bug.send_problems {
+            st.bug.held_report = true;
         }
     }
 

@@ -33,21 +33,31 @@ pub fn sharing() -> bool {
 /// settings. Reports carry it so "Delete my reports" can find them all on the report server.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn reporter_id() -> Option<String> {
-    let path = crate::show::storage_dir()?.join("report-id");
-    if let Ok(id) = std::fs::read_to_string(&path) {
-        let id = id.trim().to_string();
-        if id.len() >= 16 && id.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Some(id.to_ascii_lowercase());
-        }
+    if let Some(id) = saved_reporter_id() {
+        return Some(id);
     }
+    let path = crate::show::storage_dir()?.join("report-id");
     let id = crate::net::new_token();
     let _ = std::fs::create_dir_all(path.parent()?);
     std::fs::write(&path, &id).ok()?;
     Some(id)
 }
 
+/// The report ID this computer already has, if it ever sent a report (never makes one).
+#[cfg(not(target_arch = "wasm32"))]
+fn saved_reporter_id() -> Option<String> {
+    let id = std::fs::read_to_string(crate::show::storage_dir()?.join("report-id")).ok()?;
+    let id = id.trim();
+    (id.len() >= 16 && id.chars().all(|c| c.is_ascii_hexdigit())).then(|| id.to_ascii_lowercase())
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn reporter_id() -> Option<String> {
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+fn saved_reporter_id() -> Option<String> {
     None
 }
 
@@ -64,7 +74,8 @@ fn forget_reporter_id() {}
 
 /// Asks the report server to delete every report from this computer (its report ID); `done` hears how many went.
 pub fn delete_my_reports(done: impl FnOnce(Result<usize, String>) + Send + 'static) {
-    let (Some(url), Some(id)) = (endpoint(), reporter_id()) else {
+    // No ID = this computer never sent a report: nothing to ask the server.
+    let (Some(url), Some(id)) = (endpoint(), saved_reporter_id()) else {
         done(Ok(0));
         return;
     };

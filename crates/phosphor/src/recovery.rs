@@ -53,9 +53,27 @@ fn heartbeat_path(pid: u32) -> Option<PathBuf> {
     dir().map(|d| d.join(format!("heartbeat-{pid}")))
 }
 
-/// Markers left by runs that are no longer running (crashed, or killed): the pid in the name is gone. The old shared
+/// This run's marker, kept open and locked for as long as Phosphor runs: the system lets go of the lock the moment the
+/// process ends, however it ends. (A process id alone can't say "still running": after a restart of the computer
+/// another program gets the same number.)
+static SESSION_LOCK: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
+
+/// Is this marker's copy of Phosphor still running (does it hold the lock)?
+fn held(lock: &std::path::Path) -> bool {
+    let Ok(f) = std::fs::File::open(lock) else { return false };
+    match f.try_lock() {
+        Ok(()) => {
+            let _ = f.unlock();
+            false
+        }
+        Err(std::fs::TryLockError::WouldBlock) => true,
+        Err(std::fs::TryLockError::Error(_)) => false,
+    }
+}
+
+/// Markers left by runs that are no longer running (crashed, or killed): nobody holds them. The old shared
 /// "running.lock" counts too.
-fn stale_locks(dir: &std::path::Path, alive: impl Fn(u32) -> bool) -> Vec<PathBuf> {
+fn stale_locks(dir: &std::path::Path, held: impl Fn(&std::path::Path) -> bool) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     entries
         .flatten()
@@ -65,7 +83,7 @@ fn stale_locks(dir: &std::path::Path, alive: impl Fn(u32) -> bool) -> Vec<PathBu
             if name == "running.lock" {
                 return true;
             }
-            name.strip_prefix("running-").and_then(|n| n.strip_suffix(".lock")).and_then(|n| n.parse().ok()).is_some_and(|pid| !alive(pid))
+            name.starts_with("running-") && name.ends_with(".lock") && !held(p)
         })
         .collect()
 }
@@ -131,7 +149,7 @@ pub fn begin_session() -> Option<Snapshot> {
     let lock = lock_path(std::process::id())?;
     let _ = std::fs::create_dir_all(lock.parent()?);
     // Another copy that's still running isn't a crash; a marker whose run is gone is.
-    let stale = stale_locks(lock.parent()?, process_alive);
+    let stale = stale_locks(lock.parent()?, held);
     let unclean = !stale.is_empty();
     for old in stale {
         let _ = std::fs::remove_file(old);
@@ -140,13 +158,16 @@ pub fn begin_session() -> Option<Snapshot> {
     if let Ok(entries) = std::fs::read_dir(lock.parent()?) {
         for p in entries.flatten().map(|e| e.path()) {
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            let gone = name == "heartbeat" || name.strip_prefix("heartbeat-").and_then(|n| n.parse().ok()).is_some_and(|pid| !process_alive(pid));
+            let gone = name == "heartbeat" || name.strip_prefix("heartbeat-").and_then(|n| n.parse::<u32>().ok()).is_some_and(|pid| !lock_path(pid).is_some_and(|l| held(&l)));
             if gone {
                 let _ = std::fs::remove_file(p);
             }
         }
     }
-    let _ = std::fs::write(&lock, std::process::id().to_string());
+    if let Ok(f) = std::fs::OpenOptions::new().create(true).truncate(true).write(true).read(true).open(&lock) {
+        let _ = f.try_lock();
+        *SESSION_LOCK.lock().unwrap() = Some(f);
+    }
     if !unclean {
         return None;
     }
@@ -162,6 +183,7 @@ pub fn last_snapshot() -> Option<Snapshot> {
 /// A normal quit: the watchdog won't relaunch and the next start won't restore.
 pub fn end_session() {
     let pid = std::process::id();
+    *SESSION_LOCK.lock().unwrap() = None;
     for p in [lock_path(pid), heartbeat_path(pid)].into_iter().flatten() {
         let _ = std::fs::remove_file(p);
     }
@@ -558,17 +580,22 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("phosphor-locks-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        for name in ["running-100.lock", "running-200.lock", "heartbeat-100", "running-x.lock"] {
+        for name in ["running-100.lock", "running-200.lock", "heartbeat-100", "other.lock"] {
             std::fs::write(dir.join(name), "").unwrap();
         }
-        // 100 is still running (another copy open at the same time); 200 crashed.
+        // 100 is still running (another copy open at the same time: it holds its marker's lock); 200 crashed.
+        let running = std::fs::File::open(dir.join("running-100.lock")).unwrap();
+        running.try_lock().unwrap();
         let names = |v: Vec<PathBuf>| v.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect::<Vec<_>>();
-        assert_eq!(names(stale_locks(&dir, |pid| pid == 100)), ["running-200.lock"]);
+        assert_eq!(names(stale_locks(&dir, super::held)), ["running-200.lock"]);
         // The shared marker of 0.5.17 and before is an unclean end too.
         std::fs::write(dir.join("running.lock"), "1").unwrap();
-        let mut stale = names(stale_locks(&dir, |pid| pid == 100));
+        let mut stale = names(stale_locks(&dir, super::held));
         stale.sort();
         assert_eq!(stale, ["running-200.lock", "running.lock"]);
+        // Once that copy is gone (however it ended), its marker counts.
+        drop(running);
+        assert_eq!(stale_locks(&dir, super::held).len(), 3);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

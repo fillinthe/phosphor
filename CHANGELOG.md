@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.19 (2026-11-22)
+
+- **Privacy:** nothing is sent by itself until you've answered the one-time notice. A crash report from before
+  you answered waits for "Keep sharing" (and is dropped on "Turn off").
+- **Delete my reports** says what it did even after the menu closes, and asks the server nothing when this
+  computer never sent a report.
+- After the computer restarts from a power loss or a hard shutdown, Phosphor still offers the show back the way it was.
+
 ## 0.5.18 (2026-11-22)
 
 - **Links work:** the ? help button, Help › User Manual, Donate, the release notes in the Update window and the

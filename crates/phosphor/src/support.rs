@@ -104,6 +104,8 @@ pub struct BugReport {
     pub deleting: bool,
     /// The one-time notice about what Phosphor sends by itself has been seen (saved).
     pub notice_seen: bool,
+    /// A crash report held back because the notice hasn't been answered yet: sent on "Keep sharing", dropped on "Turn off".
+    pub held_report: bool,
     /// The diagnostics shown in the window, and when they were put together (redone every few seconds, not each frame).
     shown: Option<(f64, String)>,
 }
@@ -111,7 +113,8 @@ pub struct BugReport {
 impl BugReport {
     /// `send_problems`: the saved "Send problem reports" choice.
     pub fn new(send_problems: bool, notice_seen: bool) -> Self {
-        crate::crash_report::set_sharing(send_problems);
+        // Nothing goes by itself before the notice has been answered.
+        crate::crash_report::set_sharing(send_problems && notice_seen);
         Self { include_diagnostics: true, send_problems, notice_seen, ..Default::default() }
     }
 }
@@ -227,7 +230,7 @@ fn cameras_line(st: &mut State) -> String {
 pub fn problem_reports_toggle(ui: &mut egui::Ui, st: &mut State) -> egui::Response {
     let r = crate::ui::toggle(ui, &mut st.bug.send_problems, "Share problem reports and anonymous counts").on_hover_text(SHARING_HELP);
     if r.changed() {
-        crate::crash_report::set_sharing(st.bug.send_problems);
+        crate::crash_report::set_sharing(st.bug.send_problems && st.bug.notice_seen);
     }
     r
 }
@@ -239,14 +242,6 @@ const SHARING_HELP: &str = "To fix problems faster, Phosphor sends a report to i
 pub fn privacy_section(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::heading_help(ui, "Privacy", SHARING_HELP);
     problem_reports_toggle(ui, st);
-    if let Some(r) = st.bug.deleted.lock().unwrap().take() {
-        st.bug.deleting = false;
-        st.notice = Some(match r {
-            Ok(0) => "There were no reports from this computer to delete.".into(),
-            Ok(n) => crate::ui::plural(n, "Deleted {0} report from this computer.", "Deleted {0} reports from this computer."),
-            Err(e) => format!("Couldn't delete the reports ({e}). Try again later."),
-        });
-    }
     crate::ui::toolbar(ui, |ui| {
         if crate::ui::command_if(ui, !st.bug.deleting, crate::ui::label(icon::TRASH, "Delete my reports"))
             .on_hover_text("Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.")
@@ -267,6 +262,17 @@ pub fn privacy_section(ui: &mut egui::Ui, st: &mut State) {
 /// Once (first start, and once after the update that brought it): what Phosphor sends by itself, with Keep sharing /
 /// Turn off. Drawn app-level every frame; nothing while the bench runs.
 pub fn privacy_notice(ctx: &egui::Context, st: &mut State, bench: bool) {
+    // "Delete my reports" answered (heard here so the message shows even after the menu closed).
+    if st.bug.deleting
+        && let Some(r) = st.bug.deleted.lock().unwrap().take()
+    {
+        st.bug.deleting = false;
+        st.notice = Some(match r {
+            Ok(0) => "There were no reports from this computer to delete.".into(),
+            Ok(n) => crate::ui::plural(n, "Deleted {0} report from this computer.", "Deleted {0} reports from this computer."),
+            Err(e) => format!("Couldn't delete the reports ({e}). Try again later."),
+        });
+    }
     // (Bench pictures: PHOSPHOR_PRIVACY_NOTICE=1 shows it.)
     if st.bug.notice_seen || bench && std::env::var_os("PHOSPHOR_PRIVACY_NOTICE").is_none() {
         return;
@@ -284,8 +290,25 @@ pub fn privacy_notice(ctx: &egui::Context, st: &mut State, bench: bool) {
         st.bug.send_problems = keep;
         crate::crash_report::set_sharing(keep);
         st.bug.notice_seen = true;
+        // The crash report that waited for this answer.
+        if std::mem::take(&mut st.bug.held_report) && keep {
+            send_crash_report(st);
+        }
     }
 }
+
+/// Sends the report of the unexpected quit Phosphor just came back from (by itself: "Share problem reports" is on).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn send_crash_report(st: &mut State) {
+    let report = crash_diagnostics(st);
+    let sent = st.bug.sent.clone();
+    crate::crash_report::send(report, Some(st.account.reporter()), move |r| {
+        *sent.lock().unwrap() = Some(r);
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn send_crash_report(_st: &mut State) {}
 
 /// Bench: starts the camera lookup and waits (up to `secs`) until it's in, so a snapshot lists them.
 #[cfg(not(target_arch = "wasm32"))]
