@@ -42,6 +42,8 @@ jobs:
             ~/.cargo/git
             target
           key: win-${{ hashFiles('Cargo.lock') }}
+          # A release changes Cargo.lock (the version number): start from the last build's cache instead of from nothing.
+          restore-keys: win-
 
       - name: Engine and ISF crates
         run: cargo test -p phosphor-engine -p phosphor-isf --release

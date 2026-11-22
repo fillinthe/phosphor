@@ -44,6 +44,8 @@ jobs:
             ~/.cargo/git
             target/bundle
           key: mac-intel-cargo-${{ hashFiles('Cargo.lock') }}
+          # A release changes Cargo.lock (the version number): start from the last build's cache instead of from nothing.
+          restore-keys: mac-intel-cargo-
 
       - name: FFmpeg
         run: "[[ -x vendor/ffmpeg/bin/ffmpeg ]] || scripts/build-ffmpeg-mac.sh"
