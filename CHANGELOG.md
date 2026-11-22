@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.15 (2026-11-22)
 
 - **Web app: outputs open in a browser window of their own**: drag it to the projector and double-click for full
   screen (it was a panel inside the interface). Allow pop-ups for the site the first time.
