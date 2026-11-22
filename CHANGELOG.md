@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Web app: outputs open in a browser window of their own**: drag it to the projector and double-click for full
   screen (it was a panel inside the interface). Allow pop-ups for the site the first time.
 - **Web app: Phosphor's icon in the browser tab.**
+- **No more restarts of a Phosphor that isn't stuck:** the freeze watchdog leaves it running when it's only idle
+  (waiting for something to happen), and gives it a minute after the computer wakes from sleep.
 
 ## 0.5.14 (2026-11-21)
 

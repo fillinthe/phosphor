@@ -178,19 +178,33 @@ pub fn spawn_watchdog() {
 pub fn run_watchdog(pid: u32) {
     let mut last_beat: Option<String> = None;
     let mut stale = 0.0f64;
+    let mut noted_idle = false;
     let mut tick = std::time::Instant::now();
+    let mut wall = std::time::SystemTime::now();
+    let mut grace_until: Option<std::time::Instant> = None;
     loop {
         std::thread::sleep(std::time::Duration::from_millis(700));
         // Only count time we were awake ourselves: after the Mac sleeps, a stale heartbeat isn't a freeze.
         let dt = tick.elapsed().as_secs_f64();
         tick = std::time::Instant::now();
+        // Just woke (the wall clock jumped while our own clock, which stops in sleep, didn't): the first frames after a
+        // wake can take many seconds while memory comes back (reports 2026-11-22: 9 to 38 s frames overnight on an
+        // Intel Mac, then restarted as "frozen"). A minute's grace before a stale heartbeat counts again.
+        let wall_dt = wall.elapsed().map_or(dt, |d| d.as_secs_f64());
+        wall = std::time::SystemTime::now();
+        if woke(wall_dt, dt) {
+            grace_until = Some(tick + std::time::Duration::from_secs(WAKE_GRACE));
+            stale = 0.0;
+        }
+        let in_grace = grace_until.is_some_and(|g| tick < g);
         let alive = process_alive(pid);
         if alive {
             let beat = heartbeat_path().and_then(|p| std::fs::read_to_string(p).ok());
             if beat.is_some() && beat != last_beat {
                 last_beat = beat;
                 stale = 0.0;
-            } else if last_beat.is_some() && dt < 2.0 {
+                noted_idle = false;
+            } else if last_beat.is_some() && dt < 2.0 && !in_grace {
                 stale += dt;
             }
             if stale < FROZEN_AFTER {
@@ -198,7 +212,19 @@ pub fn run_watchdog(pid: u32) {
             }
             // Frozen: write down where it's stuck (for the report), then end it so it can be reopened with the last
             // settings.
-            let at = stuck_at(pid).map_or(String::new(), |s| format!("\n  stuck at: {s}"));
+            let stuck = stuck_at(pid);
+            // Not stuck: the main thread is waiting for events (nothing of Phosphor's own running), it just isn't
+            // drawing frames. Ending it would only lose the show (reports 2026-11-22: five restarts in ten minutes of
+            // an idle Phosphor). Noted once, left running.
+            if stuck.as_deref().is_some_and(waiting_for_events) {
+                if !noted_idle {
+                    noted_idle = true;
+                    log_line(&format!("[{}] no frames for {FROZEN_AFTER} s, but not stuck (waiting for events): left running\n", unix_now()));
+                }
+                stale = 0.0;
+                continue;
+            }
+            let at = stuck.map_or(String::new(), |s| format!("\n  stuck at: {s}"));
             if let Some(log) = crash_log_path() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
@@ -355,6 +381,30 @@ fn short_symbol(symbol: &str) -> Option<String> {
     Some(tail.trim_start_matches('_').to_string())
 }
 
+/// Seconds after the computer wakes before a stale heartbeat counts toward a freeze.
+const WAKE_GRACE: u64 = 60;
+
+/// The computer slept between two looks: more wall-clock time passed than our own (sleep-stopping) clock saw.
+fn woke(wall_dt: f64, awake_dt: f64) -> bool {
+    wall_dt - awake_dt > 5.0
+}
+
+/// A `stuck_at` path that is only the main thread waiting for the next event ("phosphor::main > in
+/// libsystem_kernel.dylib: mach_msg2_trap"): idle, not frozen.
+fn waiting_for_events(path: &str) -> bool {
+    let parts: Vec<&str> = path.split(" > ").collect();
+    let ours = parts.iter().filter(|p| !p.starts_with("in ")).count();
+    let last = parts.last().copied().unwrap_or("");
+    ours <= 1 && (last.ends_with("mach_msg2_trap") || last.ends_with("mach_msg_trap"))
+}
+
+/// Appends a line to crash.log.
+fn log_line(line: &str) {
+    if let Some(log) = crash_log_path() {
+        let _ = std::fs::OpenOptions::new().create(true).append(true).open(log).and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+    }
+}
+
 /// Ends the frozen process we watch.
 #[cfg(unix)]
 fn kill_process(pid: u32) {
@@ -429,6 +479,19 @@ mod tests {
         // Released builds have no line tables: the names, and the system call it's waiting in.
         let report = "Call graph:\n    2600 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 2600 start  (in dyld) + 6992  [0x1]\n    + ! 2600 main  (in Phosphor) + 36  [0x2]\n    + !   2600 phosphor::app::render::_$LT$impl$u20$phosphor..app..PhosphorApp$GT$::render::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !     2600 core::ops::function::FnOnce::call_once::h0123456789abcdef  (in Phosphor) + 3  [0x3]\n    + !       2600 phosphor_engine::engine::encode::_$LT$impl$u20$phosphor_engine..engine..Engine$GT$::read_target::hfedcba9876543210  (in Phosphor) + 60  [0x4]\n    + !         2600 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x5]\n    1 Thread_2\n";
         assert_eq!(super::main_thread_path(report), ["PhosphorApp::render", "Engine::read_target", "in libsystem_kernel.dylib: __psynch_cvwait"]);
+    }
+
+    #[test]
+    fn a_wake_from_sleep_is_noticed() {
+        assert!(super::woke(3600.0, 0.7), "an hour on the wall clock, 0.7 s awake: slept");
+        assert!(!super::woke(0.72, 0.7) && !super::woke(1.5, 0.7), "normal ticks and a little scheduling delay aren't");
+    }
+
+    #[test]
+    fn an_idle_main_thread_is_not_a_freeze() {
+        assert!(super::waiting_for_events("phosphor::main > in libsystem_kernel.dylib: mach_msg2_trap"));
+        assert!(!super::waiting_for_events("phosphor::main > App::ui > in libsystem_kernel.dylib: __semwait_signal"));
+        assert!(!super::waiting_for_events("phosphor::main > PhosphorApp::render > Engine::render > in libsystem_kernel.dylib: mach_msg2_trap"));
     }
 
     #[test]
