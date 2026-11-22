@@ -81,9 +81,14 @@ impl WebOutputs {
                 w.canvas.set_height(size.1);
                 configure(&w.surface, rs, w.format, w.alpha, size);
             }
-            let Ok(frame) = w.surface.get_current_texture() else {
-                configure(&w.surface, rs, w.format, w.alpha, w.size);
-                continue;
+            let frame = match w.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
+                // Out of date / lost: set it up again and draw next frame; hidden / busy: skip this one.
+                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                    configure(&w.surface, rs, w.format, w.alpha, w.size);
+                    continue;
+                }
+                _ => continue,
             };
             let target = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
             let source = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -118,6 +123,7 @@ fn configure(surface: &wgpu::Surface<'static>, rs: &egui_wgpu::RenderState, form
             alpha_mode: alpha,
             view_formats: Vec::new(),
             desired_maximum_frame_latency: 2,
+            color_space: Default::default(),
         },
     );
 }
