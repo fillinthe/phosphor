@@ -1102,6 +1102,9 @@ pub struct ExportUi {
 }
 
 pub struct PhosphorApp {
+    /// Web app: each open output in a browser window of its own.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) web_outputs: crate::web_output::WebOutputs,
     /// The workspace (built-in layout) showing, and how each one was left this session.
     pub(crate) workspace: Option<usize>,
 

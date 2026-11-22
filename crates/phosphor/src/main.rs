@@ -160,6 +160,8 @@ mod spout;
 mod thumbs;
 #[cfg(not(target_arch = "wasm32"))]
 mod tosc;
+#[cfg(target_arch = "wasm32")]
+mod web_output;
 mod update;
 mod theme;
 

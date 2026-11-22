@@ -132,14 +132,46 @@ impl PhosphorApp {
     }
 
     // "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven." Matthew 5:16 (KJV)
-    pub(crate) fn output_windows(&self, ctx: &egui::Context) {
+    pub(crate) fn output_windows(&mut self, ctx: &egui::Context) {
         // Any output open: the displays stay awake (no display sleep / screen saver / lock in the middle of a show).
         let any_open = self.state.output.lock().unwrap().values().any(|o| o.open);
         crate::screens::keep_display_awake(any_open);
         let open: Vec<(u64, String)> =
             self.state.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
+        #[cfg(not(target_arch = "wasm32"))]
         for (oid, name) in open {
             self.output_window(ctx, oid, &name);
+        }
+        // In the browser: pop-up windows (a panel inside the interface can't go to a projector).
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = ctx;
+            self.web_output_windows(open);
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn web_output_windows(&mut self, open: Vec<(u64, String)>) {
+        let (Some(rs), Some(engine)) = (self.state.render_state.as_ref(), self.state.engine.as_ref()) else { return };
+        let comp = &self.state.comp;
+        let open: Vec<(u64, String, (u32, u32))> = open
+            .into_iter()
+            .map(|(id, name)| {
+                let size = comp.outputs.iter().find(|o| o.id == id).map_or((comp.width, comp.height), |o| o.size((comp.width, comp.height)));
+                (id, name, size)
+            })
+            .collect();
+        let shown = self.web_outputs.show(rs, &open, |id| engine.output_texture(id).or_else(|| engine.output()).map(|t| &t.texture));
+        if !shown.closed.is_empty() {
+            let mut map = self.state.output.lock().unwrap();
+            for id in &shown.closed {
+                if let Some(o) = map.get_mut(id) {
+                    o.open = false;
+                }
+            }
+        }
+        if shown.blocked {
+            self.state.notice = Some("The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.".into());
         }
     }
 

@@ -155,6 +155,8 @@ impl PhosphorApp {
         let fresh_install = bench.is_none() && stored(KEY_COMPOSITION).is_none();
         let library_default_done = stored(KEY_LIBRARY_DEFAULT).is_some();
         let mut app = Self {
+            #[cfg(target_arch = "wasm32")]
+            web_outputs: Default::default(),
             state: State {
                 selected: comp.layers.last().map(|l| l.id),
                 selected_clip: None,

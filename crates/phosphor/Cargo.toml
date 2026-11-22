@@ -102,7 +102,7 @@ windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Di
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "HtmlInputElement", "Blob", "BlobPropertyBag", "Url", "File", "FileList"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "HtmlInputElement", "Blob", "BlobPropertyBag", "Url", "File", "FileList", "HtmlVideoElement", "HtmlMediaElement", "MediaStream"] }
 
 
 [dev-dependencies]
