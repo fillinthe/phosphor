@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **Web app: outputs open in a browser window of their own**: drag it to the projector and double-click for full
+  screen (it was a panel inside the interface). Allow pop-ups for the site the first time.
+- **Web app: Phosphor's icon in the browser tab.**
+
 ## 0.5.14 (2026-11-21)
 
 - **Windows: no more crash when a screen goes away** (a projector unplugged, a monitor going to sleep or display
