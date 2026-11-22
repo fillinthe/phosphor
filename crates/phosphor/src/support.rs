@@ -206,7 +206,7 @@ fn cameras_line(st: &mut State) -> String {
         st.bug.cameras_asked = true;
         let found = st.bug.cameras.clone();
         let _ = std::thread::Builder::new().name("bug-cameras".into()).spawn(move || {
-            let names: Vec<String> = crate::media::live::cameras().into_iter().map(|c| c.name).collect();
+            let names: Vec<String> = crate::media::live::cameras_when_settled(10.0).into_iter().map(|c| c.name).collect();
             *found.lock().unwrap() = Some(names);
         });
     }

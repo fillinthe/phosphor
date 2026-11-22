@@ -66,6 +66,22 @@ pub fn cameras() -> Vec<Camera> {
     found
 }
 
+/// The camera list for a caller that can wait (a background thread: Report a Bug): on Windows, after any camera that's
+/// starting has started (up to `secs`), so the list is read fresh instead of skipped.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn cameras_when_settled(secs: f64) -> Vec<Camera> {
+    #[cfg(windows)]
+    {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
+        while OPENING.load(std::sync::atomic::Ordering::SeqCst) > 0 && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = secs;
+    cameras()
+}
+
 #[cfg(windows)]
 fn list_dshow() -> Vec<Camera> {
     let Some(ffmpeg) = crate::stream::ffmpeg_path() else { return Vec::new() };
