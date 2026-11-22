@@ -1,7 +1,7 @@
 #!/bin/sh
 # Performance suite: makes test clips (4K Hap with Phosphor's own encoder, 4K H.264 / HEVC and 1080p ProRes with
 # FFmpeg), then plays 4 layers of each at 60 fps and prints one line per run (fps, CPU, GPU, memory, worst frame gap).
-# Silent (no sound in the clips), temp HOME. Results go in docs/PERF.md.
+# Silent (no sound in the clips), temp HOME.
 # Usage: scripts/perf-suite.sh [path/to/phosphor] [outdir] [seconds]
 BIN=${1:-target/release/phosphor}
 OUT=${2:-/tmp/phosphor-perf}
