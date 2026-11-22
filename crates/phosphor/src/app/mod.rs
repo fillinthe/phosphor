@@ -1216,6 +1216,18 @@ impl eframe::App for PhosphorApp {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let Some(run) = self.bench.as_mut() else { return };
         bench_drag(run, ctx, raw);
+        // `--clicks`: the next one whose time has come (one a frame).
+        if let Some((at, when)) = run.cfg.clicks.first().cloned()
+            && ctx.input(|i| i.time) >= when
+            && let Some(p) = bench_point(ctx, &at)
+        {
+            raw.events.push(egui::Event::PointerMoved(p));
+            for pressed in [true, false] {
+                raw.events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() });
+            }
+            run.cfg.clicks.remove(0);
+            println!("CLICK {at}@{when}");
+        }
         let Some(at) = run.cfg.right_click.clone() else { return };
         // "x,y@3": at 3 seconds instead of 1 (tiles and thumbnails settle first).
         let (where_, when) = at.split_once('@').map_or((at.as_str(), 1.0), |(w, t)| (w, t.parse().unwrap_or(1.0)));

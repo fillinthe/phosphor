@@ -277,7 +277,8 @@ fn main() -> eframe::Result {
         // A benchmark must start from a clean slate, not yesterday's project.
         persist_window: bench.is_none(),
         // …and must never save over the user's settings: its own throwaway storage.
-        persistence_path: bench.is_some().then(|| std::env::temp_dir().join(format!("phosphor-bench-{}", std::process::id())).join("app.ron")),
+        // (PHOSPHOR_BENCH_KEEP_SETTINGS=1: a bench saves into the real settings, for tests across a restart.)
+        persistence_path: (bench.is_some() && std::env::var_os("PHOSPHOR_BENCH_KEEP_SETTINGS").is_none()).then(|| std::env::temp_dir().join(format!("phosphor-bench-{}", std::process::id())).join("app.ron")),
         wgpu_options: gpu_options(),
         ..Default::default()
     };

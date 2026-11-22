@@ -8,7 +8,8 @@ impl PhosphorApp {
         for key in ["help_icons", "areas_v1", "use_areas"] {
             storage.remove_string(key);
         }
-        if self.bench_session {
+        // (PHOSPHOR_BENCH_KEEP_SETTINGS=1: a bench saves too, for tests across a restart.)
+        if self.bench_session && std::env::var_os("PHOSPHOR_BENCH_KEEP_SETTINGS").is_none() {
             return;
         }
         storage.set_string(KEY_COMPOSITION, self.state.comp.to_json());
