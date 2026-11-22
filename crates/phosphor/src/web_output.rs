@@ -137,7 +137,9 @@ fn open_window(rs: &egui_wgpu::RenderState, id: u64, name: &str, size: (u32, u32
     let body = doc.body()?;
     let _ = body.set_attribute("style", "margin:0;background:#000;overflow:hidden");
     body.set_inner_html("");
-    let video: web_sys::HtmlVideoElement = doc.create_element("video").ok()?.dyn_into().ok()?;
+    // (Made in the pop-up's own document: its type belongs to that window, so a type check against this page's
+    // always fails. It is a <video>.)
+    let video: web_sys::HtmlVideoElement = doc.create_element("video").ok()?.unchecked_into();
     let _ = video.set_attribute("style", "position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000");
     let _ = video.set_attribute("playsinline", "");
     video.set_autoplay(true);
