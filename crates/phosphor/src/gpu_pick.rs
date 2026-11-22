@@ -26,26 +26,49 @@ pub fn set(name: Option<&str>) -> std::io::Result<()> {
     }
 }
 
-/// The card named `wanted` if it's there, else the best one: a separate GPU, then the built-in one, then anything.
-pub fn pick<'a, T>(adapters: &'a [T], wanted: &str, info: impl Fn(&T) -> (String, eframe::wgpu::DeviceType)) -> Option<&'a T> {
-    adapters.iter().find(|a| info(a).0 == wanted).or_else(|| {
-        let rank = |t: eframe::wgpu::DeviceType| match t {
-            eframe::wgpu::DeviceType::DiscreteGpu => 0,
-            eframe::wgpu::DeviceType::IntegratedGpu => 1,
-            eframe::wgpu::DeviceType::VirtualGpu => 2,
-            _ => 3,
-        };
-        adapters.iter().min_by_key(|a| rank(info(a).1))
+/// The card named `wanted` if it's there, else the best one: a separate GPU, then the built-in one, then anything. Of
+/// the same card's ways in, the steadiest for this system (`backend_rank`).
+pub fn pick<'a, T>(adapters: &'a [T], wanted: Option<&str>, info: impl Fn(&T) -> (String, eframe::wgpu::DeviceType, eframe::wgpu::Backend)) -> Option<&'a T> {
+    let rank = |t: eframe::wgpu::DeviceType| match t {
+        eframe::wgpu::DeviceType::DiscreteGpu => 0,
+        eframe::wgpu::DeviceType::IntegratedGpu => 1,
+        eframe::wgpu::DeviceType::VirtualGpu => 2,
+        _ => 3,
+    };
+    let named: Vec<&T> = adapters.iter().filter(|a| wanted.is_some_and(|w| info(a).0 == w)).collect();
+    let from: Vec<&T> = if named.is_empty() { adapters.iter().collect() } else { named };
+    from.into_iter().min_by_key(|a| {
+        let (_, kind, backend) = info(a);
+        (rank(kind), backend_rank(backend))
     })
 }
 
-/// For eframe: picks the saved card (when one was saved).
+/// Windows: DirectX 12 before Vulkan. Lost-device crashes (reports 2026-11-20..22: "Device is lost", "driver
+/// implementation is at fault") all came from Vulkan, on laptops with two graphics chips and on AMD integrated graphics;
+/// DirectX 12 is what Windows itself and most programs draw with. Elsewhere each system has one way in.
+fn backend_rank(b: eframe::wgpu::Backend) -> u8 {
+    use eframe::wgpu::Backend as B;
+    if cfg!(windows) {
+        match b {
+            B::Dx12 => 0,
+            B::Vulkan => 1,
+            _ => 2,
+        }
+    } else {
+        0
+    }
+}
+
+/// For eframe: picks the saved card (when one was saved); on Windows always (to prefer DirectX 12, see `backend_rank`).
 pub fn selector() -> Option<eframe::egui_wgpu::NativeAdapterSelectorMethod> {
-    let wanted = wanted()?;
+    let wanted = wanted();
+    if wanted.is_none() && !cfg!(windows) {
+        return None;
+    }
     Some(std::sync::Arc::new(move |adapters: &[eframe::wgpu::Adapter], _surface: Option<&eframe::wgpu::Surface<'_>>| {
-        pick(adapters, &wanted, |a| {
+        pick(adapters, wanted.as_deref(), |a| {
             let i = a.get_info();
-            (i.name, i.device_type)
+            (i.name, i.device_type, i.backend)
         })
         .cloned()
         .ok_or_else(|| "no graphics card found".to_string())
@@ -57,9 +80,21 @@ mod tests {
     #[test]
     fn the_named_card_else_the_strongest() {
         use eframe::wgpu::DeviceType as D;
-        let cards = [("Intel UHD", D::IntegratedGpu), ("Radeon Pro", D::DiscreteGpu), ("Software", D::Cpu)];
-        let info = |c: &(&str, D)| (c.0.to_string(), c.1);
-        assert_eq!(super::pick(&cards, "Intel UHD", info).map(|c| c.0), Some("Intel UHD"));
-        assert_eq!(super::pick(&cards, "gone", info).map(|c| c.0), Some("Radeon Pro"));
+        use eframe::wgpu::Backend as B;
+        let cards = [("Intel UHD", D::IntegratedGpu, B::Vulkan), ("Radeon Pro", D::DiscreteGpu, B::Vulkan), ("Software", D::Cpu, B::Gl)];
+        let info = |c: &(&str, D, B)| (c.0.to_string(), c.1, c.2);
+        assert_eq!(super::pick(&cards, Some("Intel UHD"), info).map(|c| c.0), Some("Intel UHD"));
+        assert_eq!(super::pick(&cards, Some("gone"), info).map(|c| c.0), Some("Radeon Pro"));
+        assert_eq!(super::pick(&cards, None, info).map(|c| c.0), Some("Radeon Pro"));
+    }
+
+    #[test]
+    fn windows_draws_with_directx_12_when_the_card_has_it() {
+        use eframe::wgpu::{Backend as B, DeviceType as D};
+        let cards = [("RTX 4070", D::DiscreteGpu, B::Vulkan), ("RTX 4070", D::DiscreteGpu, B::Dx12), ("Intel UHD", D::IntegratedGpu, B::Dx12)];
+        let info = |c: &(&str, D, B)| (c.0.to_string(), c.1, c.2);
+        let picked = super::pick(&cards, None, info).unwrap();
+        assert_eq!(picked.0, "RTX 4070", "still the stronger card");
+        assert_eq!(picked.2, if cfg!(windows) { B::Dx12 } else { B::Vulkan }, "its DirectX 12 way in on Windows");
     }
 }
