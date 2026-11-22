@@ -13,6 +13,27 @@ if ! git diff --quiet HEAD -- crates scripts Cargo.toml Cargo.lock assets || [ -
   echo "Uncommitted code changes: commit them (and let the Windows build run) before releasing."; exit 1
 fi
 scripts/release-notes.sh "$VER" >/dev/null || { echo "Add a '## $VER (date)' section to CHANGELOG.md first."; exit 1; }
+# Every build of this code must have passed before anything is built, tagged or published: Windows, Linux, the Intel
+# Mac and the web app (2026-11-22: the web build was broken for three releases and nobody saw). Builds still running
+# are waited for (up to two hours); a failed one stops the release. ALLOW_FAILED_BUILDS=1 skips this.
+if [ "${ALLOW_FAILED_BUILDS:-}" != 1 ]; then
+  for w in windows.yml linux.yml mac-intel.yml web.yml; do
+    waited=0
+    until [ -n "$(bash scripts/ci-run.sh "$w" --success)" ]; do
+      RUN=$(bash scripts/ci-run.sh "$w")
+      STATE=""
+      [ -n "$RUN" ] && STATE=$(gh run view "$RUN" -R fillinthe/phosphor --json status,conclusion --jq '.status + " " + .conclusion' 2>/dev/null)
+      case "$STATE" in
+        "completed "*) echo "The $w build of this code failed (run $RUN): fix it, push, then release again." >&2; exit 1 ;;
+      esac
+      if [ "$waited" -ge 120 ]; then echo "The $w build of this code hasn't finished after two hours${RUN:+ (run $RUN)}." >&2; exit 1; fi
+      [ "$waited" = 0 ] && echo "Waiting for the $w build${RUN:+ (run $RUN)}…"
+      waited=$((waited + 1))
+      sleep 60
+    done
+    echo "$w: passed"
+  done
+fi
 # With the Developer ID certificate: notarized zip + installer disk image (scripts/notarize-mac.sh). Without it: an
 # unnotarized zip only (people then need right-click › Open the first time).
 DMG=""
