@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.14 (2026-11-21)
 
 - **Windows: no more crash when a screen goes away** (a projector unplugged, a monitor going to sleep or display
   settings changing could close Phosphor with "invalid monitor handle").
