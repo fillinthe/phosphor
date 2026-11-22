@@ -166,9 +166,14 @@ check_windows
 check_linux
 
 # The Apple Silicon app starts from where a download lands (marked as downloaded, outside /Applications).
-if [[ "${CHECK_RUN:-1}" == 1 && -n "$DMG_APP" && "$(uname -m)" == arm64 ]]; then
+# A first launch shows macOS's "downloaded from the Internet" prompt, which waits while the screen is locked: skip it then
+# (Gatekeeper's acceptance is checked above either way).
+if [[ "${CHECK_RUN:-1}" == 1 && -n "$DMG_APP" && "$(uname -m)" == arm64 ]] && [[ "$(ioreg -n Root -d1)" == *'CGSSessionScreenIsLocked"=Yes'* ]]; then
+  note "the app wasn't started: the screen is locked (macOS's first-launch prompt can't show)"
+elif [[ "${CHECK_RUN:-1}" == 1 && -n "$DMG_APP" && "$(uname -m)" == arm64 ]]; then
   echo "Starting it"
-  if out=$(HOME="$WORK/home" "$DMG_APP/Contents/MacOS/Phosphor" --version 2>&1); then ok "the app starts: $out"; else bad "the app didn't start: $(echo "$out" | head -3 | tr '\n' ' ')"; fi
+  # A minute at most: a launch that hangs fails here instead of waiting forever.
+  if out=$(HOME="$WORK/home" perl -e 'alarm 60; exec @ARGV' "$DMG_APP/Contents/MacOS/Phosphor" --version 2>&1); then ok "the app starts: $out"; else bad "the app didn't start: $(echo "$out" | head -3 | tr '\n' ' ')"; fi
 fi
 
 echo
