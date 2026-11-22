@@ -390,14 +390,18 @@ impl PhosphorApp {
                                 crate::support::set_donate_shown(donate);
                             }
                             let mut tips = theme::tooltips_on();
-                            #[cfg(not(target_arch = "wasm32"))]
-                            crate::support::problem_reports_toggle(ui, &mut self.state);
                             if crate::ui::toggle(ui, &mut tips, "Tooltips").on_hover_text("Off: no hover text over buttons (for people who know the app). (i) help still opens on a click").changed() {
                                 theme::set_tooltips(ui.ctx(), tips);
                             }
                         });
                         #[cfg(not(target_arch = "wasm32"))]
                         crate::panels::cache::cache_rows(ui, &mut self.state);
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            ui.separator();
+                            crate::support::privacy_section(ui, &mut self.state);
+                            ui.separator();
+                        }
                         crate::ui::field(ui, &format!("{} Language", icon::TRANSLATE), |ui| {
                             let now = crate::i18n::chosen();
                             let shown = if now == crate::i18n::Lang::Auto { format!("{} ({})", now.name(), if now.drawable() { now.resolved() } else { crate::i18n::Lang::English }.name()) } else { now.name().to_string() };

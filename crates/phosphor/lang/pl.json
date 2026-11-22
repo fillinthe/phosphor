@@ -5443,5 +5443,21 @@
 "User Manual": "Instrukcja obsługi",
 "Help: the user manual on phosphorfx.com, always up to date": "Pomoc: instrukcja obsługi na phosphorfx.com, zawsze aktualna",
 "Send problem reports": "Wysyłaj raporty o problemach",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Po nieoczekiwanym zamknięciu lub zawieszeniu diagnostyka trafia sama, prywatnie, do zespołu Phosphor: wersja, system, struktura projektu i to, co działo się tuż przedtem (bez zawartości projektu, bez nazw plików, warstw ani urządzeń). Każdy raport zostawia też jedną linię na Twoim koncie G Workshop (jeśli jesteś zalogowany), abyśmy mogli się odezwać."
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Po nieoczekiwanym zamknięciu lub zawieszeniu diagnostyka trafia sama, prywatnie, do zespołu Phosphor: wersja, system, struktura projektu i to, co działo się tuż przedtem (bez zawartości projektu, bez nazw plików, warstw ani urządzeń). Każdy raport zostawia też jedną linię na Twoim koncie G Workshop (jeśli jesteś zalogowany), abyśmy mogli się odezwać.",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "Możesz to zmienić w każdej chwili lub usunąć swoje raporty: przycisk jasności (słońce) na górze › Prywatność.",
+"Couldn't delete the reports ({0}). Try again later.": "Nie udało się usunąć raportów ({0}). Spróbuj ponownie później.",
+"Delete my reports": "Usuń moje raporty",
+"Deleted {0} report from this computer.": "Usunięto {0} raport z tego komputera.",
+"Deleted {0} reports from this computer.": "Usunięto raporty z tego komputera: {0}.",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "Usuwa z serwera raportów Phosphor każdy raport wysłany z tego komputera. W sprawie raportów powiązanych z Twoim kontem G Workshop napisz na support@gworkshop.app.",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "Przeciągnij to okno na projektor, a potem kliknij dwukrotnie, aby przejść na pełny ekran (Esc wychodzi).",
+"Keep sharing": "Udostępniaj dalej",
+"Privacy": "Prywatność",
+"Problem reports": "Raporty o problemach",
+"Share problem reports and anonymous counts": "Udostępniaj raporty o problemach i anonimowe liczniki",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "Przeglądarka zablokowała okno wyjścia: zezwól na wyskakujące okna dla tej strony (ikona po prawej stronie paska adresu), a potem ponownie naciśnij Wyjście.",
+"There were no reports from this computer to delete.": "Nie było raportów z tego komputera do usunięcia.",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "Aby szybciej naprawiać problemy, Phosphor sam wysyła raport do swojego zespołu, gdy ulegnie awarii lub się zawiesi: wersję, Twój system, strukturę projektu (liczby, bez zawartości) i to, co działo się tuż przedtem (bez nazw plików, warstw ani urządzeń). Jeśli jesteś zalogowany w G Workshop, raport jest powiązany z Twoim kontem, abyśmy mogli się odezwać. Gdy pobiera się aktualizacja, wysyła też anonimowy licznik (tylko numery wersji). Raporty są przechowywane 30 dni.",
+"Turn off": "Wyłącz",
+"the report server answered {0}": "serwer raportów odpowiedział {0}"
 }

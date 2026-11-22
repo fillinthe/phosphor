@@ -151,7 +151,7 @@ fn open_window(rs: &egui_wgpu::RenderState, id: u64, name: &str, size: (u32, u32
         "style",
         "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:8px 14px;border-radius:6px;background:rgba(0,0,0,.7);color:#ddd;font:14px system-ui,sans-serif;pointer-events:none;transition:opacity 1s;opacity:1",
     );
-    hint.set_text_content(Some("Drag this window to the projector, then double-click for full screen (Esc leaves it)."));
+    hint.set_text_content(Some(&crate::i18n::tr("Drag this window to the projector, then double-click for full screen (Esc leaves it).")));
     body.append_child(&hint).ok()?;
     let fade = hint.clone();
     let fade_out = Closure::once_into_js(move || {

@@ -5443,5 +5443,21 @@
 "User Manual": "用户手册",
 "Help: the user manual on phosphorfx.com, always up to date": "帮助：phosphorfx.com 上的用户手册，始终是最新的",
 "Send problem reports": "发送问题报告",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "意外退出或卡死后，诊断信息会自动私下发送给 Phosphor 团队：版本、系统、项目结构以及之前刚发生的事情（不含项目内容，不含文件、图层或设备名称）。每份报告还会在你的 G Workshop 帐户上留下一行（如果你已登录），方便我们跟进。"
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "意外退出或卡死后，诊断信息会自动私下发送给 Phosphor 团队：版本、系统、项目结构以及之前刚发生的事情（不含项目内容，不含文件、图层或设备名称）。每份报告还会在你的 G Workshop 帐户上留下一行（如果你已登录），方便我们跟进。",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "随时可以更改，或删除你的报告：顶部的亮度（太阳）按钮 › 隐私。",
+"Couldn't delete the reports ({0}). Try again later.": "无法删除报告（{0}）。请稍后再试。",
+"Delete my reports": "删除我的报告",
+"Deleted {0} report from this computer.": "已从这台电脑删除 {0} 份报告。",
+"Deleted {0} reports from this computer.": "已从这台电脑删除 {0} 份报告。",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "从 Phosphor 报告服务器删除这台电脑发送的每一份报告。与你的 G Workshop 帐户关联的报告：请写信至 support@gworkshop.app。",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "把这个窗口拖到投影仪上，然后双击进入全屏（按 Esc 退出）。",
+"Keep sharing": "继续共享",
+"Privacy": "隐私",
+"Problem reports": "问题报告",
+"Share problem reports and anonymous counts": "共享问题报告和匿名计数",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "浏览器拦截了输出窗口：请允许此网站的弹出窗口（地址栏右侧的图标），然后再按一次“输出”。",
+"There were no reports from this computer to delete.": "这台电脑没有可删除的报告。",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "为了更快地修复问题，Phosphor 在崩溃或卡死时会自动向团队发送一份报告：版本、你的系统、项目结构（只有数量，不含内容）以及之前刚发生的事情（不含文件、图层或设备名称）。如果你已登录 G Workshop，报告会关联到你的帐户，方便我们跟进。下载更新时，它还会发送一个匿名计数（只有版本号）。报告保留 30 天。",
+"Turn off": "关闭",
+"the report server answered {0}": "报告服务器返回 {0}"
 }

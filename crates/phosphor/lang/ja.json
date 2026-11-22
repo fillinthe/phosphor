@@ -5443,5 +5443,21 @@
 "User Manual": "ユーザーマニュアル",
 "Help: the user manual on phosphorfx.com, always up to date": "ヘルプ：phosphorfx.com のユーザーマニュアル（常に最新）",
 "Send problem reports": "問題レポートを送信",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "予期しない終了やフリーズの後、診断情報が自動的に非公開で Phosphor チームに送られます：バージョン、システム、プロジェクトの構成、直前に起きたこと（プロジェクトの内容、ファイル・レイヤー・デバイスの名前は含みません）。各レポートは（サインインしている場合）G Workshop アカウントにも1行残るので、こちらから連絡できます。"
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "予期しない終了やフリーズの後、診断情報が自動的に非公開で Phosphor チームに送られます：バージョン、システム、プロジェクトの構成、直前に起きたこと（プロジェクトの内容、ファイル・レイヤー・デバイスの名前は含みません）。各レポートは（サインインしている場合）G Workshop アカウントにも1行残るので、こちらから連絡できます。",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "いつでも変更したり、レポートを削除したりできます：上部の明るさ（太陽）ボタン › プライバシー。",
+"Couldn't delete the reports ({0}). Try again later.": "レポートを削除できませんでした（{0}）。後でもう一度お試しください。",
+"Delete my reports": "自分のレポートを削除",
+"Deleted {0} report from this computer.": "このコンピューターから {0} 件のレポートを削除しました。",
+"Deleted {0} reports from this computer.": "このコンピューターから {0} 件のレポートを削除しました。",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "このコンピューターが送信したすべてのレポートを Phosphor のレポートサーバーから削除します。G Workshop アカウントに紐づいたレポートについては support@gworkshop.app までご連絡ください。",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "このウィンドウをプロジェクターにドラッグし、ダブルクリックでフルスクリーンにします（Esc で解除）。",
+"Keep sharing": "共有を続ける",
+"Privacy": "プライバシー",
+"Problem reports": "問題レポート",
+"Share problem reports and anonymous counts": "問題レポートと匿名の集計を共有",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "ブラウザーが出力ウィンドウをブロックしました：このサイトのポップアップを許可して（アドレスバーの右側のアイコン）、もう一度「出力」を押してください。",
+"There were no reports from this computer to delete.": "このコンピューターから削除するレポートはありませんでした。",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "問題を早く直すため、Phosphor はクラッシュやフリーズのときに自動でチームへレポートを送ります：バージョン、お使いのシステム、プロジェクトの構成（数のみ、内容は含みません）、直前に起きたこと（ファイル・レイヤー・デバイスの名前は含みません）。G Workshop にサインインしている場合、こちらから連絡できるようにレポートはアカウントに紐づけられます。アップデートのダウンロード時には匿名の集計（バージョン番号のみ）も送ります。レポートは30日間保存されます。",
+"Turn off": "オフにする",
+"the report server answered {0}": "レポートサーバーの応答: {0}"
 }

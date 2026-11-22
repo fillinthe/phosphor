@@ -5443,5 +5443,21 @@
 "User Manual": "Manuale utente",
 "Help: the user manual on phosphorfx.com, always up to date": "Aiuto: il manuale d'uso su phosphorfx.com, sempre aggiornato",
 "Send problem reports": "Invia segnalazioni di problemi",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Dopo una chiusura imprevista o un blocco, la diagnostica arriva da sola, in privato, al team di Phosphor: versione, sistema, la struttura del progetto e cosa è successo poco prima (nessun contenuto del progetto, nessun nome di file, livello o dispositivo). Ogni segnalazione lascia anche una riga sul tuo account G Workshop (se hai effettuato l'accesso), così possiamo ricontattarti."
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Dopo una chiusura imprevista o un blocco, la diagnostica arriva da sola, in privato, al team di Phosphor: versione, sistema, la struttura del progetto e cosa è successo poco prima (nessun contenuto del progetto, nessun nome di file, livello o dispositivo). Ogni segnalazione lascia anche una riga sul tuo account G Workshop (se hai effettuato l'accesso), così possiamo ricontattarti.",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "Puoi cambiarlo in qualsiasi momento o eliminare le tue segnalazioni: pulsante della luminosità (il sole) in alto › Privacy.",
+"Couldn't delete the reports ({0}). Try again later.": "Impossibile eliminare le segnalazioni ({0}). Riprova più tardi.",
+"Delete my reports": "Elimina le mie segnalazioni",
+"Deleted {0} report from this computer.": "Eliminata {0} segnalazione da questo computer.",
+"Deleted {0} reports from this computer.": "Eliminate {0} segnalazioni da questo computer.",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "Elimina dal server delle segnalazioni di Phosphor ogni segnalazione inviata da questo computer. Per le segnalazioni collegate al tuo account G Workshop, scrivi a support@gworkshop.app.",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "Trascina questa finestra sul proiettore, poi fai doppio clic per lo schermo intero (Esc per uscire).",
+"Keep sharing": "Continua a condividere",
+"Privacy": "Privacy",
+"Problem reports": "Segnalazioni di problemi",
+"Share problem reports and anonymous counts": "Condividi segnalazioni di problemi e conteggi anonimi",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "Il browser ha bloccato la finestra di uscita: consenti i pop-up per questo sito (l'icona a destra della barra degli indirizzi), poi premi di nuovo Uscita.",
+"There were no reports from this computer to delete.": "Non c'erano segnalazioni da eliminare da questo computer.",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "Per risolvere i problemi più in fretta, Phosphor invia da solo una segnalazione al suo team quando va in crash o si blocca: la versione, il tuo sistema, la struttura del progetto (conteggi, nessun contenuto) e cosa è successo poco prima (nessun nome di file, livello o dispositivo). Se hai effettuato l'accesso a G Workshop, la segnalazione è collegata al tuo account così possiamo ricontattarti. Quando si scarica un aggiornamento, invia anche un conteggio anonimo (solo i numeri di versione). Le segnalazioni vengono conservate 30 giorni.",
+"Turn off": "Disattiva",
+"the report server answered {0}": "il server delle segnalazioni ha risposto {0}"
 }

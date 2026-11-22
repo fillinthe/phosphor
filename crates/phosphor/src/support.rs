@@ -99,14 +99,20 @@ pub struct BugReport {
     /// The cameras and capture cards this computer has (looked up once, on a thread: listing can take a moment).
     cameras: std::sync::Arc<std::sync::Mutex<Option<Vec<String>>>>,
     cameras_asked: bool,
+    /// "Delete my reports": what the last request did (None = none yet / still going), and whether one is going.
+    pub deleted: std::sync::Arc<std::sync::Mutex<Option<Result<usize, String>>>>,
+    pub deleting: bool,
+    /// The one-time notice about what Phosphor sends by itself has been seen (saved).
+    pub notice_seen: bool,
     /// The diagnostics shown in the window, and when they were put together (redone every few seconds, not each frame).
     shown: Option<(f64, String)>,
 }
 
 impl BugReport {
     /// `send_problems`: the saved "Send problem reports" choice.
-    pub fn new(send_problems: bool) -> Self {
-        Self { include_diagnostics: true, send_problems, ..Default::default() }
+    pub fn new(send_problems: bool, notice_seen: bool) -> Self {
+        crate::crash_report::set_sharing(send_problems);
+        Self { include_diagnostics: true, send_problems, notice_seen, ..Default::default() }
     }
 }
 
@@ -219,9 +225,66 @@ fn cameras_line(st: &mut State) -> String {
 
 /// The "Send problem reports" switch (Report a Bug window and the settings menu).
 pub fn problem_reports_toggle(ui: &mut egui::Ui, st: &mut State) -> egui::Response {
-    crate::ui::toggle(ui, &mut st.bug.send_problems, "Send problem reports").on_hover_text(
-        "After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.",
-    )
+    let r = crate::ui::toggle(ui, &mut st.bug.send_problems, "Share problem reports and anonymous counts").on_hover_text(SHARING_HELP);
+    if r.changed() {
+        crate::crash_report::set_sharing(st.bug.send_problems);
+    }
+    r
+}
+
+/// What Phosphor sends by itself, in plain words (the notice, the Privacy section and the switch's tooltip).
+const SHARING_HELP: &str = "To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.";
+
+/// The Privacy section (settings menu): the switch, what it means, and "Delete my reports".
+pub fn privacy_section(ui: &mut egui::Ui, st: &mut State) {
+    crate::ui::heading_help(ui, "Privacy", SHARING_HELP);
+    problem_reports_toggle(ui, st);
+    if let Some(r) = st.bug.deleted.lock().unwrap().take() {
+        st.bug.deleting = false;
+        st.notice = Some(match r {
+            Ok(0) => "There were no reports from this computer to delete.".into(),
+            Ok(n) => crate::ui::plural(n, "Deleted {0} report from this computer.", "Deleted {0} reports from this computer."),
+            Err(e) => format!("Couldn't delete the reports ({e}). Try again later."),
+        });
+    }
+    crate::ui::toolbar(ui, |ui| {
+        if crate::ui::command_if(ui, !st.bug.deleting, crate::ui::label(icon::TRASH, "Delete my reports"))
+            .on_hover_text("Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.")
+            .clicked()
+        {
+            st.bug.deleting = true;
+            let out = st.bug.deleted.clone();
+            crate::crash_report::delete_my_reports(move |r| {
+                *out.lock().unwrap() = Some(r);
+            });
+        }
+        if st.bug.deleting {
+            ui.spinner();
+        }
+    });
+}
+
+/// Once (first start, and once after the update that brought it): what Phosphor sends by itself, with Keep sharing /
+/// Turn off. Drawn app-level every frame; nothing while the bench runs.
+pub fn privacy_notice(ctx: &egui::Context, st: &mut State, bench: bool) {
+    // (Bench pictures: PHOSPHOR_PRIVACY_NOTICE=1 shows it.)
+    if st.bug.notice_seen || bench && std::env::var_os("PHOSPHOR_PRIVACY_NOTICE").is_none() {
+        return;
+    }
+    let (mut keep, mut off) = (false, false);
+    crate::ui::dialog(ctx, crate::ui::label(icon::SHIELD_CHECK, "Problem reports")).id(egui::Id::new("privacy_notice")).resizable(false).collapsible(false).default_width(460.0).show(ctx, |ui| {
+        ui.add(egui::Label::new(SHARING_HELP).wrap());
+        crate::ui::hint(ui, "Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.");
+        crate::ui::toolbar(ui, |ui| {
+            keep = crate::ui::action_button(ui, crate::ui::Act::Go, "Keep sharing").clicked();
+            off = crate::ui::command(ui, "Turn off").clicked();
+        });
+    });
+    if keep || off {
+        st.bug.send_problems = keep;
+        crate::crash_report::set_sharing(keep);
+        st.bug.notice_seen = true;
+    }
 }
 
 /// Bench: starts the camera lookup and waits (up to `secs`) until it's in, so a snapshot lists them.

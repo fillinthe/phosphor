@@ -5443,5 +5443,21 @@
 "User Manual": "Kullanım Kılavuzu",
 "Help: the user manual on phosphorfx.com, always up to date": "Yardım: phosphorfx.com'daki kullanım kılavuzu, her zaman güncel",
 "Send problem reports": "Sorun raporları gönder",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Beklenmedik bir kapanma veya donmadan sonra tanılama bilgileri kendiliğinden ve gizli olarak Phosphor ekibine gider: sürüm, sistem, projenin yapısı ve hemen öncesinde olanlar (proje içeriği, dosya, katman veya cihaz adları yok). Her rapor ayrıca G Workshop hesabına (oturum açtıysan) bir satır bırakır, böylece seninle iletişime geçebiliriz."
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Beklenmedik bir kapanma veya donmadan sonra tanılama bilgileri kendiliğinden ve gizli olarak Phosphor ekibine gider: sürüm, sistem, projenin yapısı ve hemen öncesinde olanlar (proje içeriği, dosya, katman veya cihaz adları yok). Her rapor ayrıca G Workshop hesabına (oturum açtıysan) bir satır bırakır, böylece seninle iletişime geçebiliriz.",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "Bunu istediğin zaman değiştirebilir veya raporlarını silebilirsin: üstteki parlaklık (güneş) düğmesi › Gizlilik.",
+"Couldn't delete the reports ({0}). Try again later.": "Raporlar silinemedi ({0}). Daha sonra tekrar dene.",
+"Delete my reports": "Raporlarımı sil",
+"Deleted {0} report from this computer.": "Bu bilgisayardan {0} rapor silindi.",
+"Deleted {0} reports from this computer.": "Bu bilgisayardan {0} rapor silindi.",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "Bu bilgisayarın gönderdiği her raporu Phosphor rapor sunucusundan siler. G Workshop hesabına bağlı raporlar için support@gworkshop.app adresine yaz.",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "Bu pencereyi projektöre sürükle, ardından tam ekran için çift tıkla (Esc ile çıkılır).",
+"Keep sharing": "Paylaşmaya devam et",
+"Privacy": "Gizlilik",
+"Problem reports": "Sorun raporları",
+"Share problem reports and anonymous counts": "Sorun raporlarını ve anonim sayımları paylaş",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "Tarayıcı çıkış penceresini engelledi: bu site için açılır pencerelere izin ver (adres çubuğunun sağındaki simge), ardından Çıkış'a tekrar bas.",
+"There were no reports from this computer to delete.": "Bu bilgisayardan silinecek rapor yoktu.",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "Sorunları daha hızlı düzeltmek için Phosphor çöktüğünde veya donduğunda ekibine kendiliğinden bir rapor gönderir: sürüm, sistemin, projenin yapısı (sayılar, içerik yok) ve hemen öncesinde olanlar (dosya, katman veya cihaz adları yok). G Workshop'ta oturum açtıysan rapor hesabına bağlanır, böylece seninle iletişime geçebiliriz. Bir güncelleme indirildiğinde anonim bir sayım da gönderir (yalnızca sürüm numaraları). Raporlar 30 gün saklanır.",
+"Turn off": "Kapat",
+"the report server answered {0}": "rapor sunucusu {0} yanıtını verdi"
 }

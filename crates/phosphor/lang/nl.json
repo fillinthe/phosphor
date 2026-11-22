@@ -5443,5 +5443,21 @@
 "User Manual": "Handleiding",
 "Help: the user manual on phosphorfx.com, always up to date": "Help: de handleiding op phosphorfx.com, altijd bijgewerkt",
 "Send problem reports": "Probleemrapporten versturen",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Na een onverwachte afsluiting of een vastloper gaat de diagnose vanzelf, privé, naar het Phosphor-team: versie, systeem, de opbouw van het project en wat er vlak daarvoor gebeurde (geen projectinhoud, geen bestands-, laag- of apparaatnamen). Elk rapport laat ook één regel achter op je G Workshop-account (als je bent ingelogd), zodat we contact kunnen opnemen."
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Na een onverwachte afsluiting of een vastloper gaat de diagnose vanzelf, privé, naar het Phosphor-team: versie, systeem, de opbouw van het project en wat er vlak daarvoor gebeurde (geen projectinhoud, geen bestands-, laag- of apparaatnamen). Elk rapport laat ook één regel achter op je G Workshop-account (als je bent ingelogd), zodat we contact kunnen opnemen.",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "Je kunt dit altijd wijzigen of je rapporten verwijderen: de helderheidsknop (de zon) bovenaan › Privacy.",
+"Couldn't delete the reports ({0}). Try again later.": "Kon de rapporten niet verwijderen ({0}). Probeer het later opnieuw.",
+"Delete my reports": "Mijn rapporten verwijderen",
+"Deleted {0} report from this computer.": "{0} rapport van deze computer verwijderd.",
+"Deleted {0} reports from this computer.": "{0} rapporten van deze computer verwijderd.",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "Verwijdert elk rapport dat deze computer heeft verstuurd van de rapportserver van Phosphor. Rapporten die aan je G Workshop-account gekoppeld zijn: schrijf naar support@gworkshop.app.",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "Sleep dit venster naar de projector en dubbelklik dan voor volledig scherm (Esc sluit het af).",
+"Keep sharing": "Blijven delen",
+"Privacy": "Privacy",
+"Problem reports": "Probleemrapporten",
+"Share problem reports and anonymous counts": "Probleemrapporten en anonieme tellingen delen",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "De browser heeft het uitvoervenster geblokkeerd: sta pop-ups toe voor deze site (het pictogram rechts in de adresbalk) en druk dan opnieuw op Uitgang.",
+"There were no reports from this computer to delete.": "Er waren geen rapporten van deze computer om te verwijderen.",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "Om problemen sneller op te lossen, stuurt Phosphor vanzelf een rapport naar zijn team als het crasht of vastloopt: de versie, je systeem, de opbouw van het project (aantallen, geen inhoud) en wat er vlak daarvoor gebeurde (geen bestands-, laag- of apparaatnamen). Als je bij G Workshop bent ingelogd, wordt het rapport aan je account gekoppeld zodat we contact kunnen opnemen. Als er een update wordt gedownload, stuurt het ook een anonieme telling (alleen de versienummers). Rapporten worden 30 dagen bewaard.",
+"Turn off": "Uitschakelen",
+"the report server answered {0}": "de rapportserver antwoordde {0}"
 }

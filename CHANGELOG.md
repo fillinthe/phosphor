@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **Privacy:** Phosphor now tells you, once, what it sends by itself to help fix problems (crash and freeze
+  reports, and an anonymous count when an update downloads) and lets you keep sharing or turn it off. One switch
+  covers it all (brightness menu › Privacy), and **Delete my reports** removes everything this computer sent from
+  the Phosphor report server. Reports are kept 30 days.
+
 ## 0.5.16 (2026-11-22)
 
 - **Windows draws with DirectX 12** when the graphics card has it (Vulkan before): Vulkan lost the graphics card on some

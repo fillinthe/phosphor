@@ -5443,5 +5443,21 @@
 "User Manual": "Manual do Usuário",
 "Help: the user manual on phosphorfx.com, always up to date": "Ajuda: o manual do usuário em phosphorfx.com, sempre atualizado",
 "Send problem reports": "Enviar relatórios de problemas",
-"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Depois de um fechamento inesperado ou um travamento, o diagnóstico vai sozinho, de forma privada, para a equipe do Phosphor: versão, sistema, a estrutura do projeto e o que aconteceu logo antes (sem conteúdo do projeto, sem nomes de arquivos, camadas ou dispositivos). Cada relatório também deixa uma linha na sua conta G Workshop (se você estiver conectado), para podermos acompanhar."
+"After an unexpected quit or a freeze, the diagnostics go privately to the Phosphor team by themselves: version, system, the project's shape and what happened just before (no project content, no file, layer or device names). Each report also leaves one line on your G Workshop account (if you're signed in), so we can follow up.": "Depois de um fechamento inesperado ou um travamento, o diagnóstico vai sozinho, de forma privada, para a equipe do Phosphor: versão, sistema, a estrutura do projeto e o que aconteceu logo antes (sem conteúdo do projeto, sem nomes de arquivos, camadas ou dispositivos). Cada relatório também deixa uma linha na sua conta G Workshop (se você estiver conectado), para podermos acompanhar.",
+"Change it any time, or delete your reports: the brightness (sun) button at the top › Privacy.": "Você pode mudar isso quando quiser ou excluir seus relatórios: botão de brilho (o sol) no topo › Privacidade.",
+"Couldn't delete the reports ({0}). Try again later.": "Não foi possível excluir os relatórios ({0}). Tente novamente mais tarde.",
+"Delete my reports": "Excluir meus relatórios",
+"Deleted {0} report from this computer.": "{0} relatório excluído deste computador.",
+"Deleted {0} reports from this computer.": "{0} relatórios excluídos deste computador.",
+"Deletes every report this computer sent from the Phosphor report server. Reports linked to your G Workshop account: write to support@gworkshop.app.": "Exclui do servidor de relatórios do Phosphor todos os relatórios que este computador enviou. Para relatórios vinculados à sua conta G Workshop, escreva para support@gworkshop.app.",
+"Drag this window to the projector, then double-click for full screen (Esc leaves it).": "Arraste esta janela para o projetor e clique duas vezes para tela cheia (Esc sai).",
+"Keep sharing": "Continuar compartilhando",
+"Privacy": "Privacidade",
+"Problem reports": "Relatórios de problemas",
+"Share problem reports and anonymous counts": "Compartilhar relatórios de problemas e contagens anônimas",
+"The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.": "O navegador bloqueou a janela de saída: permita pop-ups para este site (o ícone à direita da barra de endereço) e pressione Saída de novo.",
+"There were no reports from this computer to delete.": "Não havia relatórios deste computador para excluir.",
+"To fix problems faster, Phosphor sends a report to its team by itself when it crashes or freezes: the version, your system, the project's shape (counts, no content) and what happened just before (no file, layer or device names). If you're signed in to G Workshop, the report is linked to your account so we can follow up. When an update downloads, it also sends an anonymous count (just the version numbers). Reports are kept 30 days.": "Para corrigir problemas mais rápido, o Phosphor envia sozinho um relatório para a equipe quando trava ou fecha inesperadamente: a versão, seu sistema, a estrutura do projeto (contagens, sem conteúdo) e o que aconteceu logo antes (sem nomes de arquivos, camadas ou dispositivos). Se você estiver conectado ao G Workshop, o relatório fica vinculado à sua conta para podermos acompanhar. Quando uma atualização é baixada, ele também envia uma contagem anônima (só os números de versão). Os relatórios são guardados por 30 dias.",
+"Turn off": "Desativar",
+"the report server answered {0}": "o servidor de relatórios respondeu {0}"
 }

@@ -16,16 +16,91 @@ pub fn endpoint() -> Option<String> {
     std::env::var("PHOSPHOR_CRASH_URL").ok().filter(|u| u.starts_with("http")).or_else(|| (!ENDPOINT.is_empty()).then(|| ENDPOINT.to_string()))
 }
 
-/// The JSON body for one report (`kind`: "crash" sent by itself, "bug" written by someone).
+/// "Share problem reports and anonymous counts" (the one switch for everything Phosphor sends by itself: crash and
+/// freeze reports, the problem line on the account server, the update count). Set from the setting at start and when
+/// it's switched.
+static SHARING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn set_sharing(on: bool) {
+    SHARING.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn sharing() -> bool {
+    SHARING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// This computer's report ID: random (nothing personal), made the first time a report is sent and kept next to the
+/// settings. Reports carry it so "Delete my reports" can find them all on the report server.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn reporter_id() -> Option<String> {
+    let path = crate::show::storage_dir()?.join("report-id");
+    if let Ok(id) = std::fs::read_to_string(&path) {
+        let id = id.trim().to_string();
+        if id.len() >= 16 && id.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Some(id.to_ascii_lowercase());
+        }
+    }
+    let id = crate::net::new_token();
+    let _ = std::fs::create_dir_all(path.parent()?);
+    std::fs::write(&path, &id).ok()?;
+    Some(id)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn reporter_id() -> Option<String> {
+    None
+}
+
+/// After "Delete my reports": the next report starts a new ID.
+#[cfg(not(target_arch = "wasm32"))]
+fn forget_reporter_id() {
+    if let Some(dir) = crate::show::storage_dir() {
+        let _ = std::fs::remove_file(dir.join("report-id"));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn forget_reporter_id() {}
+
+/// Asks the report server to delete every report from this computer (its report ID); `done` hears how many went.
+pub fn delete_my_reports(done: impl FnOnce(Result<usize, String>) + Send + 'static) {
+    let (Some(url), Some(id)) = (endpoint(), reporter_id()) else {
+        done(Ok(0));
+        return;
+    };
+    let mut req = ehttp::Request::post(url, serde_json::json!({ "delete": id }).to_string().into_bytes());
+    req.headers = ehttp::Headers::new(&[("content-type", "application/json"), ("user-agent", "Phosphor")]);
+    ehttp::fetch(req, move |r| {
+        done(match r {
+            Ok(r) if r.ok => {
+                forget_reporter_id();
+                let n = serde_json::from_slice::<serde_json::Value>(&r.bytes).ok().and_then(|v| v["deleted"].as_u64()).unwrap_or(0);
+                Ok(n as usize)
+            }
+            Ok(r) => Err(format!("the report server answered {}", r.status)),
+            Err(e) => Err(e),
+        })
+    });
+}
+
+/// The JSON body for one report (`kind`: "crash" sent by itself, "bug" written by someone), with this computer's report
+/// ID when it has one.
 pub fn body(kind: &str, report: &str) -> String {
-    serde_json::json!({
+    body_from(kind, report, reporter_id())
+}
+
+fn body_from(kind: &str, report: &str, reporter: Option<String>) -> String {
+    let mut v = serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
         "kind": kind,
         "report": report,
-    })
-    .to_string()
+    });
+    if let Some(id) = reporter {
+        v["reporter"] = serde_json::Value::String(id);
+    }
+    v.to_string()
 }
 
 /// Who a report's line on the account server is from: the account server, and the sign-in token when signed in
@@ -131,10 +206,13 @@ mod tests {
 
     #[test]
     fn the_body_carries_the_report_and_nothing_else() {
-        let v: serde_json::Value = serde_json::from_str(&body("crash", "crash.log (end):\npanicked at x")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&body_from("crash", "crash.log (end):\npanicked at x", None)).unwrap();
         assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!((v["kind"].as_str(), v["report"].as_str()), (Some("crash"), Some("crash.log (end):\npanicked at x")));
         assert_eq!(v.as_object().unwrap().len(), 5);
+        // With this computer's random report ID (so "Delete my reports" finds them): one more field, nothing else.
+        let v: serde_json::Value = serde_json::from_str(&body_from("bug", "x", Some("ab".repeat(16)))).unwrap();
+        assert_eq!((v.as_object().unwrap().len(), v["reporter"].as_str()), (6, Some("abababababababababababababababab")));
     }
 
     #[test]

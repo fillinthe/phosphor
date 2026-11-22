@@ -96,6 +96,8 @@ impl PhosphorApp {
         crate::panels::clip_bar::publish(&ctx, &mut self.state);
         #[cfg(not(target_arch = "wasm32"))]
         crate::panels::ai_shader_window(&ctx, &mut self.state);
+        // Once: what Phosphor sends by itself, with Keep sharing / Turn off.
+        crate::support::privacy_notice(&ctx, &mut self.state, self.bench.is_some());
         // Something dropped onto a slice on the mapping canvas: a file or input gets a layer of its own there, a
         // layer is shown there.
         if let Some((sid, what)) = ctx.data_mut(|d| {

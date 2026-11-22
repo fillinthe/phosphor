@@ -104,6 +104,8 @@ const KEY_UPDATE_AUTO: &str = "update_auto";
 /// Send crash reports by themselves ("1").
 /// "Send problem reports" ("0" = off; unset = on). (The old opt-in "send_crashes" key isn't read: on is the default now.)
 const KEY_SEND_PROBLEMS: &str = "send_problems";
+/// The one-time notice about what Phosphor sends by itself has been answered ("1").
+const KEY_PRIVACY_NOTICE: &str = "privacy_notice";
 /// The output movie sound plays on (empty = the default).
 const KEY_SOUND_OUT: &str = "sound_out_device";
 /// A player: the leader to follow every time Phosphor starts ("" = none).

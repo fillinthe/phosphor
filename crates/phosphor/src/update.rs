@@ -288,7 +288,8 @@ impl Updater {
             self.status = Status::Failed("This release has no Mac download; get it from the releases page.".into());
             return;
         };
-        if !self.test && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err() {
+        // (Only while "Share problem reports and anonymous counts" is on.)
+        if !self.test && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err() && crate::crash_report::sharing() {
             count_update(&r.version);
         }
         self.status = Status::Downloading(r);

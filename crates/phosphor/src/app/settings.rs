@@ -63,6 +63,7 @@ impl PhosphorApp {
             storage.set_string(KEY_CACHE_GB, crate::media::clip_cache::cap_gb().to_string());
         }
         storage.set_string(KEY_SEND_PROBLEMS, if self.state.bug.send_problems { "1" } else { "0" }.into());
+        storage.set_string(KEY_PRIVACY_NOTICE, if self.state.bug.notice_seen { "1" } else { "0" }.into());
         #[cfg(not(target_arch = "wasm32"))]
         storage.set_string(KEY_SOUND_OUT, crate::media::video::sound::output_device().unwrap_or_default());
         storage.set_string(KEY_FOLLOW_AT_LAUNCH, self.state.follow_at_launch.clone());
