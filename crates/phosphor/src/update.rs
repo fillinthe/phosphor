@@ -82,13 +82,19 @@ pub struct Updater {
     pub in_show: bool,
     /// The update window is owed once the show is over.
     window_later: bool,
+    /// The first check after opening hasn't answered yet / it found the update now waiting to install. That one
+    /// installs even with outputs open: outputs that come back by themselves when Phosphor opens (after a crash, or
+    /// the way it was left) would otherwise hold every update off for good (report 2026-11-22: an Intel Mac stuck on
+    /// 0.5.12 through a dozen restarts whose fix was three versions old). Hourly checks after that wait for the show.
+    first_check: bool,
+    at_launch: bool,
     /// `in_show` for the install thread: a download that began before the show waits here before it swaps the app.
     show: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for Updater {
     fn default() -> Self {
-        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true, in_show: false, window_later: false, show: Default::default() }
+        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true, in_show: false, window_later: false, first_check: true, at_launch: false, show: Default::default() }
     }
 }
 
@@ -191,6 +197,11 @@ impl Updater {
         });
     }
 
+    /// May a new version install by itself now? Not during a show, except the one found as Phosphor opened.
+    fn may_install(in_show: bool, at_launch: bool) -> bool {
+        !in_show || at_launch
+    }
+
     /// Opens the update window, or after the show when one is on.
     fn pop_window(&mut self) {
         if self.in_show {
@@ -225,11 +236,18 @@ impl Updater {
                 Ok(_) => Status::UpToDate,
                 Err(e) => Status::Failed(e),
             };
+            self.at_launch = std::mem::take(&mut self.first_check) && matches!(self.status, Status::Available(_));
+            // In the session log, so a report says whether an update was found and what became of it.
+            match &self.status {
+                Status::Available(r) => log::info!("update: {} is out{}", r.version, if self.in_show && !self.at_launch { " (waits for the outputs to close)" } else { "" }),
+                Status::Failed(e) => log::info!("update: check failed: {e}"),
+                _ => {}
+            }
         }
         // A new version installs by itself, but never during a show: it waits here until the outputs are closed.
         if let Status::Available(r) = &self.status
             && self.install_rx.is_none()
-            && (self.test || (self.installs_by_itself() && r.version != self.skipped && !self.in_show))
+            && (self.test || (self.installs_by_itself() && r.version != self.skipped && Self::may_install(self.in_show, self.at_launch)))
         {
             self.install();
         }
@@ -244,6 +262,11 @@ impl Updater {
                 Status::Downloading(r) => Some(r.clone()),
                 _ => None,
             };
+            match &res {
+                Ok((_, true)) => log::info!("update: installed (opens next time)"),
+                Ok((_, false)) => log::info!("update: downloaded"),
+                Err(e) => log::info!("update: not installed: {e}"),
+            }
             self.status = match (res, release) {
                 // Installed: say so (the window offers to relaunch; otherwise it opens next time).
                 (Ok((path, true)), _) => {
@@ -297,7 +320,8 @@ impl Updater {
         self.install_rx = Some(rx);
         let progress = self.progress.clone();
         // (The bench's update test has nothing to wait for.)
-        let show = if self.test { Default::default() } else { self.show.clone() };
+        // (…nor has the one found as Phosphor opened: it goes in with the outputs open.)
+        let show = if self.test || std::mem::take(&mut self.at_launch) { Default::default() } else { self.show.clone() };
         *progress.lock().unwrap() = "Downloading…".into();
         std::thread::Builder::new()
             .name("phosphor-update".into())
@@ -706,6 +730,17 @@ mod tests {
     use super::*;
 
     /// Builds from a branch other than main say so in Info.plist; release builds don't.
+    /// Outputs open hold an update off, except the one found as Phosphor opened (outputs that reopen by themselves
+    /// would otherwise hold every update off for good).
+    #[test]
+    fn the_update_found_at_launch_installs_with_outputs_open() {
+        assert!(Updater::may_install(false, false) && Updater::may_install(false, true));
+        assert!(!Updater::may_install(true, false), "an hourly check mid-show waits");
+        assert!(Updater::may_install(true, true), "the launch check goes in");
+        let u = Updater::default();
+        assert!(u.first_check && !u.at_launch);
+    }
+
     #[test]
     fn test_builds_are_marked() {
         assert_eq!(test_build_in("<dict>\n  <key>PhosphorTestBuild</key><string>next</string>\n</dict>").as_deref(), Some("next"));
