@@ -319,8 +319,9 @@ impl Catalog {
         }
         let start = text.len() - text.trim_start_matches(is_edge).len();
         let (before, after) = (&text[..start], &text[start + core.len()..]);
-        let found = if core.len() != text.len() { self.exact.get(core).cloned() } else { None }.or_else(|| self.template(core))?;
-        Some(format!("{before}{found}{after}"))
+        let found = if core.len() != text.len() { self.exact.get(core).cloned() } else { None }.or_else(|| self.template(core));
+        // A template whose first gap is the icon ("{0} Plays on: {1}"): it only fits with the icon left on.
+        found.map(|f| format!("{before}{f}{after}")).or_else(|| if core.len() != text.len() { self.template(text) } else { None })
     }
 
     fn template(&self, text: &str) -> Option<String> {
@@ -404,7 +405,9 @@ mod tests {
             "Launch: {0}": "Lanzar: {0}",
             "Same": "Same",
             "{0} Recently added": "{0} Añadido hace poco",
-            "{0} clip{1} added": "Eklenen klip: {0}"
+            "{0} clip{1} added": "Eklenen klip: {0}",
+            "{0} Plays on: {1}": "{0} Suena en: {1}",
+            "selected (none: a new layer)": "seleccionada (ninguna: una capa nueva)"
         }"#)
     }
 
@@ -427,6 +430,8 @@ mod tests {
         // A plural ending is a gap a language may leave out, and one clip has none.
         assert_eq!(c.translate("3 clips added").as_deref(), Some("Eklenen klip: 3"));
         assert_eq!(c.translate("1 clip added").as_deref(), Some("Eklenen klip: 1"));
+        // An icon that is the template's first gap, then more gaps (the Media panel's "Plays on" stayed English).
+        assert_eq!(c.translate("\u{E3D0} Plays on: selected (none: a new layer)").as_deref(), Some("\u{E3D0} Suena en: seleccionada (ninguna: una capa nueva)"));
     }
 
     #[test]

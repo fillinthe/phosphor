@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Pick lists inside menus open again.** The Language list in the brightness (sun) menu, and the Format and fps
   lists in Render… and a cue's laser looks, closed the whole menu instead of opening. They now open as a list beside
   the menu.
+- **More of the interface is translated.** Lines that start with an icon and hold more than one value (the Media
+  panel's "Plays on: …") stayed in English in every language.
 
 ## 0.5.20 (2026-11-23)
 
