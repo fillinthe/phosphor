@@ -1041,9 +1041,15 @@ impl ControlHub {
             };
             // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
             // (Delayed moves land later, so the takeover check would never see them arrive; they skip it too.)
-            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && map.delay() == 0.0 && map.fall() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+            // A mapping's own Pickup step wins over the app-wide setting.
+            let pickup = map.pickup().unwrap_or(match (self.soft_takeover, self.takeover_glide) {
+                (false, _) => phosphor_engine::Pickup::Jump,
+                (true, false) => phosphor_engine::Pickup::Wait,
+                (true, true) => phosphor_engine::Pickup::Glide,
+            });
+            if pickup != phosphor_engine::Pickup::Jump && v != FLIP && map.smoothing() == 0.0 && map.delay() == 0.0 && map.fall() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
                 // Glide: the value comes to the fader (caught once it gets there) instead of waiting for it.
-                if self.takeover_glide {
+                if pickup == phosphor_engine::Pickup::Glide {
                     let from = get_target(comp, &map.target).unwrap_or(v);
                     self.glide_to(map.target.clone(), from, v, now, TAKEOVER_GLIDE_SECS);
                 }

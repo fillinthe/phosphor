@@ -225,6 +225,10 @@ pub(crate) fn value_fx_menu(ui: &mut egui::Ui, fx: &mut Vec<phosphor_engine::Val
                         // Draw the output: left = fader at 0, right = fader at full.
                         crate::ui::step_bars(ui, points, None, false, 40.0);
                     }
+                    ValueFx::Pickup(p) => {
+                        crate::ui::widgets::choice_combo(ui, ("value_fx_pickup", k), p, 150.0, true)
+                            .on_hover_text("When the fader isn't where the value is: wait until it gets there, glide the value to it, or jump. Instead of the MIDI / OSC panel's Soft takeover.");
+                    }
                 }
                 if crate::ui::small_command(ui, icon::X).clicked() {
                     remove = Some(k);
@@ -250,8 +254,13 @@ pub(crate) fn value_fx_menu(ui: &mut egui::Ui, fx: &mut Vec<phosphor_engine::Val
                 ValueFx::Lookup((0..9).map(|i| i as f32 / 8.0).collect()),
                 ValueFx::Endless(0.01),
                 ValueFx::DeadBand(0.02),
+                ValueFx::Pickup(phosphor_engine::Pickup::Wait),
             ];
-            for f in fresh.into_iter().filter(|f| timed || !matches!(f, ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_))) {
+            for f in fresh.into_iter().filter(|f| timed || !matches!(f, ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_) | ValueFx::Pickup(_))) {
+                // One Pickup per mapping (the first one counts).
+                if matches!(f, ValueFx::Pickup(_)) && fx.iter().any(|f| matches!(f, ValueFx::Pickup(_))) {
+                    continue;
+                }
                 let name = f.name();
                 if crate::ui::small_command(ui, label(icon::PLUS, name)).clicked() {
                     fx.push(f);

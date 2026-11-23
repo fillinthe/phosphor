@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Soft takeover for each mapping.** A controller mapping's ~ menu has a new Pickup step: wait for the fader,
+  glide to it, or jump, for that mapping only. Mappings without one follow the Soft takeover switch in MIDI / OSC.
 - **Pick lists inside menus open again.** The Language list in the brightness (sun) menu, and the Format and fps
   lists in Render… and a cue's laser looks, closed the whole menu instead of opening. They now open as a list beside
   the menu.

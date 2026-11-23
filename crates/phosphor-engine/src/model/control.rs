@@ -484,6 +484,11 @@ impl ControlMap {
         self.fx.iter().map(|f| if let ValueFx::DeadBand(d) = f { *d } else { 0.0 }).fold(0.0, f32::max)
     }
 
+    /// This mapping's own soft takeover (None = the app-wide setting).
+    pub fn pickup(&self) -> Option<Pickup> {
+        self.fx.iter().find_map(|f| if let ValueFx::Pickup(p) = f { Some(*p) } else { None })
+    }
+
     /// Seconds each move waits before it lands (0 = straight away).
     pub fn delay(&self) -> f32 {
         self.fx.iter().map(|f| if let ValueFx::Delay(s) = f { *s } else { 0.0 }).sum()
@@ -604,6 +609,32 @@ pub enum ValueFx {
     Endless(f32),
     /// Ignore changes smaller than this (a jittery fader or sensor).
     DeadBand(f32),
+    /// This mapping's own soft takeover, instead of the app-wide setting (MIDI / OSC panel).
+    Pickup(Pickup),
+}
+
+/// What a fader does when it's somewhere else than the value it drives (soft takeover).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Pickup {
+    /// Nothing happens until the fader passes the value, then it takes over.
+    #[default]
+    Wait,
+    /// The value glides to the fader.
+    Glide,
+    /// The value jumps to the fader straight away.
+    Jump,
+}
+
+impl Pickup {
+    pub const ALL: [Pickup; 3] = [Pickup::Wait, Pickup::Glide, Pickup::Jump];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Pickup::Wait => "Wait for the fader",
+            Pickup::Glide => "Glide to the fader",
+            Pickup::Jump => "Jump",
+        }
+    }
 }
 
 impl ValueFx {
@@ -622,13 +653,14 @@ impl ValueFx {
             ValueFx::Lookup(_) => "Drawn curve",
             ValueFx::Endless(_) => "Endless knob",
             ValueFx::DeadBand(_) => "Dead band",
+            ValueFx::Pickup(_) => "Pickup",
         }
     }
 
     /// The instant ones; Smooth, Delay and Fall pass through here (they work over time).
     pub fn apply(&self, v: f32) -> f32 {
         match self {
-            ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_) => v,
+            ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_) | ValueFx::Pickup(_) => v,
             ValueFx::Threshold(t) => if v >= *t { 1.0 } else { 0.0 },
             ValueFx::Clamp(lo, hi) => v.clamp(lo.min(*hi), hi.max(*lo)),
             ValueFx::Repeat(n) => {

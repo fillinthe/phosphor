@@ -633,6 +633,42 @@ fn soft_takeover_waits_or_glides() {
 }
 
 #[test]
+fn a_mappings_own_pickup_wins_over_the_app_setting() {
+    use phosphor_engine::{Pickup, ValueFx};
+    let source = ControlSource::MidiCc { channel: 0, cc: 12 };
+    let setup = |p: Pickup| {
+        let mut comp = Composition::starter();
+        comp.master_fade = 0.2;
+        let mut map = phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade);
+        map.fx.push(ValueFx::Pickup(p));
+        comp.control_maps.push(map);
+        comp
+    };
+    // App-wide soft takeover on, this mapping jumps.
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
+    let mut comp = setup(Pickup::Jump);
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.9 });
+    hub.apply(&mut comp, 1.0);
+    assert!((comp.master_fade - 0.9).abs() < 1e-6, "jumps: {}", comp.master_fade);
+    // App-wide off, this mapping waits.
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = setup(Pickup::Wait);
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.9 });
+    hub.apply(&mut comp, 1.0);
+    assert_eq!(comp.master_fade, 0.2, "waits for the fader");
+    // App-wide off, this mapping glides.
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = setup(Pickup::Glide);
+    hub.inject(&mut comp, Incoming { source, value: 0.9 });
+    hub.apply(&mut comp, 2.0);
+    hub.apply(&mut comp, 2.15);
+    assert!(comp.master_fade > 0.3 && comp.master_fade < 0.9, "on its way: {}", comp.master_fade);
+}
+
+#[test]
 fn fall_holds_peaks() {
     let mut hub = ControlHub::new();
     hub.soft_takeover = true;
