@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Output windows on older graphics chips no longer close Phosphor.** On some older PCs (Windows, drawing with
+  OpenGL), opening an output window could make Phosphor quit. Now a window the graphics driver won't draw into stays
+  blank and Phosphor keeps trying it, and the problem report says what the driver refused.
 - **Button grids.** Make a Choices widget taller and its buttons become a grid (16 choices in a square = 4 × 4
   pads), on the Mac and on the phone page.
 - **Meters on the Control Surface.** A Meter widget shows any control's value live as a bar (a layer's opacity, a

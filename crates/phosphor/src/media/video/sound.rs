@@ -788,7 +788,8 @@ fn to_stereo(f: &ff::frame::Audio) -> Option<Vec<f32>> {
         S::I16(_) => 2,
         S::I32(_) | S::F32(_) => 4,
         S::I64(_) | S::F64(_) => 8,
-        S::None => return None,
+        // None, and formats that aren't PCM (FFmpeg 9.1's DSD, which only exists when built against 9.1).
+        _ => return None,
     };
     let sample = |plane: usize, idx: usize| -> f32 {
         // Packed: everything in plane 0, interleaved; planar: one plane per channel.
@@ -804,7 +805,7 @@ fn to_stereo(f: &ff::frame::Audio) -> Option<Vec<f32>> {
             S::I64(_) => i64::from_ne_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]) as f32 / 9.223_372e18,
             S::F32(_) => f32::from_ne_bytes([b[0], b[1], b[2], b[3]]),
             S::F64(_) => f64::from_ne_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]) as f32,
-            S::None => 0.0,
+            _ => 0.0,
         }
     };
     let mut out = Vec::with_capacity(n * 2);

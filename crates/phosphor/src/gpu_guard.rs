@@ -46,12 +46,14 @@ impl GpuGuard {
             return None;
         }
         let (first, count) = self.errors.lock().map(|mut e| std::mem::take(&mut *e)).unwrap_or_default();
-        let first = first.map(|e| e.lines().next().unwrap_or_default().to_string());
         if let Some(e) = &first {
             *logged = Some(std::time::Instant::now());
             let more = if count > 1 { format!(" ({} like it in the last second)", count - 1) } else { String::new() };
-            log::warn!(target: "phosphor::gpu", "skipped a GPU error: {e}{more}");
+            // The whole message on one line: wgpu's first line is only "Validation Error"; what failed is in the
+            // "Caused by" lines (reports 2026-11-23 said nothing more).
+            log::warn!(target: "phosphor::gpu", "skipped a GPU error: {}{more}", one_line(e));
         }
+        let first = first.map(|e| e.lines().next().unwrap_or_default().to_string());
         if lost {
             return Some("The graphics card reset. Save and restart Phosphor (it reopens where you were).".into());
         }
@@ -62,6 +64,11 @@ impl GpuGuard {
         }
         None
     }
+}
+
+/// A multi-line wgpu error as one log line (its words, spaces squeezed).
+fn one_line(e: &str) -> String {
+    e.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]
@@ -83,5 +90,10 @@ mod tests {
         assert!(said.is_some_and(|s| s.contains("GPU error")));
         let _ = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: 16, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE, mapped_at_creation: false });
         assert_eq!(guard.poll(), None, "said once");
+    }
+
+    #[test]
+    fn the_whole_error_fits_one_log_line() {
+        assert_eq!(one_line("Validation Error\n\nCaused by:\n  Surface is not configured"), "Validation Error Caused by: Surface is not configured");
     }
 }

@@ -25,3 +25,6 @@ egui_dock = { path = "vendor/egui_dock" }
 # winit with one patch ("PHOSPHOR PATCH", platform_impl/windows/monitor.rs): a monitor that was just unplugged or
 # went to sleep gives no name / a 0×0 size instead of panicking (egui-winit asks every frame). Re-apply on upgrade.
 winit = { path = "vendor/winit" }
+# egui-wgpu with one patch ("PHOSPHOR PATCH", src/winit.rs): a window surface the driver refuses to set up (OpenGL on
+# old Intel graphics, Windows) skips its frames and is tried again every 2 s instead of ending the app. Re-apply on upgrade.
+egui-wgpu = { path = "vendor/egui-wgpu" }
