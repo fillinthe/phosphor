@@ -229,7 +229,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             choice_combo(ui, "render_format", &mut o.format, 200.0, false);
         });
         crate::ui::field(ui, "fps", |ui| {
-            crate::ui::dropdown(ui, "render_fps", 60.0).selected_text(o.fps.to_string()).show_ui(ui, |ui| {
+            crate::ui::pick_list(ui, "render_fps", o.fps.to_string(), 60.0, |ui| {
                 for f in [24, 25, 30, 50, 60] {
                     crate::ui::pick_value(ui, &mut o.fps, f, f.to_string());
                 }

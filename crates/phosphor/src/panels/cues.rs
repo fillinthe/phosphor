@@ -305,7 +305,7 @@ fn laser_menu(ui: &mut egui::Ui, cue: &mut phosphor_engine::Cue, projectors: &[(
         for c in &mut cue.lasers {
             let name = projectors.iter().find(|(p, _)| *p == c.id).map_or("(removed laser)", |p| p.1.as_str());
             crate::ui::heading(ui, name);
-            crate::ui::dropdown(ui, ("cue_laser_look", c.id), 200.0).selected_text(look_name(c.look)).show_ui(ui, |ui| {
+            crate::ui::pick_list(ui, ("cue_laser_look", c.id), look_name(c.look), 200.0, |ui| {
                 for (id, n) in looks {
                     crate::ui::pick_value(ui, &mut c.look, *id, n);
                 }

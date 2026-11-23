@@ -10,6 +10,22 @@ pub(crate) fn dropdown(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::D
     egui::ComboBox::from_id_salt(id).width(width).truncate()
 }
 
+/// Pick one from a list: a drop-down, or inside a menu a submenu of the choices. egui keeps one pop-up open per window,
+/// so a drop-down's list opened inside a menu replaced the menu and both vanished (bug report 2026-11-21: "I can't
+/// touch the language icon"; the same for Render › Format / fps and a cue's laser looks). `items` draws the choices
+/// (`pick_item` / `pick_value`). Use this (or `choice_combo`) for every pick-one list that can sit in a menu.
+pub(crate) fn pick_list<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, selected: impl Into<String>, width: f32, items: impl FnOnce(&mut egui::Ui) -> R) -> egui::Response {
+    if egui::containers::menu::is_in_menu(ui) {
+        let (response, _) = egui::containers::menu::SubMenuButton::new(selected.into()).ui(ui, |ui| {
+            ui.set_min_width(width);
+            egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.6).show(ui, items)
+        });
+        response
+    } else {
+        dropdown(ui, id, width).selected_text(selected.into()).show_ui(ui, items).response
+    }
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))

@@ -439,6 +439,14 @@ pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::
 
 /// A drop-down for any `Choice` setting (blend mode, fit, transition…). `small` for tight spots (Mixer strips).
 pub(crate) fn choice_combo<T: phosphor_engine::Choice>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &mut T, width: f32, small: bool) -> egui::Response {
+    // In a menu: a submenu (see `pick_list`); a drop-down's list would close the menu.
+    if egui::containers::menu::is_in_menu(ui) {
+        return crate::ui::pick_list(ui, id, value.label(), width, |ui| {
+            for &o in T::OPTIONS {
+                crate::ui::pick_value(ui, value, o, o.label());
+            }
+        });
+    }
     let text = |s: &str| if small { egui::RichText::new(s).small() } else { egui::RichText::new(s) };
     egui::ComboBox::from_id_salt(id)
         .width(width)

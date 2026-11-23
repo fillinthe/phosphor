@@ -406,10 +406,11 @@ impl PhosphorApp {
                             let now = crate::i18n::chosen();
                             let shown = if now == crate::i18n::Lang::Auto { format!("{} ({})", now.name(), if now.drawable() { now.resolved() } else { crate::i18n::Lang::English }.name()) } else { now.name().to_string() };
                             let mut pick = None;
-                            crate::ui::dropdown(ui, "language", 150.0).selected_text(shown).show_ui(ui, |ui| {
+                            crate::ui::pick_list(ui, "language", shown, 150.0, |ui| {
                                 for lang in crate::i18n::Lang::ALL.into_iter().filter(|l| *l == crate::i18n::Lang::Auto || l.drawable()) {
                                     if crate::ui::pick_item(ui, lang == now, lang.name()).clicked() {
                                         pick = Some(lang);
+                                        ui.close();
                                     }
                                 }
                             });
