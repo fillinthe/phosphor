@@ -97,7 +97,7 @@ impl State {
                     if let Some(l) = self.comp.layer_mut(id) {
                         l.looping = true;
                     }
-                } else if let Some(l) = self.comp.layer_mut(id) {
+                } else if on_layer && let Some(l) = self.comp.layer_mut(id) {
                     let (loop_in, beats) = settings_for(r, l.loop_out, bpm);
                     l.loop_in = loop_in;
                     l.sync_beats = beats;
