@@ -853,6 +853,19 @@ impl State {
             A::AutoFade if press => self.auto_fade(now),
             A::FadeToA if press => self.fade_to_side(false, now),
             A::FadeToB if press => self.fade_to_side(true, now),
+            A::SurfacePresetNext if press => {
+                if let Some(i) = self.comp.surface.next_preset() {
+                    self.recall_surface_preset(i, now);
+                }
+            }
+            A::SurfacePreset => {
+                // (A fader sweeping across the presets recalls each one it reaches, once.)
+                if let Some(i) = self.comp.surface.preset_at(v)
+                    && self.comp.surface.last_preset != Some(i)
+                {
+                    self.recall_surface_preset(i, now);
+                }
+            }
             #[cfg(not(target_arch = "wasm32"))]
             A::ProjectorsOn if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOn),
             #[cfg(not(target_arch = "wasm32"))]
@@ -871,6 +884,21 @@ impl State {
             }
             _ => {}
         }
+    }
+
+    /// Recalls Control Surface preset `index`: faders glide over the surface's preset fade, switches and choices jump;
+    /// each widget drives its targets as if moved by hand.
+    pub fn recall_surface_preset(&mut self, index: usize, now: f64) {
+        let secs = self.comp.surface.preset_fade;
+        for step in self.comp.surface.recall_steps(index) {
+            let from = crate::control::get_target(&self.comp, &step.target).unwrap_or(step.value);
+            if step.glides && secs > 0.0 {
+                self.control.glide_to(step.target, from, step.value, now as f32, secs);
+            } else if (from - step.value).abs() > 1e-6 {
+                self.set_control(&step.target, step.value, now);
+            }
+        }
+        self.comp.surface.last_preset = Some(index);
     }
 
     /// The crossfader glides to the side it's further from (A ↔ B) over the auto-fade time.

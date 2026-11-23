@@ -1375,3 +1375,36 @@ fn controls_following_each_other_settle() {
     }
     assert!((comp.layer(a).unwrap().opacity - 0.8).abs() < 1e-4);
 }
+
+#[test]
+fn a_surface_preset_glides_faders_and_drives_their_targets() {
+    use phosphor_engine::{Binding, WidgetKind};
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    let fader = comp.surface.add(WidgetKind::Fader);
+    comp.surface.widget_mut(fader).unwrap().bindings.push(Binding::new(ControlTarget::LayerOpacity(a)));
+    let toggle = comp.surface.add(WidgetKind::Toggle);
+    comp.surface.widget_mut(fader).unwrap().value = 0.8;
+    comp.surface.widget_mut(toggle).unwrap().value = 1.0;
+    let p = comp.surface.save_preset("Bright".into());
+    let mut out = Vec::new();
+    set_target(&mut comp, &ControlTarget::Surface(fader), 0.0, &mut out);
+    set_target(&mut comp, &ControlTarget::Surface(toggle), 0.0, &mut out);
+    // What `State::recall_surface_preset` does with a 1 s fade.
+    for step in comp.surface.recall_steps(p) {
+        let from = get_target(&comp, &step.target).unwrap();
+        if step.glides {
+            hub.glide_to(step.target, from, step.value, 5.0, 1.0);
+        } else {
+            set_target(&mut comp, &step.target, step.value, &mut out);
+        }
+    }
+    assert_eq!(comp.surface.widget(toggle).unwrap().value, 1.0, "the switch lands at once");
+    hub.apply(&mut comp, 5.5);
+    let mid = comp.layer_mut(a).unwrap().opacity;
+    assert!(mid > 0.05 && mid < 0.8, "on its way, and the fader's target follows: {mid}");
+    hub.apply(&mut comp, 6.1);
+    assert!((comp.surface.widget(fader).unwrap().value - 0.8).abs() < 1e-4);
+    assert!((comp.layer_mut(a).unwrap().opacity - 0.8).abs() < 1e-4);
+}

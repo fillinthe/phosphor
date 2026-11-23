@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Control Surface presets.** Save a page's fader, switch and pad positions by name and bring them back with one
+  click: faders glide over a fade time you set, switches change at once. Next steps through them, and both a preset
+  pick and Next can be mapped to a controller.
 - **Soft takeover for each mapping.** A controller mapping's ~ menu has a new Pickup step: wait for the fader,
   glide to it, or jump, for that mapping only. Mappings without one follow the Soft takeover switch in MIDI / OSC.
 - **Pick lists inside menus open again.** The Language list in the brightness (sun) menu, and the Format and fps

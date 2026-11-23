@@ -95,6 +95,7 @@ mod slice_tree;
 mod inspect;
 mod studio;
 mod surface;
+mod surface_presets;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
 mod timeline;

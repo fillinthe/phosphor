@@ -157,6 +157,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     if only.is_none() {
         page_tabs(ui, &mut st.comp.surface, edit);
     }
+    super::surface_presets::preset_bar(ui, st, edit, now);
 
     let targets = st.targets();
     let inspector = edit && (picked.len() >= 2 || selected.is_some_and(|id| st.comp.surface.widget(id).is_some()));

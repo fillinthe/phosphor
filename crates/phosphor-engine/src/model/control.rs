@@ -208,10 +208,14 @@ pub enum AppControl {
     MasterSpeed,
     /// Every output fades to black (on) / back up (off).
     Blackout,
+    /// Recall a Control Surface preset of the page showing (0..1 across its presets).
+    SurfacePreset,
+    /// Recall the next Control Surface preset of the page showing.
+    SurfacePresetNext,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 36] = [
+    pub const ALL: [AppControl; 38] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -248,6 +252,8 @@ impl AppControl {
         AppControl::DmxMaster,
         AppControl::MasterSpeed,
         AppControl::Blackout,
+        AppControl::SurfacePreset,
+        AppControl::SurfacePresetNext,
     ];
 
     pub fn name(self) -> &'static str {
@@ -288,6 +294,8 @@ impl AppControl {
             AppControl::DmxMaster => "LED / DMX master",
             AppControl::MasterSpeed => "Master speed (every movie)",
             AppControl::Blackout => "Blackout (every output to black / back)",
+            AppControl::SurfacePreset => "Control Surface preset",
+            AppControl::SurfacePresetNext => "Control Surface: next preset",
         }
     }
 
@@ -330,6 +338,8 @@ impl AppControl {
             AppControl::DmxMaster => "dmx/master",
             AppControl::MasterSpeed => "speed",
             AppControl::Blackout => "blackout",
+            AppControl::SurfacePreset => "surface/preset",
+            AppControl::SurfacePresetNext => "surface/preset/next",
         }
     }
 

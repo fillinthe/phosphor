@@ -138,6 +138,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::Ndi => on(comp.ndi.enabled),
             AppControl::Crossfader => comp.crossfader,
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
+            AppControl::SurfacePreset => comp.surface.preset_unit()?,
             _ => return None,
         },
         ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) | ControlTarget::Menu(_) | ControlTarget::Button { .. } | ControlTarget::Slider { .. } => return None,

@@ -242,11 +242,19 @@ pub struct ControlSurface {
     /// Where widgets with an OSC address send their values (another app or computer; "" = nowhere).
     pub osc_host: String,
     pub osc_port: u16,
+    /// Snapshots of a page's widget values, recalled with `preset_fade` (see `surface_presets.rs`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub presets: Vec<super::SurfacePreset>,
+    /// Seconds faders glide into a recalled preset (0 = they jump).
+    pub preset_fade: f32,
+    /// The preset recalled last (what Next steps on from).
+    #[serde(skip)]
+    pub last_preset: Option<usize>,
 }
 
 impl Default for ControlSurface {
     fn default() -> Self {
-        Self { widgets: Vec::new(), columns: 12, next_id: 1, pages: vec!["Main".into()], page: 0, osc_host: String::new(), osc_port: 9000 }
+        Self { widgets: Vec::new(), columns: 12, next_id: 1, pages: vec!["Main".into()], page: 0, osc_host: String::new(), osc_port: 9000, presets: Vec::new(), preset_fade: 1.0, last_preset: None }
     }
 }
 
@@ -474,6 +482,13 @@ impl ControlSurface {
                 w.page -= 1;
             }
         }
+        self.presets.retain(|p| p.page != i);
+        for p in &mut self.presets {
+            if p.page > i {
+                p.page -= 1;
+            }
+        }
+        self.last_preset = None;
         self.page = self.current_page();
     }
 
