@@ -360,7 +360,7 @@ function renderSurface() {
     sf.widgets.forEach(w => {
       const X = { Surface: w.id }, Y = { SurfaceY: w.id };
       let el;
-      if (w.kind === 'Fader' || w.kind === 'Slider') {
+      if (w.kind === 'Fader' || w.kind === 'Slider' || w.kind === 'Knob') {
         el = fader('sf' + w.id, 0, 1, w.value, v => setTarget(X, v), w.kind === 'Fader');
         el.querySelector('.fill').style.background = w.color;
         const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = w.label; el.appendChild(cap);
@@ -438,7 +438,7 @@ function renderSurface() {
   }
   sf.widgets.forEach(w => {
     const el = box.querySelector(`[data-id="${w.id}"]`); if (!el || touching.has(el.dataset.key)) return;
-    if (w.kind === 'Fader' || w.kind === 'Slider') el.setValue(w.value);
+    if (w.kind === 'Fader' || w.kind === 'Slider' || w.kind === 'Knob') el.setValue(w.value);
     else if (w.kind === 'XyPad' || w.kind === 'Color') el.setValue(w.value, w.value_y);
     else if (w.kind === 'Choices') el.setValue(w.value);
     else if (w.kind === 'Multi') el.setValue(w.bars);

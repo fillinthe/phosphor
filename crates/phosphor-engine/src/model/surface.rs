@@ -33,10 +33,12 @@ pub enum WidgetKind {
     /// A value worked out from other controls by a formula (`a * b`, `max(a, b)`, `sin(beat)`…), kept up to date
     /// by itself; it drives its targets like a fader.
     Computed,
+    /// A round knob: drag up or down to turn it; drives its targets like a fader.
+    Knob,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 11] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Computed, WidgetKind::Text, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 12] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Knob, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Computed, WidgetKind::Text, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -51,7 +53,13 @@ impl WidgetKind {
             WidgetKind::Text => "Text field",
             WidgetKind::Multi => "Multi-slider",
             WidgetKind::Computed => "Computed value",
+            WidgetKind::Knob => "Knob",
         }
+    }
+
+    /// A single level you set by hand (fader, slider, knob): it can move by itself and has a guest range.
+    pub fn is_level(self) -> bool {
+        matches!(self, WidgetKind::Fader | WidgetKind::Slider | WidgetKind::Knob)
     }
 
     /// Size in grid cells when added.
@@ -67,6 +75,7 @@ impl WidgetKind {
             WidgetKind::Text => (6.0, 1.0),
             WidgetKind::Multi => (6.0, 3.0),
             WidgetKind::Computed => (4.0, 1.0),
+            WidgetKind::Knob => (2.0, 2.0),
         }
     }
 }

@@ -32,7 +32,7 @@ impl State {
     /// where you set it). Nothing runs while none moves.
     pub(crate) fn run_surface_motion(&mut self, now: f64) {
         let mut sends = Vec::new();
-        for w in self.comp.surface.widgets.iter_mut().filter(|w| matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider)) {
+        for w in self.comp.surface.widgets.iter_mut().filter(|w| w.kind.is_level()) {
             let Some(m) = &w.motion else { continue };
             let v = phosphor_engine::control::modulate(w.value, 0.0, 1.0, Some(m), &self.mod_inputs);
             if (v - w.live).abs() > 1e-4 {

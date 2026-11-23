@@ -28,7 +28,7 @@ impl ControlSurface {
         let mut out = Vec::new();
         for w in self.widgets.iter().filter(|w| w.page == page) {
             match w.kind {
-                WidgetKind::Fader | WidgetKind::Slider | WidgetKind::Toggle | WidgetKind::Choices => out.push((ControlTarget::Surface(w.id), w.value)),
+                WidgetKind::Fader | WidgetKind::Slider | WidgetKind::Knob | WidgetKind::Toggle | WidgetKind::Choices => out.push((ControlTarget::Surface(w.id), w.value)),
                 WidgetKind::XyPad | WidgetKind::Color => {
                     out.push((ControlTarget::Surface(w.id), w.value));
                     out.push((ControlTarget::SurfaceY(w.id), w.value_y));

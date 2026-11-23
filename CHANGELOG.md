@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Knobs on the Control Surface.** A round knob widget: drag up or down to turn it, double-click for the middle.
+  Like a fader it drives any targets, can move by itself and has a guest range; it goes to TouchOSC as a knob too.
 - **Control Surface presets.** Save a page's fader, switch and pad positions by name and bring them back with one
   click: faders glide over a fade time you set, switches change at once. Next steps through them, and both a preset
   pick and Next can be mapped to a controller.

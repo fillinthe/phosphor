@@ -88,6 +88,7 @@ fn widget(x: &mut String, w: &SurfaceWidget, cell: f32) {
         WidgetKind::Fader => node(x, "FADER", &w.label, frame, w.color, &[], &[(main, "x")]),
         // orientation 1 = east (horizontal).
         WidgetKind::Slider => node(x, "FADER", &w.label, frame, w.color, &[("orientation", 1)], &[(main, "x")]),
+        WidgetKind::Knob => node(x, "RADIAL", &w.label, frame, w.color, &[], &[(main, "x")]),
         WidgetKind::XyPad | WidgetKind::Color => node(x, "XY", &w.label, frame, w.color, &[], &[(main, "x"), (y, "y")]),
         WidgetKind::Label | WidgetKind::Text | WidgetKind::Computed => node(x, "LABEL", &w.label, frame, w.color, &[], &[]),
         // (TouchOSC's radio needs its own count; a horizontal fader picks the choices the same way.)
@@ -230,6 +231,7 @@ pub fn import(comp: &mut Composition, bytes: &[u8]) -> Result<Imported, String> 
                 (Some("BUTTON"), ..) => WidgetKind::Toggle,
                 (Some("FADER"), _, Some("1") | Some("3")) | (Some("ENCODER"), ..) => WidgetKind::Slider,
                 (Some("FADER"), ..) => WidgetKind::Fader,
+                (Some("RADIAL"), ..) => WidgetKind::Knob,
                 (Some("XY"), ..) => WidgetKind::XyPad,
                 (Some("RADIO"), ..) => WidgetKind::Choices,
                 (Some("LABEL"), ..) => WidgetKind::Label,
@@ -280,10 +282,12 @@ mod tests {
         comp.surface.widget_mut(fader).unwrap().label = "Dimmer".into();
         comp.surface.add(WidgetKind::XyPad);
         comp.surface.add(WidgetKind::Label);
+        comp.surface.add(WidgetKind::Knob);
         let bytes = export(&comp);
         let mut fresh = Composition::default();
         let got = import(&mut fresh, &bytes).unwrap();
-        assert_eq!((got.pages, got.widgets, got.mappings), (1, 3, 3), "fader x, pad x and y");
+        assert_eq!((got.pages, got.widgets, got.mappings), (1, 4, 4), "fader x, pad x and y, knob x");
+        assert!(fresh.surface.widgets.iter().any(|w| w.kind == WidgetKind::Knob), "a knob comes back a knob");
         let w = fresh.surface.widgets.iter().find(|w| w.label == "Dimmer").expect("the fader");
         assert_eq!((w.kind, w.page), (WidgetKind::Fader, 1));
         let orig = comp.surface.widget(fader).unwrap();
@@ -317,7 +321,7 @@ fn write_sample_layout() {
     let Some(out) = std::env::var_os("PHOSPHOR_TOSC_OUT") else { return };
     let mut comp = Composition::default();
     comp.add_layer().name = "Rings".into();
-    for k in [WidgetKind::Fader, WidgetKind::XyPad, WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Slider, WidgetKind::Color] {
+    for k in [WidgetKind::Fader, WidgetKind::XyPad, WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Slider, WidgetKind::Knob, WidgetKind::Color] {
         comp.surface.add(k);
     }
     std::fs::write(out, export(&comp)).unwrap();

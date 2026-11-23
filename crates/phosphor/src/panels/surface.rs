@@ -349,6 +349,18 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                             }
                         }
                     }
+                    // Turned by dragging up / down (a full turn over about two widget heights, at least 150 points).
+                    WidgetKind::Knob => {
+                        if resp.dragged_by(egui::PointerButton::Primary) {
+                            let d = -resp.drag_delta().y / (rect.height() * 2.0).max(150.0);
+                            if d != 0.0 {
+                                sets.push((target.clone(), (w.value + d).clamp(0.0, 1.0)));
+                            }
+                        }
+                        if resp.double_clicked() {
+                            sets.push((target.clone(), 0.5));
+                        }
+                    }
                     // Draw across the bars: each one under the pointer takes its height.
                     WidgetKind::Multi => {
                         if (resp.dragged_by(egui::PointerButton::Primary) || resp.clicked())
@@ -726,6 +738,38 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
                 p.text(corner.0, corner.1, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE);
             }
         }
+        WidgetKind::Knob => {
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
+            p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            // The dial: a 270° track from bottom left round to bottom right, lit up to the value; the percent in
+            // its middle (room enough even at 2 × 2 cells), the pointer a tick at the rim.
+            let label_h = 15.0;
+            let dial = egui::Rect::from_min_max(rect.min + egui::vec2(0.0, label_h), rect.max).shrink(3.0);
+            let radius = (dial.width().min(dial.height()) * 0.5).max(4.0);
+            let width = (radius * 0.16).clamp(2.0, 7.0);
+            let r = radius - width * 0.5;
+            let at = |v: f32, r: f32| {
+                let a = std::f32::consts::PI * (0.75 + 1.5 * v.clamp(0.0, 1.0));
+                dial.center() + egui::vec2(a.cos(), a.sin()) * r
+            };
+            let arc = |from: f32, to: f32| -> Vec<egui::Pos2> {
+                let n = ((to - from) * 48.0).ceil().max(1.0) as usize;
+                (0..=n).map(|i| at(from + (to - from) * i as f32 / n as f32, r)).collect()
+            };
+            p.add(egui::Shape::line(arc(0.0, 1.0), Stroke::new(width, c.gamma_multiply(0.2))));
+            if w.value > 0.0 {
+                p.add(egui::Shape::line(arc(0.0, w.value), Stroke::new(width, c.gamma_multiply(0.9))));
+            }
+            p.line_segment([at(w.value, r * 0.62), at(w.value, r + width * 0.5)], Stroke::new(2.0, Color32::WHITE));
+            if w.motion.is_some() {
+                p.circle_filled(at(w.live, r), width * 0.7, Color32::WHITE);
+                p.ctx().request_repaint();
+            }
+            p.text(rect.center_top() + egui::vec2(0.0, 2.0), egui::Align2::CENTER_TOP, &w.label, font.clone(), Color32::WHITE);
+            if !edit {
+                p.text(dial.center(), egui::Align2::CENTER_CENTER, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(if radius < 22.0 { 9.0 } else { 11.0 }), crate::theme::ON_PICTURE);
+            }
+        }
         WidgetKind::XyPad => {
             p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
@@ -940,7 +984,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 });
             }
         } else {
-            if matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider) {
+            if w.kind.is_level() {
                 crate::ui::toolbar(ui, |ui| {
                     ui.label("Moves by itself");
                     crate::ui::mod_button(ui, &mut w.motion);
@@ -986,7 +1030,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         // Audience play: whether guests get it, and how far they can push it.
         ui.horizontal(|ui| {
             toggle(ui, &mut w.guests, "Guests can use it").on_hover_text("Audience play: off hides it from guests' phones (only you and remotes use it)");
-            if w.guests && matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider | WidgetKind::XyPad) {
+            if w.guests && (w.kind.is_level() || w.kind == WidgetKind::XyPad) {
                 let [mut lo, mut hi] = w.guest_range;
                 Level::percent(&mut lo, "Guests from").default(0.0).width(110.0).show(ui);
                 Level::percent(&mut hi, "up to").default(1.0).width(110.0).show(ui);
