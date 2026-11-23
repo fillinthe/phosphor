@@ -7,8 +7,22 @@ use super::State;
 
 impl State {
     pub(crate) fn run_computed(&mut self, now: f64) {
-        if !self.comp.surface.widgets.iter().any(|w| w.kind == WidgetKind::Computed) {
+        if !self.comp.surface.widgets.iter().any(|w| matches!(w.kind, WidgetKind::Computed | WidgetKind::Meter)) {
             return;
+        }
+        // Meters only show what they read (nothing to drive).
+        let read: Vec<(u64, f32)> = self
+            .comp
+            .surface
+            .widgets
+            .iter()
+            .filter(|w| w.kind == WidgetKind::Meter)
+            .filter_map(|w| Some((w.id, crate::control::get_target(&self.comp, w.inputs.first()?)?)))
+            .collect();
+        for (id, v) in read {
+            if let Some(w) = self.comp.surface.widget_mut(id) {
+                w.value = v.clamp(0.0, 1.0);
+            }
         }
         let beats = self.clock.beats(now);
         let changed: Vec<(u64, f32)> = self

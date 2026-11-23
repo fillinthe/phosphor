@@ -34,7 +34,7 @@ impl ControlSurface {
                     out.push((ControlTarget::SurfaceY(w.id), w.value_y));
                 }
                 WidgetKind::Multi => out.extend(w.bars.iter().enumerate().map(|(i, b)| (ControlTarget::SurfaceBar { widget: w.id, bar: i as u8 }, b.value))),
-                WidgetKind::Button | WidgetKind::Label | WidgetKind::Text | WidgetKind::Computed => {}
+                WidgetKind::Button | WidgetKind::Label | WidgetKind::Text | WidgetKind::Computed | WidgetKind::Meter => {}
             }
         }
         out

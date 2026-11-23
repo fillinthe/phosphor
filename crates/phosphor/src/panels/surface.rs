@@ -313,7 +313,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                         });
                         corner.on_hover_text("Locked in place: click the padlock to unlock (or Cmd+L)");
                     }
-                    let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty());
+                    let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty()) || (w.kind == WidgetKind::Meter && !w.inputs.is_empty());
                     if !wired && w.kind != WidgetKind::Label {
                         painter.text(rect.left_bottom() + egui::vec2(4.0, -3.0), egui::Align2::LEFT_BOTTOM, "not wired", egui::FontId::proportional(10.0), WARN);
                     }
@@ -397,7 +397,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                             sets.push((target.clone(), w.choice_value(((x * n as f32) as usize).min(n - 1))));
                         }
                     }
-                    WidgetKind::Label | WidgetKind::Computed => {}
+                    WidgetKind::Label | WidgetKind::Computed | WidgetKind::Meter => {}
                     // Typed words go on the text layer when Enter is pressed (or the field is left).
                     WidgetKind::Text => {
                         let key = id.with("draft");
@@ -845,6 +845,23 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, format!("{} = {shown}", w.label), font.clone(), Color32::WHITE);
             p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE);
         }
+        WidgetKind::Meter => {
+            // Tall = fills upward, wide = fills to the right.
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
+            let tall = rect.height() >= rect.width();
+            let mut fill = rect.shrink(3.0);
+            if tall {
+                fill.set_top(fill.bottom() - fill.height() * w.value);
+            } else {
+                fill.set_right(fill.left() + fill.width() * w.value);
+            }
+            p.rect_filled(fill, 3.0, c.gamma_multiply(0.85));
+            p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            let (at, align) = if tall { (rect.center_top() + egui::vec2(0.0, 4.0), egui::Align2::CENTER_TOP) } else { (rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER) };
+            p.text(at, align, &w.label, font.clone(), Color32::WHITE);
+            let (at, align) = if tall { (rect.center_bottom() - egui::vec2(0.0, 4.0), egui::Align2::CENTER_BOTTOM) } else { (rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER) };
+            p.text(at, align, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE);
+        }
         WidgetKind::Multi => {
             p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             let n = w.bars.len().max(1);
@@ -937,6 +954,14 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             WidgetKind::Color => "Red drives",
             _ => "Drives",
         };
+        if w.kind == WidgetKind::Meter {
+            crate::ui::heading_help(ui, "Shows", "The control whose value this meter shows, live (a layer's opacity, a modulator, the sound level…). It only looks: moving it does nothing.");
+            let current = w.inputs.first().cloned();
+            if let Some(picked) = target_picker(ui, ("meter_in", id), targets, current.as_ref(), 240.0) {
+                w.inputs = vec![picked];
+            }
+            ui.add_space(4.0);
+        }
         if w.kind == WidgetKind::Computed {
             crate::ui::heading(ui, "Formula");
             crate::ui::text_field(ui, &mut w.formula, "a * b, max(a, b), sin(beat)…", Some(280.0))
@@ -983,7 +1008,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                     binding_list(ui, ("bar_bindings", id, i), targets, &mut b.bindings);
                 });
             }
-        } else {
+        } else if w.kind != WidgetKind::Meter {
             if w.kind.is_level() {
                 crate::ui::toolbar(ui, |ui| {
                     ui.label("Moves by itself");

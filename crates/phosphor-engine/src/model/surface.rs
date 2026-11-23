@@ -35,10 +35,12 @@ pub enum WidgetKind {
     Computed,
     /// A round knob: drag up or down to turn it; drives its targets like a fader.
     Knob,
+    /// Shows another control's value as a bar (the first of `inputs`): look, don't touch; drives nothing.
+    Meter,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 12] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Knob, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Computed, WidgetKind::Text, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 13] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Knob, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Computed, WidgetKind::Meter, WidgetKind::Text, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -54,6 +56,7 @@ impl WidgetKind {
             WidgetKind::Multi => "Multi-slider",
             WidgetKind::Computed => "Computed value",
             WidgetKind::Knob => "Knob",
+            WidgetKind::Meter => "Meter",
         }
     }
 
@@ -76,6 +79,7 @@ impl WidgetKind {
             WidgetKind::Multi => (6.0, 3.0),
             WidgetKind::Computed => (4.0, 1.0),
             WidgetKind::Knob => (2.0, 2.0),
+            WidgetKind::Meter => (1.0, 4.0),
         }
     }
 }
