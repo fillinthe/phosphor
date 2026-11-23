@@ -212,6 +212,23 @@ impl SurfaceWidget {
         crate::pick_unit(i, self.choice_count())
     }
 
+    /// Choices: (columns, rows) of its buttons. A wide widget is one row; a taller one becomes a grid whose cells
+    /// come out close to square (the phone page uses the same rule).
+    pub fn choice_grid(&self) -> (usize, usize) {
+        let n = self.choice_count();
+        let rows = ((n as f32 * self.h.max(0.25) / self.w.max(0.25)).sqrt().round() as usize).clamp(1, n);
+        (n.div_ceil(rows), n.div_ceil(n.div_ceil(rows)))
+    }
+
+    /// Choices: the button under (x, y), both 0..1 from the top left (None = an empty cell of the last row).
+    pub fn choice_at(&self, x: f32, y: f32) -> Option<usize> {
+        let (cols, rows) = self.choice_grid();
+        let col = ((x.clamp(0.0, 1.0) * cols as f32) as usize).min(cols - 1);
+        let row = ((y.clamp(0.0, 1.0) * rows as f32) as usize).min(rows - 1);
+        let i = row * cols + col;
+        (i < self.choice_count()).then_some(i)
+    }
+
     /// A color widget's color, red / green / blue 0..1 (hue, saturation, brightness → RGB).
     pub fn rgb(&self) -> [f32; 3] {
         let (h, s, v) = (self.value.rem_euclid(1.0) * 6.0, self.value_y.clamp(0.0, 1.0), self.value_z.clamp(0.0, 1.0));
@@ -532,6 +549,20 @@ impl ControlSurface {
 #[cfg(test)]
 mod page_tests {
     use super::*;
+
+    #[test]
+    fn tall_choices_become_a_grid() {
+        let mut w = SurfaceWidget { kind: WidgetKind::Choices, w: 6.0, h: 1.0, items: (1..=4).map(|i| i.to_string()).collect(), ..Default::default() };
+        assert_eq!(w.choice_grid(), (4, 1), "wide: one row");
+        assert_eq!(w.choice_at(0.6, 0.5), Some(2));
+        (w.w, w.h, w.items) = (4.0, 4.0, (1..=16).map(|i| i.to_string()).collect());
+        assert_eq!(w.choice_grid(), (4, 4), "square: a 4 × 4 pad grid");
+        assert_eq!(w.choice_at(0.1, 0.9), Some(12), "bottom left");
+        w.items.truncate(7);
+        let (cols, rows) = w.choice_grid();
+        assert!(cols * rows >= 7 && cols * (rows - 1) < 7, "{cols} × {rows}");
+        assert_eq!(w.choice_at(0.99, 0.99), None, "an empty cell picks nothing");
+    }
 
     #[test]
     fn widgets_live_on_pages_and_go_with_them() {

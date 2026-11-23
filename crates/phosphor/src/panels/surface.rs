@@ -392,9 +392,10 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                         if resp.clicked()
                             && let Some(p) = pointer
                         {
-                            let n = w.choice_count();
-                            let (x, _) = pos(p);
-                            sets.push((target.clone(), w.choice_value(((x * n as f32) as usize).min(n - 1))));
+                            let (x, y) = pos(p);
+                            if let Some(i) = w.choice_at(x, 1.0 - y) {
+                                sets.push((target.clone(), w.choice_value(i)));
+                            }
                         }
                     }
                     WidgetKind::Label | WidgetKind::Computed | WidgetKind::Meter => {}
@@ -826,9 +827,11 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
         WidgetKind::Choices => {
             let n = w.choice_count();
             let picked = w.picked();
-            let seg = rect.width() / n as f32;
+            let (cols, rows) = w.choice_grid();
+            let cell = egui::vec2(rect.width() / cols as f32, rect.height() / rows as f32);
             for i in 0..n {
-                let r = egui::Rect::from_min_size(egui::pos2(rect.left() + i as f32 * seg, rect.top()), egui::vec2(seg, rect.height())).shrink(1.5);
+                let at = rect.min + egui::vec2((i % cols) as f32 * cell.x, (i / cols) as f32 * cell.y);
+                let r = egui::Rect::from_min_size(at, cell).shrink(1.5);
                 let on = i == picked;
                 p.rect_filled(r, 5.0, if on { c } else { c.gamma_multiply(0.15) });
                 let name = w.items.get(i).cloned().unwrap_or_else(|| (i + 1).to_string());

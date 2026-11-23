@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Button grids.** Make a Choices widget taller and its buttons become a grid (16 choices in a square = 4 × 4
+  pads), on the Mac and on the phone page.
 - **Meters on the Control Surface.** A Meter widget shows any control's value live as a bar (a layer's opacity, a
   modulator, the master fade…): tall ones fill upward, wide ones to the right.
 - **Knobs on the Control Surface.** A round knob widget: drag up or down to turn it, double-click for the middle.

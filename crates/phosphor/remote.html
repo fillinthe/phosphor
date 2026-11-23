@@ -385,11 +385,13 @@ function renderSurface() {
           el.appendChild(box);
         }
         else if (w.kind === 'Choices') {
-          // A row of buttons, one picked: each sends the middle of its slice of 0..1.
-          el.className = 'w choices'; el.style.display = 'flex'; el.style.gap = '3px'; el.style.padding = '0';
+          // Buttons, one picked: each sends the middle of its slice of 0..1. A tall widget is a grid (the Mac's
+          // rule: about square cells; SurfaceWidget::choice_grid).
           const n = Math.max(2, (w.items || []).length);
+          const rows = Math.min(n, Math.max(1, Math.round(Math.sqrt(n * Math.max(0.25, w.h) / Math.max(0.25, w.w)))));
+          el.className = 'w choices'; el.style.display = 'grid'; el.style.gridTemplateColumns = `repeat(${Math.ceil(n / rows)}, 1fr)`; el.style.gap = '3px'; el.style.padding = '0';
           for (let i = 0; i < n; i++) {
-            const b = document.createElement('button'); b.textContent = (w.items || [])[i] || String(i + 1); b.style.flex = '1';
+            const b = document.createElement('button'); b.textContent = (w.items || [])[i] || String(i + 1);
             b.onclick = () => setTarget(X, (i + 0.5) / n); el.appendChild(b);
           }
           el.setValue = v => { [...el.children].forEach((b, i) => { const on = i === Math.min(n - 1, Math.floor(v * n)); b.style.background = on ? w.color : '#1b1f22'; b.style.color = on ? '#000' : '#eee'; }); };
