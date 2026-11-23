@@ -301,6 +301,9 @@ pub struct State {
     pub media: MediaManager,
     pub stats: Stats,
     pub selected: Option<u64>,
+    /// What the selection pointed at last frame (the selected id and its comp): the open comp follows the selection
+    /// only when this changes (`panels::follow_selection_comp`).
+    pub(crate) comp_followed: Option<(u64, Option<u64>)>,
     /// More layers selected with Shift / Cmd-click: edits to the selected layer go to these too (`run_multi_edit`).
     pub also_selected: Vec<u64>,
     /// The selected layer as of the last frame (what changed since is copied to `also_selected`).
@@ -723,6 +726,7 @@ impl State {
         // The timeline starts over, stopped, and changes nothing until it plays.
         (self.timeline_pos, self.timeline_play, self.timeline_applied) = (0.0, None, Some(0.0));
         self.selected = comp.layers.last().map(|l| l.id);
+        self.comp_followed = None;
         self.comp = comp;
         self.comp.ensure_outputs();
         self.notice = None;

@@ -177,6 +177,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     transport_bar(ui, st);
     ui.add_space(4.0);
     let (grid, mut out) = Grid::new(ui, st);
+    let mut comp_act: Option<(u64, CompRowAct)> = None;
     {
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, .. } = st;
         let ctx = ui.ctx().clone();
@@ -188,10 +189,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             // Layers hid a comp's clips with nothing here to open it again.
             let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
             let many = comp.comps.len() > 1;
+            let open = comp.open_comp();
             for cid in comp_ids {
             if let Some(c) = cid.and_then(|id| comp.comp(id)).filter(|c| many || !c.is_plain()) {
-                ui.label(RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong().color(crate::theme::Hue::Output.color()))
-                    .on_hover_text("A comp: its layers' clip rows (rename it and its settings: the Layers panel)");
+                let rows = comp.comp_layers(cid).count();
+                if let Some(a) = comp_row(ui, c, open == Some(c.id), rows, many) {
+                    comp_act = Some((c.id, a));
+                }
             }
             for idx in (0..n).rev() {
                 if comp.comp_of(&comp.layers[idx]) != cid {
@@ -225,6 +229,65 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         });
     }
     apply_row_out(ui, st, out, now);
+    match comp_act {
+        Some((id, CompRowAct::Open)) => pick_comp(st, id),
+        Some((id, CompRowAct::AddLayer)) => {
+            add_layer_in(st, id);
+        }
+        Some((id, CompRowAct::Only)) => {
+            pick_comp(st, id);
+            super::stack::apply_comp_band_act(st, id, super::stack::CompBandAct::Only);
+        }
+        None => {}
+    }
+}
+
+/// What a comp's name row in the clip grid asked for.
+enum CompRowAct {
+    /// Open it (and select it: the Inspector shows its size, outputs and effects).
+    Open,
+    /// A new layer in it.
+    AddLayer,
+    /// It on, every other comp off.
+    Only,
+}
+
+/// A comp's name over its clip rows. Click the name to open the comp (new layers go there), the open one in the accent
+/// color; "+ Layer" adds a layer to it whichever comp is open (an empty comp has no rows to click); "Only" shows it
+/// alone. Comps are renamed and set up in Layers / Stack and the Inspector.
+fn comp_row(ui: &mut egui::Ui, c: &phosphor_engine::Comp, is_open: bool, rows: usize, many: bool) -> Option<CompRowAct> {
+    let mut act = None;
+    crate::ui::toolbar(ui, |ui| {
+        let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong();
+        let name = name.color(if is_open { accent() } else { crate::theme::Hue::Output.color() });
+        let tip = if is_open {
+            "The open comp: new layers go here · click to select it (size, outputs, effects in the Inspector)"
+        } else {
+            "Click to open this comp: new layers go here, and the Inspector shows it"
+        };
+        if crate::ui::command(ui, name).on_hover_text(tip).clicked() {
+            act = Some(CompRowAct::Open);
+        }
+        if crate::ui::small_command(ui, label(icon::PLUS, "Layer")).on_hover_text("A new layer in this comp").clicked() {
+            act = Some(CompRowAct::AddLayer);
+        }
+        if many && crate::ui::small_command(ui, "Only").on_hover_text("Show this comp and switch the others off").clicked() {
+            act = Some(CompRowAct::Only);
+        }
+        let state = match (is_open, c.enabled) {
+            (true, true) => "open",
+            (true, false) => "open · off",
+            (false, false) => "off",
+            (false, true) => "",
+        };
+        if !state.is_empty() {
+            hint(ui, state);
+        }
+    });
+    if rows == 0 {
+        help(ui, "No layers in this comp yet: + Layer adds one here");
+    }
+    act
 }
 
 /// Width of the layer strip at the start of each clip row.

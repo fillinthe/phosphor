@@ -159,6 +159,7 @@ impl PhosphorApp {
             web_outputs: Default::default(),
             state: State {
                 selected: comp.layers.last().map(|l| l.id),
+                comp_followed: None,
                 selected_clip: None,
                 also_clips: Vec::new(),
                 clip_before: None,
