@@ -89,6 +89,8 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     continue;
                 }
                 let n = comp.layers.len();
+                // A switched-off comp's rows are faded: its clips start, but nothing of it reaches the master.
+                let off = comp_is_off(comp, cid);
                 for idx in (0..n).rev() {
                     if comp.comp_of(&comp.layers[idx]) != cid {
                         continue;
@@ -127,6 +129,9 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     let dimmed = any_solo && !layer.solo;
                     let indent = 10.0 * (band.is_some() as u8 + parent.is_some() as u8) as f32;
                     ui.horizontal(|ui| {
+                        if off {
+                            ui.multiply_opacity(OFF_COMP_ROWS);
+                        }
                         let strip = Strip { thumb, aspect, is_selected, dimmed, err: err.as_deref(), feeds: &feeds, others: &others, indent, size: egui::vec2(strip_w, grid.cell.y) };
                         let o = layer_strip(ui, layer, &strip, &mut out);
                         if o.select {

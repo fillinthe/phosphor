@@ -197,12 +197,16 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     comp_act = Some((c.id, a));
                 }
             }
+            let off = comp_is_off(comp, cid);
             for idx in (0..n).rev() {
                 if comp.comp_of(&comp.layers[idx]) != cid {
                     continue;
                 }
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
+                    if off {
+                        ui.multiply_opacity(OFF_COMP_ROWS);
+                    }
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
                     let (fill, beat_all, midi, stop) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, grid.cell.y));
                     if stop {
@@ -254,7 +258,8 @@ enum CompRowAct {
 
 /// A comp's name over its clip rows. Click the name to open the comp (new layers go there), the open one in the accent
 /// color; "+ Layer" adds a layer to it whichever comp is open (an empty comp has no rows to click); "Only" shows it
-/// alone. Comps are renamed and set up in Layers / Stack and the Inspector.
+/// alone. A comp that's off says so (its rows are faded too). Comps are renamed and set up in Layers / Stack and the
+/// Inspector.
 fn comp_row(ui: &mut egui::Ui, c: &phosphor_engine::Comp, is_open: bool, rows: usize, many: bool) -> Option<CompRowAct> {
     let mut act = None;
     crate::ui::toolbar(ui, |ui| {
@@ -276,12 +281,12 @@ fn comp_row(ui: &mut egui::Ui, c: &phosphor_engine::Comp, is_open: bool, rows: u
         }
         let state = match (is_open, c.enabled) {
             (true, true) => "open",
-            (true, false) => "open · off",
-            (false, false) => "off",
+            (true, false) => "open · off: its clips don't show",
+            (false, false) => "off: its clips don't show",
             (false, true) => "",
         };
         if !state.is_empty() {
-            hint(ui, state);
+            hint(ui, state).on_hover_text("A comp that's off isn't drawn in the master: its clips start, but you won't see them. ON is on its band in Layers / Stack; Only switches the others off");
         }
     });
     if rows == 0 {

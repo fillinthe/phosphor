@@ -110,6 +110,15 @@ pub(crate) fn follow_selection_comp(comp: &mut Composition, selected: Option<u64
     }
 }
 
+/// How faded a switched-off comp's clip rows are drawn (Clips and Stack): its clips still start, but nothing of it
+/// reaches the master, so they shouldn't look like they're showing.
+pub(crate) const OFF_COMP_ROWS: f32 = 0.4;
+
+/// The comp `cid` (a band in Clips / Stack; None = a project without comps) is switched off.
+pub(crate) fn comp_is_off(comp: &Composition, cid: Option<u64>) -> bool {
+    cid.and_then(|id| comp.comp(id)).is_some_and(|c| !c.enabled)
+}
+
 /// Opens comp `id` from a click on it (the clip grid's comp name): it's selected too, so the Inspector shows it and
 /// the open comp follows the selection from there.
 pub(crate) fn pick_comp(st: &mut State, id: u64) {
@@ -214,6 +223,21 @@ mod tests {
         c.move_to_comp(a, side);
         frame(&mut c, Some(a), &mut last);
         assert_eq!(c.open_comp(), Some(side));
+    }
+
+    /// "Only" on one comp: the others' clip rows are drawn faded (their clips play but don't show).
+    #[test]
+    fn rows_of_a_switched_off_comp_are_faded() {
+        let mut c = Composition::default();
+        c.add_layer();
+        assert!(!super::comp_is_off(&c, None), "no comps: nothing to fade");
+        let a = c.add_comp("A");
+        let b = c.add_comp("B");
+        assert!(!super::comp_is_off(&c, Some(a)) && !super::comp_is_off(&c, Some(b)));
+        c.show_only_comp(a);
+        assert!(!super::comp_is_off(&c, Some(a)));
+        assert!(super::comp_is_off(&c, Some(b)));
+        assert!(super::comp_is_off(&c, Some(c.comps[0].id)), "Main too");
     }
 
     /// Nothing selected, then the same layer again: that counts as a move (it follows).
