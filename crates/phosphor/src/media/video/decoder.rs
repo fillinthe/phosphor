@@ -766,7 +766,11 @@ impl Decoder {
         let mut rel = if ts == NOPTS {
             self.last_rel + dur
         } else {
-            let origin = *self.origin.get_or_insert(ts);
+            // Time 0 is the movie's first frame. A jump that came before any frame was decoded lands mid-movie: the
+            // stream's own start is time 0 then (as `seek_to` counts it), not the first frame after the jump (under
+            // load, a jump to the very end found its "last frame" at 0.37 s and showed the start of the movie).
+            let first = if self.seek_target.is_some() { self.start_ts } else { ts };
+            let origin = *self.origin.get_or_insert(first);
             (ts - origin) as f64 * self.tb
         };
         // Keep time strictly increasing within a loop even with broken timestamps.
