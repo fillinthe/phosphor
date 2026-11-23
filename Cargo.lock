@@ -3850,8 +3850,12 @@ dependencies = [
 name = "phosphor-isf"
 version = "0.1.0"
 dependencies = [
+ "image",
  "naga",
+ "phosphor-engine",
+ "pollster 0.4.0",
  "serde_json",
+ "wgpu",
 ]
 
 [[package]]

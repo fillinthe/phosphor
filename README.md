@@ -103,6 +103,15 @@ Prints one JSON stats line per second and a `SUMMARY` line.
 cargo test   # includes WGSL validation of every shader, no GPU needed
 ```
 
+Check ISF shaders without building the app: `isf_one` converts one and prints OK or the error; `isf_render` (Mac)
+draws them through the engine (as a generator, effect or transition, with a made-up beat for audio inputs) and writes
+a PNG of four moments per shader.
+
+```bash
+cargo run -p phosphor-isf --example isf_one -- path/to/Shader.fs
+cargo run -p phosphor-isf --release --example isf_render -- path/to/Shader.fs-or-folder out/
+```
+
 ## License
 
 GPL-3.0-or-later (see `LICENSE`). Phosphor links GPL libraries (FFmpeg's GPL build, Ableton Link), so the app is GPL too:
