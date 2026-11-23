@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.20 (2026-11-23)
 
 - **Updates reach people who keep an output open.** The update found when Phosphor opens now installs even with
   outputs open (before, outputs that reopen by themselves held every update off). Checks made later, during a show,
