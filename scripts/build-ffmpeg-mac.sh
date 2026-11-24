@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the FFmpeg that ships inside Phosphor.app: FFmpeg 9.0.2 (the version the Rust bindings use) + dav1d,
+# Builds the FFmpeg that ships inside Phosphor.app: FFmpeg 9.1 (the Rust bindings, ffmpeg-next 9.1, also build with 9.0) + dav1d,
 # shared libraries and the ffmpeg command, for macOS 14 and later (Homebrew's are built for the macOS they were
 # compiled on, so a bundle made from them won't open on older Macs).
 # Only what Phosphor uses: FFmpeg's own decoders, VideoToolbox / AudioToolbox, AVFoundation capture, dav1d (AV1),
@@ -13,7 +13,7 @@ ROOT=$PWD
 MIN_MACOS=${MIN_MACOS:-$(cat scripts/min-macos)}
 ARCH=$(uname -m)
 if [[ $ARCH == x86_64 ]]; then VPX_TARGET=x86_64-darwin19-gcc; SSL_TARGET=darwin64-x86_64-cc; else VPX_TARGET=arm64-darwin23-gcc; SSL_TARGET=darwin64-arm64-cc; fi
-FFMPEG_VER=9.0.2
+FFMPEG_VER=9.1
 DAV1D_VER=1.5.1
 VPX_VER=1.15.2
 OPENSSL_VER=3.5.4
