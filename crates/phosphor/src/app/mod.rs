@@ -567,6 +567,40 @@ impl State {
         self.recent.truncate(12);
     }
 
+    /// The project's copy in the account, by its file: known again after it's opened from the file.
+    fn link_from_file(&mut self, path: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let name = std::path::Path::new(path).file_stem().map_or(path.to_string(), |n| n.to_string_lossy().into_owned());
+            self.cloud_project = crate::account_links::get(path).map(|id| (id, name));
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = path;
+    }
+
+    /// The name the project goes by in the account: its copy's there, the one typed in the Account window, its
+    /// file's, or "My show".
+    fn account_name(&self) -> String {
+        let typed = self.account_ui.name.trim();
+        match &self.cloud_project {
+            Some((_, name)) => name.clone(),
+            None if !typed.is_empty() => typed.to_string(),
+            None => self.project_path.as_deref().and_then(|p| std::path::Path::new(p).file_stem()).map_or("My show".to_string(), |n| n.to_string_lossy().into_owned()),
+        }
+    }
+
+    /// Saves the project into the account: over its copy there, or as a new one under its name. False = not signed
+    /// in (nothing sent).
+    pub fn save_to_account(&mut self, ctx: &egui::Context) -> bool {
+        if !self.account.signed_in() {
+            return false;
+        }
+        let name = self.account_name();
+        let id = self.cloud_project.as_ref().map_or(String::new(), |(id, _)| id.clone());
+        self.account.save(ctx, &id, &name, &self.comp.to_json());
+        true
+    }
+
     /// Every control by name (`control::all_targets`), worked out a few times a second at most.
     pub fn targets(&mut self) -> std::sync::Arc<Vec<(phosphor_engine::ControlTarget, String)>> {
         self.targets_cache.get(&self.comp)
@@ -583,7 +617,7 @@ impl State {
         {
             let name = format!("{}.phosphor", self.cloud_project.as_ref().map_or("My show", |(_, n)| n.as_str()));
             self.notice = Some(match crate::web_files::download(&name, &self.comp.to_json()) {
-                Ok(()) => format!("Downloaded {name} (File › Open loads it again)"),
+                Ok(()) => format!("Downloaded {name} to this computer (File › Open loads it again)"),
                 Err(e) => format!("Download failed: {e}"),
             });
         }
@@ -678,6 +712,7 @@ impl State {
         {
             self.load_composition(comp);
             self.set_project_path(path);
+            self.link_from_file(path);
             // Level with the copy; a copy that is ahead of a drive that's back counts as unsaved, so Save (and
             // autosave) writes it to the drive.
             self.saved_hash = if there && ahead { 0 } else { hash_text(&self.comp.to_json()) };
@@ -699,6 +734,7 @@ impl State {
                 let newer = comp.made_by_newer();
                 self.load_composition(comp);
                 self.set_project_path(path);
+                self.link_from_file(path);
                 self.saved_hash = hash_text(&self.comp.to_json());
                 #[cfg(not(target_arch = "wasm32"))]
                 let _ = crate::project_files::keep_copy(path, &json, false);
@@ -1382,7 +1418,12 @@ impl PhosphorApp {
             }
         }
         let mut cloud_layouts = None;
-        for e in st.account.tick(ctx) {
+        let events = st.account.tick(ctx);
+        // (A save from the File menu has no Account window open: what went wrong is said in the status note.)
+        if let Some(e) = st.account.fresh_error() {
+            st.notice = Some(e);
+        }
+        for e in events {
             match e {
                 crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {
                     Ok(comp) => {
@@ -1396,6 +1437,11 @@ impl PhosphorApp {
                 },
                 crate::account::Event::Saved(id, name) => {
                     st.notice = Some(format!("Saved {name} to your account"));
+                    // Its file on this computer knows its account copy from now on.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(p) = &st.project_path {
+                        crate::account_links::set(p, &id);
+                    }
                     st.cloud_project = Some((id, name));
                 }
                 crate::account::Event::Layouts(text) => cloud_layouts = Some(text),

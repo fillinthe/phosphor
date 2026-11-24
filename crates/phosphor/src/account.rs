@@ -126,6 +126,8 @@ pub struct Account {
     /// (bytes used, bytes allowed)
     pub storage: Option<(u64, u64)>,
     pub error: String,
+    /// The error the app has already said in its status note (`fresh_error`).
+    told: String,
     pub busy: u32,
     pub checked: bool,
     /// The last sign-in needs the authenticator code.
@@ -145,7 +147,7 @@ impl Default for Account {
         let base = web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
         #[cfg(not(target_arch = "wasm32"))]
         let base = std::env::var("PHOSPHOR_CLOUD_URL").unwrap_or_else(|_| "https://phosphorfx.com".into());
-        let mut a = Self { base, user: None, ent: Entitlements::default(), projects: Vec::new(), storage: None, error: String::new(), busy: 0, checked: false, need_code: false, started: false, docs: Default::default(), token: String::new(), tx, rx };
+        let mut a = Self { base, user: None, ent: Entitlements::default(), projects: Vec::new(), storage: None, error: String::new(), told: String::new(), busy: 0, checked: false, need_code: false, started: false, docs: Default::default(), token: String::new(), tx, rx };
         a.token = load_token();
         a
     }
@@ -279,6 +281,15 @@ impl Account {
             let n = |k: &str| v.get(k).and_then(serde_json::Value::as_u64).unwrap_or(0);
             if status < 400 { Reply::Storage(n("usedBytes"), n("maxBytes")) } else { Reply::Error(error_of(status, &v)) }
         });
+    }
+
+    /// An error that hasn't been said yet (a save from the File menu has no Account panel open to show it).
+    pub fn fresh_error(&mut self) -> Option<String> {
+        if self.error == self.told {
+            return None;
+        }
+        self.told = self.error.clone();
+        (!self.told.is_empty()).then(|| self.told.clone())
     }
 
     /// Saves `json` as a new project (`id` empty) or over an existing one.

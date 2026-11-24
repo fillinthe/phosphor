@@ -5,6 +5,8 @@
 // him." Colossians 3:17 (KJV)
 
 mod account;
+#[cfg(not(target_arch = "wasm32"))]
+mod account_links;
 mod text;
 mod i18n;
 #[cfg(target_arch = "wasm32")]

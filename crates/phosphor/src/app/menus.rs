@@ -30,6 +30,7 @@ impl PhosphorApp {
             A::NewProject => {
                 st.load_composition(Composition::starter());
                 st.project_path = None;
+                st.cloud_project = None;
                 st.notice = Some("New project. Undo (⌘Z) brings the previous one back.".into());
             }
             A::Open => {
@@ -38,17 +39,25 @@ impl PhosphorApp {
                 #[cfg(target_arch = "wasm32")]
                 crate::web_files::pick_text(".phosphor,.json");
             }
+            // The browser keeps projects in the account (Download a Copy puts one on the computer); the installed app
+            // keeps them in files, and a project that also has a copy in the account keeps that copy up to date.
+            A::Save if crate::account::Account::web() => {
+                if !st.save_to_account(ctx) {
+                    st.account_window = true;
+                }
+            }
             A::Save => {
                 st.save_project();
                 #[cfg(not(target_arch = "wasm32"))]
                 st.save_project_picture();
+                if st.project_path.is_some() && st.cloud_project.is_some() {
+                    st.save_to_account(ctx);
+                }
             }
             A::SaveAs => st.save_project_as(),
             A::SaveToAccount => {
-                let name = st.cloud_project.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| st.account_ui.name.trim().to_string());
-                match st.cloud_project.clone() {
-                    Some((id, _)) if st.account.signed_in() => st.account.save(ctx, &id, &name, &st.comp.to_json()),
-                    _ => self.state.account_window = true,
+                if !st.save_to_account(ctx) {
+                    st.account_window = true;
                 }
             }
             A::Account | A::OpenFromAccount => self.state.account_window = true,

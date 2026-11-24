@@ -130,10 +130,15 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::MergeProject, "Merge Project…", None),
             S,
             I(A::Save, "Save", Some((false, Key::S))),
+            #[cfg(not(target_arch = "wasm32"))]
             I(A::SaveAs, "Save As…", Some((true, Key::S))),
+            // (The browser's Save goes to the account; this puts a file on the computer.)
+            #[cfg(target_arch = "wasm32")]
+            I(A::SaveAs, "Download a Copy", Some((true, Key::S))),
             I(A::Autosave, "Autosave On / Off", None),
             I(A::ShowBackups, "Show Backups", None),
             I(A::Account, "Account & Sign In…", None),
+            #[cfg(not(target_arch = "wasm32"))]
             I(A::SaveToAccount, "Save to Account", None),
             I(A::OpenFromAccount, "Open from Account…", None),
             S,

@@ -14,6 +14,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Formulas can choose.** Computed widgets and a mapping's Formula step now take `if(a > b, a, b)`, `not`,
   `<= >= == !=`, `&&`, `||`, and named steps: `x = a * 2; x + b`.
 - Crash reports carry only what happened since the last one. A run that ended without a logged crash used to send the end of the crash log anyway, so a weeks-old crash looked like a new one.
+- **Projects in your account.** A project you saved to your account (File › Save to Account) now keeps that copy up to date: every Save writes the file on your computer first, then updates the copy in your account. Phosphor remembers which file goes with which account copy, also after a restart, so saving again never makes a second copy. Save to Account with nothing saved there yet saves it under the project's name right away.
+- If saving to your account fails (no connection, project too big), the status note says so, not only the Account window.
+- Opening another project no longer leaves Save to Account pointed at the project you had open before.
 
 ## 0.5.21 (2026-11-24)
 

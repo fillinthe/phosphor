@@ -316,6 +316,7 @@ impl PhosphorApp {
                             (Source::Recent, _) => "Nothing opened yet. Projects you open show here.",
                             (Source::ThisMac, _) if busy => "Looking…",
                             (Source::ThisMac, _) => "No projects found on this Mac or its drives.",
+                            (Source::Account, _) if crate::account::Account::web() => "Nothing saved in your account yet (File › Save).",
                             (Source::Account, _) => "Nothing saved in your account yet (File › Save to Account).",
                         };
                         crate::ui::hint(ui, empty);
