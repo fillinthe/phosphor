@@ -322,11 +322,16 @@ pub fn run_watchdog(pid: u32) {
                 }
                 Verdict::Frozen => {}
             }
-            let at = match &stuck {
+            let mut at = match &stuck {
                 Ok(s) => format!("\n  stuck at: {s}"),
                 Err(e) if !e.is_empty() => format!("\n  couldn't see where: {e}"),
                 Err(_) => String::new(),
             };
+            // What the window was doing at the last frame (minimized, focused…): a freeze report from Windows said
+            // nothing else (2026-11-24). Kept out of the report's one-line summary.
+            if let Some(s) = last_beat.as_deref().map(beat_state).filter(|s| !s.is_empty()) {
+                at.push_str(&format!("\n  last frame: {s}"));
+            }
             if let Some(log) = crash_log_path() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
@@ -410,8 +415,48 @@ fn stuck_at(pid: u32) -> Result<String, String> {
     Ok(path.join(" > "))
 }
 
+/// What `stuck_at` says on Windows when Phosphor's window still answers messages: waiting for events, not frozen.
+const ANSWERS_WINDOWS: &str = "phosphor::main > in user32.dll: waiting for messages (its window answers)";
+
+/// Windows has no `sample`: Phosphor's window is asked something empty (WM_NULL), as Windows itself does before it
+/// calls a window "Not responding". An answer within 5 s = the main thread is handling messages (a freeze report on
+/// Windows 2026-11-24 couldn't tell). Err("") when it has no window to ask (as before: no second look).
+#[cfg(windows)]
+fn stuck_at(pid: u32) -> Result<String, String> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SMTO_ABORTIFHUNG, SMTO_BLOCK, SendMessageTimeoutW, WM_NULL,
+    };
+    struct Find {
+        pid: u32,
+        found: HWND,
+    }
+    unsafe extern "system" fn each(hwnd: HWND, data: LPARAM) -> i32 {
+        // SAFETY: `data` is the `Find` handed to EnumWindows below, alive for the whole call.
+        let find = unsafe { &mut *(data as *mut Find) };
+        let mut owner = 0u32;
+        // SAFETY: plain queries on a window handle EnumWindows gave us.
+        unsafe { GetWindowThreadProcessId(hwnd, &mut owner) };
+        if owner == find.pid && unsafe { IsWindowVisible(hwnd) } != 0 {
+            find.found = hwnd;
+            return 0;
+        }
+        1
+    }
+    let mut find = Find { pid, found: std::ptr::null_mut() };
+    // SAFETY: the callback only reads windows and writes `find`, which outlives the call.
+    unsafe { EnumWindows(Some(each), &mut find as *mut Find as LPARAM) };
+    if find.found.is_null() {
+        return Err(String::new());
+    }
+    let mut result = 0usize;
+    // SAFETY: an empty message with a timeout; nothing is read from or written to the other process.
+    let answered = unsafe { SendMessageTimeoutW(find.found, WM_NULL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 5000, &mut result) } != 0;
+    Ok(if answered { ANSWERS_WINDOWS.to_string() } else { "phosphor::main > not answering window messages".to_string() })
+}
+
 /// Elsewhere there's no look: Err("") (nothing to say, and no second look).
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 fn stuck_at(_pid: u32) -> Result<String, String> {
     Err(String::new())
 }
@@ -532,7 +577,7 @@ fn waiting_for_events(path: &str) -> bool {
     let parts: Vec<&str> = path.split(" > ").collect();
     let ours = parts.iter().filter(|p| !p.starts_with("in ")).count();
     let last = parts.last().copied().unwrap_or("");
-    ours <= 1 && (last.ends_with("mach_msg2_trap") || last.ends_with("mach_msg_trap"))
+    path == ANSWERS_WINDOWS || (ours <= 1 && (last.ends_with("mach_msg2_trap") || last.ends_with("mach_msg_trap")))
 }
 
 /// Appends a line to crash.log.
@@ -678,6 +723,8 @@ mod tests {
         assert!(super::waiting_for_events("phosphor::main > in libsystem_kernel.dylib: mach_msg2_trap"));
         assert!(!super::waiting_for_events("phosphor::main > App::ui > in libsystem_kernel.dylib: __semwait_signal"));
         assert!(!super::waiting_for_events("phosphor::main > PhosphorApp::render > Engine::render > in libsystem_kernel.dylib: mach_msg2_trap"));
+        assert!(super::waiting_for_events(super::ANSWERS_WINDOWS), "Windows: its window still answers");
+        assert!(!super::waiting_for_events("phosphor::main > not answering window messages"));
     }
 
     #[test]

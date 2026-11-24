@@ -143,8 +143,12 @@ pub fn summary_line(kind: &str, report: &str) -> String {
             .rposition(|l| l.contains("panicked at") || l.contains("froze ("))
             .map(|i| {
                 let first = lines[i].trim_start_matches(|c: char| c == '[' || c.is_ascii_digit() || c == ']' || c == ' ');
-                // (Not the heading of the next section: "session log (recent):".)
-                let next = lines.get(i + 1).map(|l| l.trim()).filter(|l| !l.is_empty() && !l.starts_with('[') && !l.ends_with(':'));
+                // (Not the heading of the next section: "session log (recent):", nor the window's state at the last
+                // frame, which would split one cause into many.)
+                let next = lines
+                    .get(i + 1)
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty() && !l.starts_with('[') && !l.ends_with(':') && !l.starts_with("last frame:"));
                 match next {
                     Some(n) => format!("{} {n}", first.trim_end_matches(':')),
                     None => first.to_string(),
@@ -235,6 +239,8 @@ mod tests {
         assert_eq!(summary_line("crash", "nothing in the log"), "Phosphor: crash: quit unexpectedly");
         let windows_freeze = "crash.log (end):\n[1795060207] froze (no heartbeat for 20 s); restarted by the watchdog\nsession log (recent):\n05:18:25 Phosphor 0.5.12\n";
         assert_eq!(summary_line("crash", windows_freeze), "Phosphor: crash: froze (no heartbeat for 20 s); restarted by the watchdog");
+        let with_window = "crash.log (end):\n[1795060207] froze (no heartbeat for 20 s); restarted by the watchdog\n  last frame: window minimized=yes focused=no occluded=? fullscreen=no, 1 outputs open\n";
+        assert_eq!(summary_line("crash", with_window), "Phosphor: crash: froze (no heartbeat for 20 s); restarted by the watchdog", "the window's state doesn't split causes");
         let bug = "My clip Party Night.mov in /Users/jane/Movies won't play in 0.5.11, e.g. on loop\n---\nPhosphor 0.5.11";
         assert_eq!(summary_line("bug", bug), "Phosphor: bug: My clip Party … in … won't play in 0.5.11, e.g. on loop");
     }
