@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.21 (2026-11-24)
 
 - **Fewer needless restarts.** The freeze guard could restart Phosphor just as it started drawing again, or
   when it couldn't tell what Phosphor was doing. It now checks once more before restarting, and gives Phosphor
