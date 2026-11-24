@@ -140,6 +140,50 @@ pub fn crash_log_path() -> Option<PathBuf> {
     dir().map(|d| d.join("crash.log"))
 }
 
+fn reported_path() -> Option<PathBuf> {
+    dir().map(|d| d.join("crash-reported"))
+}
+
+/// How old a crash.log entry may be to go into a crash report on a computer that has no "reported up to" mark yet.
+const FRESH_SECS: u64 = 7 * 24 * 3600;
+
+/// The part of crash.log a crash report hasn't carried yet: everything after `reported` bytes (a log that's shorter
+/// was started again: all of it); with no mark, the entries of the last week. (A run that ends without a panic or a
+/// freeze logs nothing: its report used to carry the end of the log anyway, so a weeks-old crash read as today's;
+/// report 2026-11-24.)
+fn unreported(log: &str, reported: Option<usize>, now: u64) -> &str {
+    match reported {
+        Some(n) if n <= log.len() && log.is_char_boundary(n) => &log[n..],
+        Some(_) => log,
+        None => {
+            let mut at = 0;
+            for line in log.split_inclusive('\n') {
+                let stamp = line.strip_prefix('[').and_then(|l| l.split_once(']')).and_then(|(t, _)| t.parse::<u64>().ok());
+                if stamp.is_some_and(|t| t + FRESH_SECS >= now) {
+                    return &log[at..];
+                }
+                at += line.len();
+            }
+            ""
+        }
+    }
+}
+
+/// What crash.log gained since the last crash report (empty = nothing new).
+pub fn unreported_crash_log() -> String {
+    let Some(log) = crash_log_path().and_then(|p| std::fs::read_to_string(p).ok()) else { return String::new() };
+    let reported = reported_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| t.trim().parse().ok());
+    unreported(&log, reported, unix_now()).to_string()
+}
+
+/// A crash report was made: the next one starts after what crash.log holds now.
+pub fn mark_crash_log_reported() {
+    if let (Some(mark), Some(log)) = (reported_path(), crash_log_path()) {
+        let len = std::fs::metadata(log).map_or(0, |m| m.len());
+        let _ = std::fs::write(mark, len.to_string());
+    }
+}
+
 fn unix_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
@@ -625,6 +669,23 @@ fn relaunch() {
 #[cfg(test)]
 mod tests {
     use super::stale_locks;
+
+    #[test]
+    fn a_crash_report_carries_only_what_the_log_gained() {
+        use super::{FRESH_SECS, unreported};
+        let old = "[1000] panicked at a.rs:1:2:\nold crash\n";
+        let new = "[900000] froze (no heartbeat for 20 s); restarted by the watchdog\n  stuck at: x\n";
+        let log = format!("{old}{new}");
+        // After a report, only what came later; nothing later = nothing.
+        assert_eq!(unreported(&log, Some(old.len()), 900_010), new);
+        assert_eq!(unreported(&log, Some(log.len()), 900_010), "");
+        // A log that was started again (shorter than the mark): all of it.
+        assert_eq!(unreported(new, Some(log.len()), 900_010), new);
+        // No mark yet: the last week's entries with their following lines, and none of the old ones.
+        assert_eq!(unreported(&log, None, 900_010), new);
+        assert_eq!(unreported(&log, None, 900_000 + FRESH_SECS + 1), "");
+        assert_eq!(unreported(old, None, 900_010), "");
+    }
     use std::path::PathBuf;
 
     /// The snapshot is written whole by the writer thread, only when it changed, and quitting waits for it.

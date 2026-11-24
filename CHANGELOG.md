@@ -13,6 +13,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
   small blend icon on its row (hover for which one).
 - **Formulas can choose.** Computed widgets and a mapping's Formula step now take `if(a > b, a, b)`, `not`,
   `<= >= == !=`, `&&`, `||`, and named steps: `x = a * 2; x + b`.
+- Crash reports carry only what happened since the last one. A run that ended without a logged crash used to send the end of the crash log anyway, so a weeks-old crash looked like a new one.
 
 ## 0.5.21 (2026-11-24)
 

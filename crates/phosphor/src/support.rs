@@ -301,6 +301,7 @@ pub fn privacy_notice(ctx: &egui::Context, st: &mut State, bench: bool) {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn send_crash_report(st: &mut State) {
     let report = crash_diagnostics(st);
+    crate::recovery::mark_crash_log_reported();
     let sent = st.bug.sent.clone();
     crate::crash_report::send(report, Some(st.account.reporter()), move |r| {
         *sent.lock().unwrap() = Some(r);
@@ -361,15 +362,16 @@ fn diagnostics_named(st: &mut State, crash: bool) -> String {
         out.push_str(&cameras_line(st));
     }
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(path) = crate::recovery::crash_log_path()
-        && let Ok(log) = std::fs::read_to_string(&path)
-    {
+    // (A crash report carries only what crash.log gained since the last one: never an old crash again.)
+    if let Some(log) = if crash { Some(crate::recovery::unreported_crash_log()) } else { crate::recovery::crash_log_path().and_then(|p| std::fs::read_to_string(p).ok()) } {
         let tail: Vec<&str> = log.lines().rev().take(40).collect();
         let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
         let tail = tail_of(&tail, 3000).to_string();
         if !tail.trim().is_empty() {
             out.push_str("\ncrash.log (end):\n");
             out.push_str(&tail);
+        } else if crash {
+            out.push_str("\nNothing new in crash.log: this run ended without a panic or a freeze being logged.\n");
         }
     }
     // What happened just before: the end of this run's session log (what was played, effects added, outputs, slow
