@@ -173,7 +173,14 @@ if [[ "${CHECK_RUN:-1}" == 1 && -n "$DMG_APP" && "$(uname -m)" == arm64 ]] && [[
 elif [[ "${CHECK_RUN:-1}" == 1 && -n "$DMG_APP" && "$(uname -m)" == arm64 ]]; then
   echo "Starting it"
   # A minute at most: a launch that hangs fails here instead of waiting forever.
-  if out=$(HOME="$WORK/home" perl -e 'alarm 60; exec @ARGV' "$DMG_APP/Contents/MacOS/Phosphor" --version 2>&1); then ok "the app starts: $out"; else bad "the app didn't start: $(echo "$out" | head -3 | tr '\n' ' ')"; fi
+  started=$SECONDS
+  if out=$(HOME="$WORK/home" perl -e 'alarm 60; exec @ARGV' "$DMG_APP/Contents/MacOS/Phosphor" --version 2>&1); then ok "the app starts: $out"
+  elif [[ -z "$out" ]] && waited=$((SECONDS - started)) \
+    && out=$(HOME="$WORK/home" perl -e 'alarm 60; exec @ARGV' "$DMG_APP/Contents/MacOS/Phosphor" --version 2>&1); then
+    # Release 0.5.21: the first launch of a new build sat in macOS's own check before any of its code ran
+    # (stack at _dyld_start, no prompt on screen) for 1 to 11 minutes; the next launch started at once.
+    note "the app starts ($out), but its first launch waited ${waited} s in macOS's check before running"
+  else bad "the app didn't start: $(echo "$out" | head -3 | tr '\n' ' ')"; fi
 fi
 
 echo
