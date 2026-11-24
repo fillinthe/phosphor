@@ -96,7 +96,21 @@ struct WinitAppWrapper<T: WinitApp> {
     painting_unfocused: bool,
     /// PHOSPHOR PATCH: true inside `about_to_wait`, the only place unfocused windows are painted directly.
     in_about_to_wait: bool,
+    /// PHOSPHOR PATCH (macOS): when each window was first asked to redraw without its `RedrawRequested` coming yet.
+    /// One that hasn't come in `REDRAW_OVERDUE` is painted directly: a lost redraw otherwise stalls the show until
+    /// the next mouse or key event (reports 2026-11-23: Macs on 0.5.20 drew nothing for 1 s to 6 min while waiting
+    /// for events, some focused and in front).
+    redraw_asked: HashMap<WindowId, Instant>,
+    /// Windows whose last redraw never came: painted directly at their pace (like invisible ones) until a
+    /// `RedrawRequested` arrives again (an occluded window macOS won't draw would otherwise get 4 frames a second).
+    redraw_lost: std::collections::HashSet<WindowId>,
+    /// When a missed redraw was last logged, and how many since.
+    missed_logged: Option<Instant>,
+    missed: u64,
 }
+
+/// PHOSPHOR PATCH: how long an asked-for redraw may take before the window is painted directly (macOS).
+const REDRAW_OVERDUE: Duration = Duration::from_millis(250);
 
 impl<T: WinitApp> WinitAppWrapper<T> {
     fn new(winit_app: T, run_and_return: bool) -> Self {
@@ -107,6 +121,10 @@ impl<T: WinitApp> WinitAppWrapper<T> {
             run_and_return,
             painting_unfocused: false,
             in_about_to_wait: false,
+            redraw_asked: HashMap::default(),
+            redraw_lost: Default::default(),
+            missed_logged: None,
+            missed: 0,
         }
     }
 
@@ -247,6 +265,16 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                         // busy-loops a whole CPU core.
                         // See https://github.com/emilk/egui/issues/8326.
                         window.request_redraw();
+                        // PHOSPHOR PATCH (see `redraw_asked`): the first ask counts, not the latest. A window
+                        // whose redraws are lost is painted directly now; the ask above still goes out, so the
+                        // first one that comes again puts it back on the normal path.
+                        if cfg!(target_os = "macos") {
+                            if self.redraw_lost.contains(window_id) {
+                                invisible_window_ids.push(*window_id);
+                            } else {
+                                self.redraw_asked.entry(*window_id).or_insert(now);
+                            }
+                        }
                     }
                 } else {
                     log::trace!("No window found for {window_id:?}");
@@ -262,6 +290,32 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                 self.handle_event_result(event_loop, event_result);
             }
             self.painting_unfocused = false;
+        }
+
+        // PHOSPHOR PATCH (see `redraw_asked`): redraws asked for that never came, painted now.
+        let overdue: Vec<WindowId> = self
+            .redraw_asked
+            .iter()
+            .filter(|(_, asked)| now.duration_since(**asked) >= REDRAW_OVERDUE)
+            .map(|(id, _)| *id)
+            .collect();
+        for window_id in &overdue {
+            let asked = self.redraw_asked.remove(window_id);
+            if self.winit_app.window(*window_id).is_none() {
+                continue;
+            }
+            self.redraw_lost.insert(*window_id);
+            self.missed += 1;
+            if self.missed_logged.is_none_or(|t| t.elapsed() >= Duration::from_secs(10)) {
+                let waited = asked.map_or(0, |a| now.duration_since(a).as_millis());
+                log::warn!(
+                    "a window's redraw didn't come in {waited} ms: painted directly ({} times so far)",
+                    self.missed
+                );
+                self.missed_logged = Some(now);
+            }
+            let event_result = self.winit_app.run_ui_and_paint(event_loop, *window_id);
+            self.handle_event_result(event_loop, event_result);
         }
 
         // Paint invisible windows directly, since they won't receive
@@ -290,7 +344,12 @@ impl<T: WinitApp> WinitAppWrapper<T> {
         // `ControlFlow::Poll` set earlier was never undone once the last timed
         // repaint had been consumed, leaving the loop spinning.
         // See https://github.com/emilk/egui/issues/8326.
-        let next_repaint_time = self.windows_next_repaint_times.values().min().copied();
+        let next_repaint_time = self
+            .windows_next_repaint_times
+            .values()
+            .copied()
+            .chain(self.redraw_asked.values().map(|asked| *asked + REDRAW_OVERDUE))
+            .min();
         event_loop.set_control_flow(match next_repaint_time {
             Some(next_repaint_time) => ControlFlow::WaitUntil(next_repaint_time),
             None => ControlFlow::Wait,
@@ -429,6 +488,8 @@ impl<T: WinitApp> ApplicationHandler<UserEvent> for WinitAppWrapper<T> {
         event_loop_context::with_event_loop_context(event_loop, move || {
             let event_result = match event {
                 winit::event::WindowEvent::RedrawRequested => {
+                    self.redraw_asked.remove(&window_id);
+                    self.redraw_lost.remove(&window_id);
                     self.winit_app.run_ui_and_paint(event_loop, window_id)
                 }
                 _ => self.winit_app.window_event(event_loop, window_id, event),

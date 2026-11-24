@@ -9,6 +9,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Fewer needless restarts.** The freeze guard could restart Phosphor just as it started drawing again, or
   when it couldn't tell what Phosphor was doing. It now checks once more before restarting, and gives Phosphor
   another 20 seconds when it can't tell. On Windows it now leaves Phosphor running while its window still responds.
+- **No more stalls on Macs while nothing is touched.** Phosphor could stop drawing (outputs too) from a second to
+  several minutes, until the mouse moved, when macOS didn't deliver a redraw it had asked for. It now notices within a
+  quarter of a second and draws anyway.
 - **Output windows on older graphics chips no longer close Phosphor.** On some older PCs (Windows, drawing with
   OpenGL), opening an output window could make Phosphor quit. Now a window the graphics driver won't draw into stays
   blank and Phosphor keeps trying it, and the problem report says what the driver refused.
