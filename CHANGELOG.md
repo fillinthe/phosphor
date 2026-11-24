@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **Steadier outputs on a flaky projector cable.** When a screen drops out and comes back within seconds, its
+  output now waits until the screen has stayed back for 2 seconds before filling it again, instead of reopening
+  every time (each reopen caused a stutter).
+
 ## 0.5.21 (2026-11-24)
 
 - **Fewer needless restarts.** The freeze guard could restart Phosphor just as it started drawing again, or

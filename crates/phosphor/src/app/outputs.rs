@@ -44,7 +44,7 @@ impl PhosphorApp {
             return;
         }
         let displays = crate::screens::displays();
-        let acts = self.state.screen_watch.update(&displays, &placed);
+        let acts = self.state.screen_watch.update(&displays, &placed, now);
         if !displays.is_empty() && displays != self.state.displays {
             self.state.displays = displays;
         }
