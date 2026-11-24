@@ -58,7 +58,8 @@ install_name_tool -id "@rpath/$vpx" "$PREFIX/lib/$vpx"
 
 # OpenSSL, static (it ends up inside libavformat, nothing more to bundle): TLS for RTMPS and DTLS for WHIP
 # (WebRTC), which macOS's own TLS can't do.
-SSL=$WORK/openssl
+# One per oldest-macOS value: a copy built for a newer macOS would be reused as it is (it is only built when missing).
+SSL=$WORK/openssl-$MIN_MACOS
 [[ -f openssl-$OPENSSL_VER.tar.gz ]] || curl -sSLO "https://github.com/openssl/openssl/releases/download/openssl-$OPENSSL_VER/openssl-$OPENSSL_VER.tar.gz"
 if [[ ! -f "$SSL/lib/libssl.a" ]]; then
   rm -rf openssl-$OPENSSL_VER && tar xf openssl-$OPENSSL_VER.tar.gz
