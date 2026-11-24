@@ -577,6 +577,7 @@
 "Blend shader",
 "Blend shader: {0}",
 "Blend: {0}",
+"Blend: {0} (right-click the row to change it)",
 "Blended by this FFGL mixer (Inspector › Mixer plugin)",
 "Blends B over A (blend mode and opacity)",
 "Block",

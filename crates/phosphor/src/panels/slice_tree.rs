@@ -213,12 +213,18 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
         }
         let name = s.name.clone();
         let is_picked = picked.contains(&id);
+        let blend = s.blend;
         let (enabled, opacity, locked) = (&mut s.enabled, &mut s.opacity, &mut s.locked);
         // A narrow list keeps the name readable: the fader stays, solo and lock show once there's room (a locked
         // or soloed row always shows its own, so you can see why it won't move / why the rest is dark).
         let room = ui.available_width() - indent;
         let r = layer_row(ui, indent, is_picked, icon::POLYGON, &name, None, enabled, |ui| {
             Level::percent(opacity, "").default(1.0).width(FADE_W).target(ControlTarget::SliceOpacity(id)).tip("This slice's opacity").show(ui);
+            // A slice that doesn't simply cover what's under it says so (owner's MadMapper-style list, 2026-11-15).
+            if blend != phosphor_engine::mapping::SliceBlend::Normal {
+                ui.add(egui::Label::new(RichText::new(icon::CIRCLES_THREE).color(accent())).selectable(false))
+                    .on_hover_text(format!("Blend: {} (right-click the row to change it)", blend.name()));
+            }
             if room > 300.0 || *locked {
                 let glyph = if *locked { icon::LOCK } else { icon::LOCK_OPEN };
                 crate::ui::icon_toggle(ui, locked, glyph).on_hover_text("Locked: its points can't be dragged or nudged");
