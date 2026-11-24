@@ -968,7 +968,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         if w.kind == WidgetKind::Computed {
             crate::ui::heading(ui, "Formula");
             crate::ui::text_field(ui, &mut w.formula, "a * b, max(a, b), sin(beat)…", Some(280.0))
-                .on_hover_text("a, b, c… = the controls below (0..1); t = seconds, beat = beats, val = its own value. + - * / %, min, max, clamp, mix, pow, sin, cos (a turn per 1.0), abs, floor, fract. The answer is kept in 0..1.");
+                .on_hover_text("a, b, c… = the controls below (0..1); t = seconds, beat = beats, val = its own value. + - * / %, min, max, clamp, mix, pow, sin, cos (a turn per 1.0), abs, floor, fract. The answer is kept in 0..1. if(a > b, a, b), not(a), <= >= == != && ||; x = a * 2; x + b");
             let mut remove = None;
             for (i, t) in w.inputs.iter_mut().enumerate() {
                 crate::ui::toolbar(ui, |ui| {

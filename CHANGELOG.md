@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Steadier outputs on a flaky projector cable.** When a screen drops out and comes back within seconds, its
   output now waits until the screen has stayed back for 2 seconds before filling it again, instead of reopening
   every time (each reopen caused a stutter).
+- **Formulas can choose.** Computed widgets and a mapping's Formula step now take `if(a > b, a, b)`, `not`,
+  `<= >= == !=`, `&&`, `||`, and named steps: `x = a * 2; x + b`.
 
 ## 0.5.21 (2026-11-24)
 
