@@ -257,6 +257,8 @@ pub fn run_watchdog(pid: u32) {
     let mut last_beat: Option<String> = None;
     let mut stale = 0.0f64;
     let mut noted_idle = false;
+    // The last look at a stalled Phosphor couldn't see where it was (no new beat since).
+    let mut looked_blind = false;
     let mut tick = std::time::Instant::now();
     let mut wall = std::time::SystemTime::now();
     let mut grace_until: Option<std::time::Instant> = None;
@@ -282,6 +284,7 @@ pub fn run_watchdog(pid: u32) {
                 last_beat = beat;
                 stale = 0.0;
                 noted_idle = false;
+                looked_blind = false;
             } else if last_beat.is_some() && dt < 2.0 && !in_grace {
                 stale += dt;
             }
@@ -291,19 +294,39 @@ pub fn run_watchdog(pid: u32) {
             // Frozen: write down where it's stuck (for the report), then end it so it can be reopened with the last
             // settings.
             let stuck = stuck_at(pid);
-            // Not stuck: the main thread is waiting for events (nothing of Phosphor's own running), it just isn't
-            // drawing frames. Ending it would only lose the show (reports 2026-11-22: five restarts in ten minutes of
-            // an idle Phosphor). Noted once, left running.
-            if stuck.as_deref().is_some_and(waiting_for_events) {
-                if !noted_idle {
-                    noted_idle = true;
-                    let last = last_beat.as_deref().map(beat_state).filter(|s| !s.is_empty()).map_or(String::new(), |s| format!(" (last frame: {s})"));
-                    log_line(&format!("[{}] no frames for {FROZEN_AFTER} s, but not stuck (waiting for events): left running{last}\n", unix_now()));
+            // Looking takes a second: a beat that came meanwhile means it's drawing again.
+            let beat_moved = heartbeat_path(pid).and_then(|p| std::fs::read_to_string(p).ok()).is_some_and(|b| Some(&b) != last_beat.as_ref());
+            match verdict(beat_moved, &stuck, looked_blind) {
+                Verdict::Alive => {
+                    // The next turn takes the new beat (and clears the counters).
+                    continue;
                 }
-                stale = 0.0;
-                continue;
+                // Not stuck: the main thread is waiting for events (nothing of Phosphor's own running), it just isn't
+                // drawing frames. Ending it would only lose the show (reports 2026-11-22: five restarts in ten minutes
+                // of an idle Phosphor). Noted once, left running.
+                Verdict::Idle => {
+                    if !noted_idle {
+                        noted_idle = true;
+                        let last = last_beat.as_deref().map(beat_state).filter(|s| !s.is_empty()).map_or(String::new(), |s| format!(" (last frame: {s})"));
+                        log_line(&format!("[{}] no frames for {FROZEN_AFTER} s, but not stuck (waiting for events): left running{last}\n", unix_now()));
+                    }
+                    stale = 0.0;
+                    continue;
+                }
+                Verdict::LookAgain => {
+                    let why = stuck.as_ref().err().map_or("", |e| e.as_str());
+                    log_line(&format!("[{}] no frames for {FROZEN_AFTER} s and couldn't see where ({why}): looking again in {FROZEN_AFTER} s\n", unix_now()));
+                    looked_blind = true;
+                    stale = 0.0;
+                    continue;
+                }
+                Verdict::Frozen => {}
             }
-            let at = stuck.map_or(String::new(), |s| format!("\n  stuck at: {s}"));
+            let at = match &stuck {
+                Ok(s) => format!("\n  stuck at: {s}"),
+                Err(e) if !e.is_empty() => format!("\n  couldn't see where: {e}"),
+                Err(_) => String::new(),
+            };
             if let Some(log) = crash_log_path() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
@@ -365,24 +388,55 @@ fn process_alive(pid: u32) -> bool {
 
 /// Where a frozen Phosphor's main thread is (macOS: one second of `sample`): the source lines along its busiest
 /// stack, outermost first.
+/// Err = why it couldn't be seen (reports 2026-11-23: two Macs on 0.5.20 were restarted with no "stuck at", a
+/// minute after the same look had found them only idle).
 #[cfg(target_os = "macos")]
-fn stuck_at(pid: u32) -> Option<String> {
-    let file = crash_log_path()?.with_file_name("freeze-sample.txt");
-    crate::os::command("/usr/bin/sample")
+fn stuck_at(pid: u32) -> Result<String, String> {
+    let file = crash_log_path().ok_or("no folder for the sample")?.with_file_name("freeze-sample.txt");
+    let _ = std::fs::remove_file(&file);
+    let out = crate::os::command("/usr/bin/sample")
         .args([&pid.to_string(), "1", "-mayDie", "-file"])
         .arg(&file)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .ok()?;
-    let text = std::fs::read_to_string(&file).ok()?;
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| format!("sample didn't run: {e}"))?;
+    let said = || String::from_utf8_lossy(&out.stderr).split_whitespace().take(30).collect::<Vec<_>>().join(" ");
+    let text = std::fs::read_to_string(&file).map_err(|_| format!("sample wrote nothing ({}; {})", out.status, said()))?;
     let path = main_thread_path(&text);
-    (!path.is_empty()).then(|| path.join(" > "))
+    if path.is_empty() {
+        return Err(format!("no main thread in the sample ({} bytes; {})", text.len(), said()));
+    }
+    Ok(path.join(" > "))
 }
 
+/// Elsewhere there's no look: Err("") (nothing to say, and no second look).
 #[cfg(not(target_os = "macos"))]
-fn stuck_at(_pid: u32) -> Option<String> {
-    None
+fn stuck_at(_pid: u32) -> Result<String, String> {
+    Err(String::new())
+}
+
+#[derive(Debug, PartialEq)]
+enum Verdict {
+    /// A beat came while it was being looked at.
+    Alive,
+    /// Only waiting for events: not frozen.
+    Idle,
+    /// Couldn't see where (the first time since the last beat): wait another stretch before ending it.
+    LookAgain,
+    Frozen,
+}
+
+/// What a stalled Phosphor is, from one look at it. `looked_blind` = the last look couldn't see either. An Err with no
+/// words is "no way to look here" (not macOS): no second look.
+fn verdict(beat_moved: bool, stuck: &Result<String, String>, looked_blind: bool) -> Verdict {
+    match stuck {
+        _ if beat_moved => Verdict::Alive,
+        Ok(path) if waiting_for_events(path) => Verdict::Idle,
+        Ok(_) => Verdict::Frozen,
+        Err(why) if !why.is_empty() && !looked_blind => Verdict::LookAgain,
+        Err(_) => Verdict::Frozen,
+    }
 }
 
 /// From a `sample` report: the main thread's busiest stack (the first child at each level), outermost first, as
@@ -603,6 +657,20 @@ mod tests {
     fn a_wake_from_sleep_is_noticed() {
         assert!(super::woke(3600.0, 0.7), "an hour on the wall clock, 0.7 s awake: slept");
         assert!(!super::woke(0.72, 0.7) && !super::woke(1.5, 0.7), "normal ticks and a little scheduling delay aren't");
+    }
+
+    #[test]
+    fn a_stall_is_only_ended_when_it_is_seen_stuck_or_looked_at_twice() {
+        use super::{Verdict, verdict};
+        let stuck = Ok("phosphor::main > App::ui > in libsystem_kernel.dylib: __semwait_signal".to_string());
+        let idle = Ok("phosphor::main > in libsystem_kernel.dylib: mach_msg2_trap".to_string());
+        let blind = Err("sample wrote nothing".to_string());
+        assert_eq!(verdict(true, &stuck, false), Verdict::Alive, "drew again while being looked at (M5, 0.5.20)");
+        assert_eq!(verdict(false, &idle, false), Verdict::Idle);
+        assert_eq!(verdict(false, &stuck, false), Verdict::Frozen);
+        assert_eq!(verdict(false, &blind, false), Verdict::LookAgain, "couldn't see: one more stretch first");
+        assert_eq!(verdict(false, &blind, true), Verdict::Frozen, "still couldn't see: end it");
+        assert_eq!(verdict(false, &Err(String::new()), false), Verdict::Frozen, "no way to look (Windows): as before");
     }
 
     #[test]
