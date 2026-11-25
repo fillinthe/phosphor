@@ -140,7 +140,7 @@ pub fn summary_line(kind: &str, report: &str) -> String {
         let lines: Vec<&str> = report.lines().collect();
         lines
             .iter()
-            .rposition(|l| l.contains("panicked at") || l.contains("froze ("))
+            .rposition(|l| l.contains("panicked at") || l.contains("froze (") || l.contains("] crashed: SIG") || l.contains("] ended "))
             .map(|i| {
                 let first = lines[i].trim_start_matches(|c: char| c == '[' || c.is_ascii_digit() || c == ']' || c == ' ');
                 // (Not the heading of the next section: "session log (recent):", nor the window's state at the last
@@ -237,6 +237,11 @@ mod tests {
         let froze = "crash.log (end):\n[1795060207] froze (no heartbeat for 20 s); restarted by the watchdog\n  stuck at: PhosphorApp::render > in libsystem_kernel.dylib: __psynch_cvwait\n";
         assert_eq!(summary_line("crash", froze), "Phosphor: crash: froze (no heartbeat for 20 s); restarted by the watchdog stuck at: PhosphorApp::render > in libsystem_kernel.dylib: __psynch_cvwait");
         assert_eq!(summary_line("crash", "nothing in the log"), "Phosphor: crash: quit unexpectedly");
+        // A crash below Rust: the signal and where; ended from outside: said so, without the window's state.
+        let hard = "crash.log (end):\n[1795611146] crashed: SIGSEGV (touched memory it doesn't have)\n  at: avcodec_send_packet < phosphor::media::video::decode\nsession log (recent):\n";
+        assert_eq!(summary_line("crash", hard), "Phosphor: crash: crashed: SIGSEGV (touched memory it doesn't have) at: avcodec_send_packet < phosphor::media::video::decode");
+        let outside = "crash.log (end):\n[1795611146] ended from outside (no panic, freeze or crash signal): Force Quit, the system, or the power\n  last frame: 1 s before the end; window minimized=no\nsession log (recent):\n";
+        assert_eq!(summary_line("crash", outside), "Phosphor: crash: ended from outside (no panic, freeze or crash signal): Force Quit, the system, or the power");
         let windows_freeze = "crash.log (end):\n[1795060207] froze (no heartbeat for 20 s); restarted by the watchdog\nsession log (recent):\n05:18:25 Phosphor 0.5.12\n";
         assert_eq!(summary_line("crash", windows_freeze), "Phosphor: crash: froze (no heartbeat for 20 s); restarted by the watchdog");
         let with_window = "crash.log (end):\n[1795060207] froze (no heartbeat for 20 s); restarted by the watchdog\n  last frame: window minimized=yes focused=no occluded=? fullscreen=no, 1 outputs open\n";

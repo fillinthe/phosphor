@@ -306,6 +306,8 @@ pub fn run_watchdog(pid: u32) {
     let mut tick = std::time::Instant::now();
     let mut wall = std::time::SystemTime::now();
     let mut grace_until: Option<std::time::Instant> = None;
+    // When the last new heartbeat was seen: how long before the end the last frame was.
+    let mut beat_seen: Option<std::time::Instant> = None;
     loop {
         std::thread::sleep(std::time::Duration::from_millis(700));
         // Only count time we were awake ourselves: after the Mac sleeps, a stale heartbeat isn't a freeze.
@@ -326,6 +328,7 @@ pub fn run_watchdog(pid: u32) {
             let beat = heartbeat_path(pid).and_then(|p| std::fs::read_to_string(p).ok());
             if beat.is_some() && beat != last_beat {
                 last_beat = beat;
+                beat_seen = Some(tick);
                 stale = 0.0;
                 noted_idle = false;
                 looked_blind = false;
@@ -395,6 +398,13 @@ pub fn run_watchdog(pid: u32) {
             return;
         }
         let now = unix_now();
+        // Gone with nothing written down (no panic, no freeze, no crash signal): say so, with how long before the end
+        // it last drew a frame (reports 2026-11-25: runs that ended this way said nothing at all).
+        let log = crash_log_path().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+        if !logged_since(&log, now.saturating_sub(JUST_LOGGED)) {
+            let state = last_beat.as_deref().map(beat_state).unwrap_or("");
+            log_line(&ended_line(now, beat_seen.map(|t| t.elapsed().as_secs()), state));
+        }
         let mut recent: Vec<u64> = crashes_path()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .map(|s| s.lines().filter_map(|l| l.trim().parse().ok()).filter(|t| now.saturating_sub(*t) < 120).collect())
@@ -624,6 +634,31 @@ fn waiting_for_events(path: &str) -> bool {
     path == ANSWERS_WINDOWS || (ours <= 1 && (last.ends_with("mach_msg2_trap") || last.ends_with("mach_msg_trap")))
 }
 
+/// Seconds back a crash.log entry counts as being about the end the watchdog has just seen.
+const JUST_LOGGED: u64 = 30;
+
+/// Does crash.log hold an entry stamped at `since` or later?
+fn logged_since(log: &str, since: u64) -> bool {
+    log.lines().any(|line| line.strip_prefix('[').and_then(|l| l.split_once(']')).and_then(|(t, _)| t.parse::<u64>().ok()).is_some_and(|t| t >= since))
+}
+
+/// What crash.log says for a run that went without quitting and without anything being logged. On Mac and Linux a
+/// crash inside Phosphor logs its signal, so nothing logged means it was ended from outside; Windows can't tell yet.
+fn ended_line(now: u64, last_frame_ago: Option<u64>, state: &str) -> String {
+    let what = if cfg!(unix) {
+        "ended from outside (no panic, freeze or crash signal): Force Quit, the system, or the power"
+    } else {
+        "ended without quitting (no panic or freeze logged)"
+    };
+    let mut line = format!("[{now}] {what}\n");
+    let ago = last_frame_ago.map(|s| format!("{s} s before the end"));
+    let last: Vec<&str> = ago.as_deref().into_iter().chain((!state.is_empty()).then_some(state)).collect();
+    if !last.is_empty() {
+        line.push_str(&format!("  last frame: {}\n", last.join("; ")));
+    }
+    line
+}
+
 /// Appends a line to crash.log.
 fn log_line(line: &str) {
     if let Some(log) = crash_log_path() {
@@ -669,6 +704,22 @@ fn relaunch() {
 #[cfg(test)]
 mod tests {
     use super::stale_locks;
+    use super::{ended_line, logged_since};
+
+    #[test]
+    fn an_end_with_nothing_logged_gets_a_line_of_its_own() {
+        // A panic, freeze or crash signal a moment ago is this end's cause: nothing to add.
+        assert!(logged_since("[90] old\n[1000] crashed: SIGSEGV (touched memory it doesn't have)\n  at: a < b\n", 970));
+        // Only old entries (or none): this end said nothing.
+        assert!(!logged_since("[90] froze (no heartbeat for 20 s); restarted by the watchdog\n", 970));
+        assert!(!logged_since("", 970));
+        let line = ended_line(1000, Some(1), "window minimized=no focused=yes occluded=no fullscreen=no, 1 outputs open");
+        assert!(line.starts_with("[1000] ended "), "{line}");
+        assert!(line.ends_with("  last frame: 1 s before the end; window minimized=no focused=yes occluded=no fullscreen=no, 1 outputs open\n"), "{line}");
+        assert_eq!(ended_line(5, None, "").lines().count(), 1);
+        // The line it writes is found by the next look.
+        assert!(logged_since(&line, 1000));
+    }
 
     #[test]
     fn a_crash_report_carries_only_what_the_log_gained() {
