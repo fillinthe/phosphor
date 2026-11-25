@@ -8,15 +8,26 @@
 //! (James 1:12, KJV)
 #![cfg(unix)]
 
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 
 /// crash.log, opened for appending when the handlers go in (nothing can be opened safely inside one).
 static LOG: AtomicI32 = AtomicI32::new(-1);
 /// One crash is written down; a second signal while that happens just ends the process.
 static HANDLING: AtomicBool = AtomicBool::new(false);
 
-/// The signals that end a process, what crash.log says for each, and whether a stack is worth reading (a crash
-/// inside Phosphor: yes; asked to end from outside: no).
+/// When the last frame was drawn (unix seconds, 0 = none yet): an end from outside says how long before it that was.
+static LAST_FRAME: AtomicU64 = AtomicU64::new(0);
+
+/// A frame was drawn (called with the heartbeat, about once a second).
+pub fn frame() {
+    // SAFETY: time(NULL) only reads the clock.
+    LAST_FRAME.store(unsafe { libc::time(std::ptr::null_mut()) } as u64, Ordering::Relaxed);
+}
+
+/// The signals that end a process, what crash.log says for each, and whether it's a crash. The stack is read for
+/// all of them: for a crash it's where it crashed, and for an end from outside it's what Phosphor was doing when
+/// someone gave up on it (two 0.5.23 reports, 2026-11-25: "ended by SIGTERM" after a window stopped answering, one
+/// of them in the second the watchdog looked, so its own look saw nothing).
 const SIGNALS: [(i32, &str, bool); 7] = [
     (libc::SIGSEGV, "crashed: SIGSEGV (touched memory it doesn't have)", true),
     (libc::SIGBUS, "crashed: SIGBUS (touched memory that isn't there)", true),
@@ -57,22 +68,25 @@ extern "C" fn on_signal(signal: libc::c_int) {
     let fd = LOG.load(Ordering::SeqCst);
     let first = !HANDLING.swap(true, Ordering::SeqCst);
     if first && fd >= 0 {
-        let (what, stack) = SIGNALS.iter().find(|(s, _, _)| *s == signal).map_or(("crashed", true), |(_, what, stack)| (*what, *stack));
+        let (what, crash) = SIGNALS.iter().find(|(s, _, _)| *s == signal).map_or(("crashed", true), |(_, what, crash)| (*what, *crash));
         let mut line = [0u8; 160];
         // SAFETY: time(NULL) only reads the clock.
         let now = unsafe { libc::time(std::ptr::null_mut()) } as u64;
         let n = first_line(&mut line, now, what);
         write(fd, &line[..n]);
-        if stack {
-            // SAFETY: alarm only sets a timer; if reading the stack hangs, SIGALRM ends the process.
-            unsafe { libc::alarm(STACK_SECS) };
-            let steps = stack_line(&std::backtrace::Backtrace::force_capture().to_string());
-            if !steps.is_empty() {
-                write(fd, format!("  at: {steps}\n").as_bytes());
-            }
-            // SAFETY: as above.
-            unsafe { libc::alarm(0) };
+        let last = LAST_FRAME.load(Ordering::Relaxed);
+        if !crash && last != 0 {
+            let n = frame_line(&mut line, now.saturating_sub(last));
+            write(fd, &line[..n]);
         }
+        // SAFETY: alarm only sets a timer; if reading the stack hangs, SIGALRM ends the process.
+        unsafe { libc::alarm(STACK_SECS) };
+        let steps = stack_line(&std::backtrace::Backtrace::force_capture().to_string());
+        if !steps.is_empty() {
+            write(fd, format!("  {}: {steps}\n", thread_words(on_main_thread())).as_bytes());
+        }
+        // SAFETY: as above.
+        unsafe { libc::alarm(0) };
     }
     // The usual ending: the signal's own action back, and the signal again (delivered when this handler returns).
     // SAFETY: signal() and raise() are safe to call in a handler.
@@ -87,11 +101,45 @@ fn write(fd: i32, bytes: &[u8]) {
     unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
 }
 
+/// Is this the main thread (the one that draws)? None where that can't be asked.
+fn on_main_thread() -> Option<bool> {
+    // SAFETY: both only read which thread this is.
+    #[cfg(target_os = "macos")]
+    return Some(unsafe { libc::pthread_main_np() } != 0);
+    #[cfg(target_os = "linux")]
+    return Some(unsafe { libc::syscall(libc::SYS_gettid) } == i64::from(unsafe { libc::getpid() }));
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    None
+}
+
+/// What the stack's line is called: the main thread's stack is where the window was (stuck or waiting).
+fn thread_words(main: Option<bool>) -> &'static str {
+    match main {
+        Some(true) => "main thread at",
+        Some(false) => "another thread at",
+        None => "at",
+    }
+}
+
 /// "[1795611146] crashed: SIGSEGV (…)\n" into `out`, without asking for memory. Returns its length.
 fn first_line(out: &mut [u8], now: u64, what: &str) -> usize {
     let mut digits = [0u8; 20];
+    let d = number(&mut digits, now);
+    put(out, &[b"[", &digits[d..], b"] ", what.as_bytes(), b"\n"])
+}
+
+/// "  last frame: 21 s before the end\n" into `out` (the watchdog's words for the same thing), without asking for
+/// memory. Returns its length.
+fn frame_line(out: &mut [u8], ago: u64) -> usize {
+    let mut digits = [0u8; 20];
+    let d = number(&mut digits, ago);
+    put(out, &[b"  last frame: ", &digits[d..], b" s before the end\n"])
+}
+
+/// `n` in decimal at the end of `digits`; returns where it starts.
+fn number(digits: &mut [u8; 20], n: u64) -> usize {
     let mut d = digits.len();
-    let mut left = now;
+    let mut left = n;
     loop {
         d -= 1;
         digits[d] = b'0' + (left % 10) as u8;
@@ -100,10 +148,14 @@ fn first_line(out: &mut [u8], now: u64, what: &str) -> usize {
             break;
         }
     }
+    d
+}
+
+/// The parts one after another into `out`, cut at its end. Returns the length.
+fn put(out: &mut [u8], parts: &[&[u8]]) -> usize {
     let mut n = 0;
-    for part in [b"[".as_slice(), &digits[d..], b"] ", what.as_bytes(), b"\n"] {
-        let room = out.len() - n;
-        let take = part.len().min(room);
+    for part in parts {
+        let take = part.len().min(out.len() - n);
         out[n..n + take].copy_from_slice(&part[..take]);
         n += take;
     }
@@ -146,6 +198,9 @@ mod tests {
         // Never past the buffer, whatever the words.
         let mut small = [0u8; 8];
         assert_eq!(first_line(&mut small, 0, "crashed"), 8);
+        let n = frame_line(&mut out, 21);
+        assert_eq!(std::str::from_utf8(&out[..n]).unwrap(), "  last frame: 21 s before the end\n");
+        assert_eq!(thread_words(Some(true)), "main thread at");
     }
 
     #[test]
@@ -161,6 +216,7 @@ mod tests {
     fn crash_child() {
         let Some(log) = std::env::var_os("PHOSPHOR_TEST_CRASH_LOG") else { return };
         install(std::path::Path::new(&log));
+        frame();
         let signal = if std::env::var_os("PHOSPHOR_TEST_CRASH_TERM").is_some() { libc::SIGTERM } else { libc::SIGSEGV };
         // SAFETY: sending this test process a signal: it is meant to end here.
         unsafe { libc::raise(signal) };
@@ -172,7 +228,7 @@ mod tests {
     #[test]
     fn a_crash_is_written_down_and_still_ends_the_process() {
         use std::os::unix::process::ExitStatusExt;
-        for (term, signal, words, stack) in [(false, libc::SIGSEGV, "crashed: SIGSEGV", true), (true, libc::SIGTERM, "ended by SIGTERM", false)] {
+        for (term, signal, words, frame) in [(false, libc::SIGSEGV, "crashed: SIGSEGV", false), (true, libc::SIGTERM, "ended by SIGTERM", true)] {
             let log = std::env::temp_dir().join(format!("phosphor-crash-test-{}-{term}.log", std::process::id()));
             let _ = std::fs::remove_file(&log);
             let mut child = std::process::Command::new(std::env::current_exe().unwrap());
@@ -187,7 +243,9 @@ mod tests {
             assert_eq!(status.signal(), Some(signal), "ended by the signal itself; log: {text}");
             let first = text.lines().next().unwrap_or("");
             assert!(first.starts_with('[') && first.contains(words), "log: {text}");
-            assert_eq!(text.contains("\n  at: "), stack, "log: {text}");
+            // Where it was, for a crash and for an end from outside alike (the test's own thread, not the main one).
+            assert!(text.contains("\n  another thread at: "), "log: {text}");
+            assert_eq!(text.contains("\n  last frame: "), frame, "log: {text}");
         }
     }
 }

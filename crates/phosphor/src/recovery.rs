@@ -110,6 +110,8 @@ impl Heartbeat {
         }
         self.last = now;
         self.count += 1;
+        #[cfg(unix)]
+        crate::crash_signals::frame();
         if let Some(p) = heartbeat_path(std::process::id()) {
             let _ = std::fs::write(p, format!("{} {}", self.count, self.state()));
         }
