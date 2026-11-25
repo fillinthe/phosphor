@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.24 (2026-11-25)
 
 - **Reports from a Force Quit say what Phosphor was doing.** When Phosphor is ended from outside on a Mac or on
   Linux, the report now also says where it was at that moment and how long before it last drew a frame.
