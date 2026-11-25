@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Mac: the show no longer drops to one frame a second while Phosphor's own window is covered.** With the window
+  under a full-screen output (or anything else covering it), every frame waited a second for a picture macOS never
+  gave, so everything looked frozen. A covered window is no longer drawn; the outputs keep their pace.
 - **An output that fills the screen Phosphor is on no longer leaves you stuck.** With one screen, a full-screen
   output covered Phosphor's own window, the menu bar and the Dock, and hid the pointer, so it looked frozen. Now the
   output says how to get back (Esc or double-click), keeps the pointer, and Esc works even when the output wasn't

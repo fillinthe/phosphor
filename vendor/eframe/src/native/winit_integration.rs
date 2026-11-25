@@ -9,6 +9,55 @@ use egui::ViewportId;
 #[cfg(feature = "accesskit")]
 use egui_winit::accesskit_winit;
 
+/// PHOSPHOR PATCH (macOS): true while a window whose redraws don't come is being painted directly (see
+/// `redraw_lost` in run.rs).
+pub static DIRECT_PAINT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// PHOSPHOR PATCH: a direct paint that waited this long was waiting for a picture the screen never gave (Metal's
+/// wait for the next drawable gives up after 1 s).
+const NO_PICTURE: std::time::Duration = std::time::Duration::from_millis(900);
+
+/// PHOSPHOR PATCH: per window, until when its direct paints are left out, and the wait that grows while it lasts.
+static NO_PICTURE_UNTIL: std::sync::Mutex<Vec<(ViewportId, Instant, std::time::Duration)>> = std::sync::Mutex::new(Vec::new());
+
+/// PHOSPHOR PATCH (macOS): should this window's picture be left out of a direct paint (its UI and the app's logic
+/// still run)? A covered window gets no picture from macOS: asking for one made the main thread wait a second per
+/// frame, so the whole show ran at one frame a second and looked frozen (reports 2026-11-25 on 0.5.24: runs ended
+/// from outside with the main thread waiting in `get_current_texture`, the control window under a full-screen
+/// output). Left out while macOS says it's covered, and for a while after a paint that waited the whole second.
+pub fn skip_direct_paint(id: ViewportId, occluded: Option<bool>) -> bool {
+    if !DIRECT_PAINT.load(std::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    occluded == Some(true) || NO_PICTURE_UNTIL.lock().is_ok_and(|l| l.iter().any(|(v, until, _)| *v == id && Instant::now() < *until))
+}
+
+/// PHOSPHOR PATCH (macOS): a window was painted and it took this long. A direct paint that waited for a picture
+/// that never came is left out for 2 s, then 4 s, up to 30 s; any paint that goes through clears that.
+pub fn painted(id: ViewportId, took: std::time::Duration) {
+    let direct = DIRECT_PAINT.load(std::sync::atomic::Ordering::Relaxed);
+    let Ok(mut list) = NO_PICTURE_UNTIL.lock() else { return };
+    let at = list.iter().position(|(v, _, _)| *v == id);
+    if direct && took >= NO_PICTURE {
+        let wait = no_picture_wait(at.map(|i| list[i].2));
+        if at.is_none() {
+            log::warn!("a window's picture didn't come ({} ms): its drawing is left out while that lasts", took.as_millis());
+        }
+        let entry = (id, Instant::now() + wait, wait);
+        match at {
+            Some(i) => list[i] = entry,
+            None => list.push(entry),
+        }
+    } else if let Some(i) = at {
+        list.swap_remove(i);
+    }
+}
+
+/// PHOSPHOR PATCH: how long direct paints are left out after one that got no picture: 2 s, doubling to 30 s.
+fn no_picture_wait(last: Option<std::time::Duration>) -> std::time::Duration {
+    last.map_or(std::time::Duration::from_secs(2), |w| (w * 2).min(std::time::Duration::from_secs(30)))
+}
+
 /// Returns `true` if the window is invisible or minimized.
 ///
 /// These windows don't receive `RedrawRequested` events on Windows,

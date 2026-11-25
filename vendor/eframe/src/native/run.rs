@@ -113,6 +113,16 @@ struct WinitAppWrapper<T: WinitApp> {
 const REDRAW_OVERDUE: Duration = Duration::from_millis(250);
 
 impl<T: WinitApp> WinitAppWrapper<T> {
+    /// PHOSPHOR PATCH: a window painted outside a `RedrawRequested`. One whose redraws don't come (macOS) says so
+    /// while it's painted, so no picture is asked for where the screen won't give one (`skip_direct_paint`).
+    fn paint_directly(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId) {
+        let lost = self.redraw_lost.contains(&window_id);
+        super::winit_integration::DIRECT_PAINT.store(lost, std::sync::atomic::Ordering::Relaxed);
+        let event_result = self.winit_app.run_ui_and_paint(event_loop, window_id);
+        super::winit_integration::DIRECT_PAINT.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.handle_event_result(event_loop, event_result);
+    }
+
     fn new(winit_app: T, run_and_return: bool) -> Self {
         Self {
             windows_next_repaint_times: HashMap::default(),
@@ -314,16 +324,14 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                 );
                 self.missed_logged = Some(now);
             }
-            let event_result = self.winit_app.run_ui_and_paint(event_loop, *window_id);
-            self.handle_event_result(event_loop, event_result);
+            self.paint_directly(event_loop, *window_id);
         }
 
         // Paint invisible windows directly, since they won't receive
         // RedrawRequested events on Windows. This ensures that viewport
         // commands like Visible(true) are still processed.
         for window_id in &invisible_window_ids {
-            let event_result = self.winit_app.run_ui_and_paint(event_loop, *window_id);
-            self.handle_event_result(event_loop, event_result);
+            self.paint_directly(event_loop, *window_id);
         }
 
         // Throttle any already-scheduled repaints for invisible windows
