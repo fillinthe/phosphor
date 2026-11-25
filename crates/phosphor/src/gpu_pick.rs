@@ -33,6 +33,10 @@ pub fn pick<'a, T>(adapters: &'a [T], wanted: Option<&str>, info: impl Fn(&T) ->
         eframe::wgpu::DeviceType::DiscreteGpu => 0,
         eframe::wgpu::DeviceType::IntegratedGpu => 1,
         eframe::wgpu::DeviceType::VirtualGpu => 2,
+        // Drawing on the processor comes last, after a real card of a kind the driver doesn't say (an old card
+        // through OpenGL): Windows' Basic Render Driver was picked over one for being DirectX 12, at a frame a second
+        // (report 2026-11-24).
+        eframe::wgpu::DeviceType::Cpu => 4,
         _ => 3,
     };
     let named: Vec<&T> = adapters.iter().filter(|a| wanted.is_some_and(|w| info(a).0 == w)).collect();
@@ -86,6 +90,15 @@ mod tests {
         assert_eq!(super::pick(&cards, Some("Intel UHD"), info).map(|c| c.0), Some("Intel UHD"));
         assert_eq!(super::pick(&cards, Some("gone"), info).map(|c| c.0), Some("Radeon Pro"));
         assert_eq!(super::pick(&cards, None, info).map(|c| c.0), Some("Radeon Pro"));
+    }
+
+    #[test]
+    fn a_real_card_before_drawing_on_the_processor() {
+        use eframe::wgpu::{Backend as B, DeviceType as D};
+        let cards = [("Microsoft Basic Render Driver", D::Cpu, B::Dx12), ("GeForce 210", D::Other, B::Gl)];
+        let info = |c: &(&str, D, B)| (c.0.to_string(), c.1, c.2);
+        assert_eq!(super::pick(&cards, None, info).map(|c| c.0), Some("GeForce 210"));
+        assert_eq!(super::pick(&cards[..1], None, info).map(|c| c.0), Some("Microsoft Basic Render Driver"), "alone: still used");
     }
 
     #[test]

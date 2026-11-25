@@ -6,6 +6,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Windows: an old graphics card is used instead of drawing on the processor.** On a PC whose card only works
+  through OpenGL, Phosphor picked Windows' software renderer and ran at about a frame a second, freezing and
+  restarting. It now picks the real card.
+- **Fit is in the Inspector too.** A layer's Fit / Fill / Stretch / 1:1 choice (how a picture that isn't the
+  canvas's shape is shown) now also sits at the top of the Inspector's Transform section, with a tip saying what
+  each does. It was only on the layer's card.
 - **Two Rutt-Etra effects on one layer work.** Rutt-Etra and Rutt-Etra Points together in one chain (or two of
   either) gave a skipped GPU error every frame and the second one drew nothing.
 - **Steadier outputs on a flaky projector cable.** When a screen drops out and comes back within seconds, its

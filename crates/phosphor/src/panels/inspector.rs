@@ -736,7 +736,15 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let id = layer.id;
     let t = &mut layer.transform;
     let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
+    let fit = &mut layer.fit;
     crate::ui::section(ui, ("transform", id), title, false, |ui| {
+        // The same choice as on the layer's card, where people looking for "don't crop my picture" didn't find it.
+        crate::ui::field(ui, "Fit", |ui| {
+            let tip = "A picture that isn't the canvas's shape: Fit shows all of it (bars at the sides), Fill covers the canvas (edges cut off), Stretch squeezes it to the canvas, 1:1 keeps its own pixels";
+            crate::ui::choice_buttons(ui, fit, |_, r| {
+                r.clone().on_hover_text(tip);
+            });
+        });
         let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
             ui.horizontal(|ui| {
                 let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);

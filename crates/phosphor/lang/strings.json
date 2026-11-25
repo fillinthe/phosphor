@@ -273,6 +273,7 @@
 "A picture behind this output's slices (a backdrop; only with mapping)",
 "A picture or movie of its own on this slice (a layer that stays out of the mix)",
 "A picture shown faintly behind the canvas to draw over (the laser never shows it)",
+"A picture that isn't the canvas's shape: Fit shows all of it (bars at the sides), Fill covers the canvas (edges cut off), Stretch squeezes it to the canvas, 1:1 keeps its own pixels",
 "A plus B",
 "A ramp that runs as fast as the number says: a spin that speeds up with the sound",
 "A random cue (not the one on now)",
