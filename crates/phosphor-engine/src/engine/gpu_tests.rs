@@ -1298,3 +1298,27 @@ fn a_removed_effects_buffers_are_freed() {
     engine.render(&comp, 0.0, &ModInputs::default());
     assert!(engine.layers[&1].history.is_empty(), "removed: freed");
 }
+
+/// Two Rutt-Etra effects in one chain each draw into their own picture (they shared one: the second drew into the
+/// picture it was reading, a GPU error every frame; bug report 2026-11-24).
+#[test]
+fn two_rutt_etras_in_a_chain_dont_share_a_picture() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() };
+    for id in ["rutt_etra_points", "rutt_etra"] {
+        layer.effects.push(comp.new_effect(id).expect(id));
+    }
+    comp.layers.push(layer);
+    let scope = engine.gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
+    for _ in 0..3 {
+        engine.render(&comp, 0.0, &ModInputs::default());
+        let _ = engine.read_output();
+    }
+    let error = pollster::block_on(scope.pop());
+    assert!(error.is_none(), "{error:?}");
+    assert_eq!(engine.layers[&1].rutt.len(), 2);
+    comp.layers[0].effects.pop();
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert_eq!(engine.layers[&1].rutt.len(), 1, "removed: freed");
+}

@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- **Two Rutt-Etra effects on one layer work.** Rutt-Etra and Rutt-Etra Points together in one chain (or two of
+  either) gave a skipped GPU error every frame and the second one drew nothing.
 - **Steadier outputs on a flaky projector cable.** When a screen drops out and comes back within seconds, its
   output now waits until the screen has stayed back for 2 seconds before filling it again, instead of reopening
   every time (each reopen caused a stutter).

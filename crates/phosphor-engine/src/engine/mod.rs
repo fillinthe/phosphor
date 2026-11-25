@@ -86,8 +86,9 @@ struct LayerResources {
     /// RGB copies of incoming/outgoing (when YUV) and the blended result.
     trans: [Option<Target>; 3],
     fx: [Option<Target>; 3],
-    /// Reduced-size target for Rutt-Etra (and Points: Lines); its scale sets the apparent line width.
-    rutt: Option<Target>,
+    /// Reduced-size targets for Rutt-Etra, per effect id (two in one chain shared one: the second drew into the
+    /// picture it was reading); the scale sets the apparent line width.
+    rutt: HashMap<u64, Option<Target>>,
     /// A slice drawn on its own (the output's size) before its own masks cut it; keyed by the slice's id.
     cut: Option<Target>,
     /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.

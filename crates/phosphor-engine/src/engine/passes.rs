@@ -343,6 +343,9 @@ impl Engine {
         if !res.history.is_empty() {
             res.history.retain(|id, _| in_chain(*id));
         }
+        if !res.rutt.is_empty() {
+            res.rutt.retain(|id, _| in_chain(*id));
+        }
         if !res.multipass.is_empty() {
             res.multipass.retain(|key, _| *key == GENERATOR_KEY || *key == GENERATOR_OUT_KEY || in_chain(*key));
         }
@@ -491,9 +494,10 @@ impl Engine {
                             tex2 = self.layers.get(&l.id).and_then(|r| r.thumbnail.as_ref()).map(|t| t.view.clone());
                         }
                         let res = self.layers.entry(res_id).or_default();
-                        Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
+                        let slot = res.rutt.entry(fx_id).or_default();
+                        Target::ensure(slot, &self.gpu.device, "rutt", rw, rh);
                         u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
-                        res.rutt.as_ref().unwrap().view.clone()
+                        slot.as_ref().unwrap().view.clone()
                     } else if entry == "fx_trails" || entry == "fx_slitscan" || entry == "fx_flow_keep" || entry == "fx_pts_particles" {
                         // History effects write one slot while reading the other.
                         let res = self.layers.entry(res_id).or_default();
