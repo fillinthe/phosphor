@@ -171,6 +171,11 @@ pub fn spec_for(name: &str, path: Option<String>) -> SourceSpec {
 pub struct MediaManager {
     loaded: HashMap<u64, SourceSpec>,
     pub errors: HashMap<u64, String>,
+    /// Pictures handed over as data instead of a path, by name (the browser gives a dropped file's contents, never
+    /// where it is), and the channel they arrive on once read. Without this a picture dropped on the browser app
+    /// was a clip that showed black with no word of why (bug report 2026-11-25).
+    dropped: HashMap<String, std::sync::Arc<[u8]>>,
+    dropped_feed: Option<(std::sync::mpsc::Sender<DroppedData>, std::sync::mpsc::Receiver<DroppedData>)>,
     #[cfg(not(target_arch = "wasm32"))]
     players: HashMap<u64, video::VideoPlayer>,
     /// Each movie's decoder work at the last CPU sample (when, nanoseconds busy): `cpu_shares`.
@@ -338,6 +343,7 @@ impl MediaManager {
     }
 
     pub fn sync(&mut self, comp: &Composition, engine: &mut Engine) {
+        self.take_dropped();
         for layer in &comp.layers {
             if self.loaded.get(&layer.id) == Some(&layer.source) {
                 continue;
@@ -385,6 +391,19 @@ impl MediaManager {
                         self.errors.insert(layer.id, e);
                     }
                 }
+                // A picture that came as data (the browser): shown from what was handed over. One that hasn't
+                // come says so, instead of a black clip.
+                SourceSpec::Image { path: None, name } if cfg!(target_arch = "wasm32") || self.dropped.contains_key(name) => match self.dropped.get(name) {
+                    Some(bytes) => match decode_dropped(name, bytes) {
+                        Ok(img) => engine.upload_rgba(layer.id, img.width(), img.height(), img.as_raw()),
+                        Err(e) => {
+                            self.errors.insert(layer.id, e);
+                        }
+                    },
+                    None => {
+                        self.errors.insert(layer.id, format!("{name}: drop this picture onto Phosphor again (the browser doesn't keep files between visits)"));
+                    }
+                },
                 // A clip kept ready starts at once; anything else opens in the background (never on this thread).
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Movie { path: Some(path), .. } => match self.preload.take(path) {
@@ -895,6 +914,78 @@ impl MediaManager {
 
 #[cfg(not(target_arch = "wasm32"))]
 type Decoded = (u64, SourceSpec, Result<image::RgbaImage, String>);
+
+/// A dropped file's name and its contents (or why they couldn't be read).
+pub type DroppedData = (String, Result<Vec<u8>, String>);
+
+/// The longest side a picture handed over as data is kept at (a phone photo is 4000 across: a third of the memory
+/// at this size, and still more than the canvas).
+const DROPPED_MAX_SIDE: u32 = 2560;
+
+/// A picture handed over as data, ready for the GPU.
+fn decode_dropped(name: &str, bytes: &[u8]) -> Result<image::RgbaImage, String> {
+    let img = image::load_from_memory(bytes).map_err(|e| format!("Couldn't open {name}: {e}"))?;
+    let img = if img.width().max(img.height()) > DROPPED_MAX_SIDE { img.thumbnail(DROPPED_MAX_SIDE, DROPPED_MAX_SIDE) } else { img };
+    Ok(img.to_rgba8())
+}
+
+impl MediaManager {
+    /// Where a dropped file's contents are sent once read (the browser reads them a moment after the drop).
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub fn dropped_sender(&mut self) -> std::sync::mpsc::Sender<DroppedData> {
+        self.dropped_feed.get_or_insert_with(std::sync::mpsc::channel).0.clone()
+    }
+
+    /// Takes in the dropped files read since last time. Layers already showing one of them by name load again, so
+    /// a clip launched before its picture arrived shows it now.
+    fn take_dropped(&mut self) {
+        let Some((_, rx)) = &self.dropped_feed else { return };
+        let arrived: Vec<DroppedData> = rx.try_iter().collect();
+        for (name, data) in arrived {
+            match data {
+                Ok(bytes) => {
+                    self.dropped.insert(name.clone(), bytes.into());
+                }
+                Err(e) => log::warn!("{name}: couldn't be read: {e}"),
+            }
+            self.loaded.retain(|_, spec| !matches!(spec, SourceSpec::Image { path: None, name: n } if *n == name));
+        }
+    }
+}
+
+#[cfg(test)]
+mod dropped_tests {
+    use super::*;
+
+    fn png(w: u32, h: u32) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 10, 255])).write_to(&mut out, image::ImageFormat::Png).unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn a_picture_handed_over_as_data_is_decoded_and_kept_to_a_sane_size() {
+        let small = decode_dropped("a.png", &png(64, 32)).unwrap();
+        assert_eq!((small.width(), small.height()), (64, 32));
+        assert_eq!(small.get_pixel(3, 3).0, [200, 40, 10, 255]);
+        let big = decode_dropped("b.png", &png(5120, 1280)).unwrap();
+        assert_eq!((big.width(), big.height()), (2560, 640));
+        assert!(decode_dropped("c.jpeg", b"not a picture").unwrap_err().starts_with("Couldn't open c.jpeg"));
+    }
+
+    #[test]
+    fn a_layer_waiting_for_a_dropped_picture_loads_again_when_it_arrives() {
+        let mut m = MediaManager::default();
+        let spec = |n: &str| SourceSpec::Image { name: n.into(), path: None };
+        m.loaded.insert(1, spec("a.jpeg"));
+        m.loaded.insert(2, spec("other.jpeg"));
+        m.dropped_sender().send(("a.jpeg".into(), Ok(png(4, 4)))).unwrap();
+        m.take_dropped();
+        assert!(m.dropped.contains_key("a.jpeg"));
+        assert!(!m.loaded.contains_key(&1), "loads again with the picture");
+        assert!(m.loaded.contains_key(&2));
+    }
+}
 
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn load_image_path(engine: &mut Engine, layer: u64, path: &str) -> Result<(), String> {

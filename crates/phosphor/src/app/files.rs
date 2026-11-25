@@ -575,6 +575,20 @@ impl PhosphorApp {
             crate::panels::open_pack(&mut self.state, pack);
             return;
         }
+        // The browser gives a dropped file's contents, not a path: pictures are read and handed to the media manager.
+        #[cfg(target_arch = "wasm32")]
+        for file in &dropped {
+            let name = file.path().file_name().map_or_else(|| file.path().to_string_lossy().into_owned(), |n| n.to_string_lossy().into_owned());
+            if !media::is_picture(&name) {
+                continue;
+            }
+            let tx = self.state.media.dropped_sender();
+            let file = file.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let data = file.bytes_async().await;
+                let _ = tx.send((name, data));
+            });
+        }
         let now = ctx.input(|i| i.time);
         let files = dropped_media(&dropped);
         if files.is_empty() {
