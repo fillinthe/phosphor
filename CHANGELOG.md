@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.22 (2026-11-24)
 
 - **Windows: an old graphics card is used instead of drawing on the processor.** On a PC whose card only works
   through OpenGL, Phosphor picked Windows' software renderer and ran at about a frame a second, freezing and
