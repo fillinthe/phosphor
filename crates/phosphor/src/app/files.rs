@@ -99,6 +99,9 @@ impl PhosphorApp {
             }
         }
         let dialogs = self.state.dialogs.poll();
+        if self.state.dialogs.take_failed() {
+            self.state.notice = Some("macOS didn't open the file window. Drag the file onto Phosphor instead, or quit and open Phosphor again.".into());
+        }
         if dialogs.is_empty() {
             return;
         }

@@ -3,6 +3,9 @@
 use super::*;
 use crate::ui::RightMenu;
 
+/// Seconds the way back to a window stays on an output that has just covered Phosphor's own window.
+const WAY_BACK_SECS: f64 = 8.0;
+
 impl PhosphorApp {
     /// An output filling a display (F, double-click, the right-click menu) is remembered in the project as that
     /// output's screen, so it goes back there when its window reopens or the project is opened again.
@@ -17,6 +20,33 @@ impl PhosphorApp {
             {
                 log::info!(target: "phosphor::action", "output \"{}\" now fills the screen \"{key}\"", o.name);
                 o.screen = key;
+            }
+        }
+    }
+
+    /// An output filling the screen Phosphor's own window is on leaves a picture and no controls: no menu bar, no
+    /// Dock, nothing to click (reports 2026-11-25: runs ended from outside a minute after the control window was
+    /// covered, with one output open). The output is told so (it shows the way back and keeps the pointer), takes
+    /// the keys, and Esc typed in the covered window brings it back to a window too.
+    ///
+    /// "Thy word is a lamp unto my feet, and a light unto my path." (Psalm 119:105, KJV)
+    pub(crate) fn outputs_over_controls(&mut self, ctx: &egui::Context) {
+        let mut map = self.state.output.lock().unwrap();
+        if !map.values().any(|o| o.open && o.fullscreen || o.over_controls) {
+            return;
+        }
+        let own = ctx.input(|i| i.viewport().outer_rect).and_then(|r| crate::screens::display_of(&self.state.displays, r.center().x, r.center().y));
+        let (now, escape) = ctx.input(|i| (i.time, i.key_pressed(egui::Key::Escape)));
+        for (id, out) in map.iter_mut() {
+            let over = out.open && out.fullscreen && out.place.is_none() && own.is_some() && out.display == own;
+            if over && !out.over_controls {
+                log::info!(target: "phosphor::action", "output \"{}\" covers the screen Phosphor's own window is on", out.name);
+                out.way_back_until = now + WAY_BACK_SECS;
+                ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of(("phosphor_output", *id)), egui::ViewportCommand::Focus);
+            }
+            out.over_controls = over;
+            if over && escape {
+                out.uncover = true;
             }
         }
     }
@@ -271,6 +301,9 @@ impl PhosphorApp {
                 if toggle {
                     if fullscreen { uncover(out) } else { cover_here(out) }
                 }
+                if std::mem::take(&mut out.uncover) && fullscreen {
+                    uncover(out);
+                }
                 if escape {
                     if fullscreen {
                         uncover(out);
@@ -286,8 +319,21 @@ impl PhosphorApp {
                 }
                 // A projector shows no pointer, except while its mapping handles are out: then you need it to drag them
                 // (bug report: Edit on output in fullscreen on Windows, no pointer to move anything with).
-                if fullscreen && !out.edit_mapping {
+                let over_controls = fullscreen && out.over_controls;
+                if fullscreen && !out.edit_mapping && !over_controls {
                     ctx.set_cursor_icon(egui::CursorIcon::None);
+                }
+                // Over Phosphor's own window: the way back, for a few seconds and whenever the pointer moves.
+                if over_controls && ctx.input(|i| i.time < out.way_back_until || i.pointer.is_moving()) {
+                    if ctx.input(|i| i.pointer.is_moving()) {
+                        out.way_back_until = ctx.input(|i| i.time) + 3.0;
+                    }
+                    let words = "This output covers Phosphor's own window · Esc or double-click = back to a window";
+                    let font = egui::FontId::proportional(18.0);
+                    let at = rect.center_bottom() + egui::vec2(0.0, -28.0);
+                    let size = ui.painter().layout_no_wrap(words.into(), font.clone(), Color32::WHITE).size();
+                    ui.painter().rect_filled(egui::Rect::from_center_size(at - egui::vec2(0.0, size.y / 2.0), size + egui::vec2(28.0, 16.0)), 0.0, Color32::from_black_alpha(190));
+                    ui.painter().text(at, egui::Align2::CENTER_BOTTOM, words, font, Color32::WHITE);
                 }
                 if !out.edit_mapping {
                     // No title bar, so dragging the picture moves the window (to the projector).

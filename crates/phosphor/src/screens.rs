@@ -40,9 +40,23 @@ pub fn find_screen(all: &[Display], key: &str) -> Option<Display> {
     all.iter().find(|d| screen_key(all, d) == key).cloned()
 }
 
+/// The display the point is on (None when it's on none of them).
+pub fn display_of(all: &[Display], x: f32, y: f32) -> Option<u32> {
+    all.iter().find(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h).map(|d| d.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_is_on_the_display_that_holds_it() {
+        let d = |id, x| Display { id, name: String::new(), x, y: 0.0, w: 100.0, h: 100.0, pixels: (1920, 1080), main: false };
+        let all = vec![d(1, 0.0), d(2, 100.0)];
+        assert_eq!(display_of(&all, 50.0, 50.0), Some(1));
+        assert_eq!(display_of(&all, 100.0, 50.0), Some(2));
+        assert_eq!(display_of(&all, 250.0, 50.0), None);
+    }
 
     #[test]
     fn same_named_screens_are_numbered_left_to_right() {
@@ -194,7 +208,8 @@ pub fn displays() -> Vec<Display> {
 /// The display containing a global point (points, top-left origin), e.g. a window's center.
 pub fn display_at(x: f32, y: f32) -> Option<Display> {
     let all = displays();
-    all.iter().find(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h).cloned().or_else(|| all.into_iter().next())
+    let on = display_of(&all, x, y);
+    all.iter().find(|d| Some(d.id) == on).cloned().or_else(|| all.into_iter().next())
 }
 
 /// Puts the window titled `title` above the menu bar and Dock and keeps it out of Spaces

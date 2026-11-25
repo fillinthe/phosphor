@@ -212,6 +212,7 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.watch_screens(wall);
         self.remember_output_screens();
+        self.outputs_over_controls(&ctx);
         crate::panels::follow_selection_comp(&mut self.state.comp, self.state.selected);
         self.state.control.selected_layer = self.state.selected;
         {

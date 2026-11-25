@@ -181,6 +181,13 @@ pub struct OutputShared {
     pub can_redo: bool,
     /// A mouse button is down in this window (a drag in flight: no undo step until it's let go).
     pub pointer_down: bool,
+    /// This output fills the screen Phosphor's own window is on (set by the app each frame): the way back is shown
+    /// and the pointer stays, so nobody is left with a picture and no controls.
+    pub over_controls: bool,
+    /// Show the way back to a window until this time.
+    pub way_back_until: f64,
+    /// Go back to a normal window (Esc typed in Phosphor's own window while this output covers it).
+    pub uncover: bool,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next

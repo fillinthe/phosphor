@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- **An output that fills the screen Phosphor is on no longer leaves you stuck.** With one screen, a full-screen
+  output covered Phosphor's own window, the menu bar and the Dock, and hid the pointer, so it looked frozen. Now the
+  output says how to get back (Esc or double-click), keeps the pointer, and Esc works even when the output wasn't
+  clicked first.
+- **A file window that macOS refuses to open** now shows a message instead of doing nothing.
+
 ## 0.5.24 (2026-11-25)
 
 - **Reports from a Force Quit say what Phosphor was doing.** When Phosphor is ended from outside on a Mac or on

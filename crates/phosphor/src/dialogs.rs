@@ -91,32 +91,50 @@ pub struct Dialogs {
     rx: Receiver<(Purpose, Vec<PathBuf>)>,
     /// True while a dialog is showing (only one at a time).
     pub busy: bool,
+    /// The system gave no file window (macOS handed back nothing for the open / save panel and the dialog library
+    /// panicked: report 2026-11-25, Open then Save both did nothing). Taken by `take_failed` for a notice.
+    failed: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for Dialogs {
     fn default() -> Self {
         let (tx, rx) = channel();
-        Self { tx, rx, busy: false }
+        Self { tx, rx, busy: false, failed: Default::default() }
     }
 }
 
 impl Dialogs {
-    fn run<F>(&mut self, purpose: Purpose, future: F)
+    /// Opens the dialog `make` builds. A dialog the system won't give (building or showing it panics) is noted in
+    /// `failed` and answers with no paths, so the next one can still open.
+    fn run<F>(&mut self, purpose: Purpose, make: impl FnOnce() -> F)
     where
         F: std::future::Future<Output = Vec<PathBuf>> + Send + 'static,
     {
         if self.busy {
             return;
         }
+        let Ok(future) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(make)) else {
+            self.failed.store(true, std::sync::atomic::Ordering::Relaxed);
+            return;
+        };
         self.busy = true;
         let tx = self.tx.clone();
+        let failed = self.failed.clone();
         std::thread::spawn(move || {
-            let paths = pollster::block_on(future);
+            let paths = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pollster::block_on(future))).unwrap_or_else(|_| {
+                failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                Vec::new()
+            });
             let _ = tx.send((purpose, paths));
         });
     }
 
-    fn dialog(filter: Option<(&str, &[&str])>) -> rfd::AsyncFileDialog {
+    /// Did a dialog fail to open since this was last asked?
+    pub fn take_failed(&mut self) -> bool {
+        self.failed.swap(false, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn dialog_owned(filter: &Option<(String, Vec<String>)>) -> rfd::AsyncFileDialog {
         let d = rfd::AsyncFileDialog::new();
         match filter {
             Some((name, exts)) => d.add_filter(name, exts),
@@ -125,23 +143,35 @@ impl Dialogs {
     }
 
     pub fn pick_file(&mut self, purpose: Purpose, filter: Option<(&str, &[&str])>) {
-        let f = Self::dialog(filter).pick_file();
-        self.run(purpose, async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() });
+        let filter = filter.map(|(n, e)| (n.to_string(), e.iter().map(|e| e.to_string()).collect::<Vec<_>>()));
+        self.run(purpose, move || {
+            let f = Self::dialog_owned(&filter).pick_file();
+            async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() }
+        });
     }
 
     pub fn pick_files(&mut self, purpose: Purpose, filter: Option<(&str, &[&str])>) {
-        let f = Self::dialog(filter).pick_files();
-        self.run(purpose, async move { f.await.map(|v| v.iter().map(|h| h.path().to_path_buf()).collect()).unwrap_or_default() });
+        let filter = filter.map(|(n, e)| (n.to_string(), e.iter().map(|e| e.to_string()).collect::<Vec<_>>()));
+        self.run(purpose, move || {
+            let f = Self::dialog_owned(&filter).pick_files();
+            async move { f.await.map(|v| v.iter().map(|h| h.path().to_path_buf()).collect()).unwrap_or_default() }
+        });
     }
 
     pub fn pick_folder(&mut self, purpose: Purpose) {
-        let f = rfd::AsyncFileDialog::new().pick_folder();
-        self.run(purpose, async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() });
+        self.run(purpose, || {
+            let f = rfd::AsyncFileDialog::new().pick_folder();
+            async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() }
+        });
     }
 
     pub fn save_file(&mut self, purpose: Purpose, filter: (&str, &[&str]), name: &str) {
-        let f = Self::dialog(Some(filter)).set_file_name(name).save_file();
-        self.run(purpose, async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() });
+        let filter = Some((filter.0.to_string(), filter.1.iter().map(|e| e.to_string()).collect::<Vec<_>>()));
+        let name = name.to_string();
+        self.run(purpose, move || {
+            let f = Self::dialog_owned(&filter).set_file_name(name).save_file();
+            async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() }
+        });
     }
 
     /// Finished dialogs (canceled ones come back with no paths).
