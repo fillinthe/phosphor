@@ -22,6 +22,8 @@ pub(crate) struct ConvertUi {
     /// Use the converted file in place of the original in this project when done.
     pub swap: bool,
     swapped: bool,
+    /// The finished file's size, read once (not from the disk every frame: it may be on a slow drive).
+    done_size: Option<u64>,
     /// The folder the new file goes in (`convert::default_dir` until you pick another).
     pub dest: String,
 }
@@ -122,6 +124,7 @@ impl PhosphorApp {
                     if crate::ui::command(ui, RichText::new(format!("{} Convert", icon::FILM_STRIP)).strong()).clicked() {
                         c.progress = Some(crate::convert::start(crate::convert::Job { src: c.src.clone(), dir: c.dest.clone(), format: c.format, quality: c.quality, size: c.size, probe: probe.clone() }));
                         c.swapped = false;
+                        c.done_size = None;
                     }
                     crate::ui::help(ui, "The original stays as it is.");
                 }
@@ -137,7 +140,7 @@ impl PhosphorApp {
                         }
                     }
                     None => {
-                        let size = std::fs::metadata(&p.output).map_or(0, |m| m.len());
+                        let size = *c.done_size.get_or_insert_with(|| std::fs::metadata(&p.output).map_or(0, |m| m.len()));
                         ui.label(RichText::new(format!("{} Done: {}", icon::CHECK_CIRCLE, mb(size))).color(theme::accent()));
                         crate::ui::hint(ui, &p.output);
                         if !c.swapped {
