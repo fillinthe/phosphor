@@ -276,6 +276,21 @@ impl PhosphorApp {
                         out.place = None;
                     }
                 }
+                // Still covering its screen? macOS puts a window back under the menu bar now and then, which slid the
+                // picture (and every slice mapped on it) down by the menu bar's height. Looked at once a second.
+                let now = ctx.input(|i| i.time);
+                if fullscreen && out.place.is_none() && now - out.cover_checked >= 1.0 {
+                    out.cover_checked = now;
+                    if let Some(d) = out.display.and_then(|id| crate::screens::displays().into_iter().find(|d| d.id == id))
+                        && crate::screens::covers(&title, &d) == Some(false)
+                    {
+                        if now - out.cover_logged >= 60.0 || out.cover_logged == 0.0 {
+                            out.cover_logged = now;
+                            log::info!(target: "phosphor::action", "output \"{}\" had moved off its screen's edges (macOS): put back", out.name);
+                        }
+                        crate::screens::cover_window(&title, Some(&d));
+                    }
+                }
                 if ctx.input(|i| i.viewport().close_requested()) {
                     out.open = false;
                 }

@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- Mac: a full-screen output stays put. macOS sometimes moved it back under the menu bar, so the picture (and every
+  mapped slice) slid down and the desktop showed above it; Phosphor now notices within a second and puts it back.
 - Windows: a full-screen output no longer has a thin white line along its top edge.
 - Transform shows a layer's position in pixels of its canvas (X 480 px) and its size as a percentage (Scale 150%,
   Scale X / Y too); right-click › Value takes pixels and percentages. Saved projects are unchanged.

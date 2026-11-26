@@ -188,6 +188,10 @@ pub struct OutputShared {
     pub way_back_until: f64,
     /// Go back to a normal window (Esc typed in Phosphor's own window while this output covers it).
     pub uncover: bool,
+    /// When a full-screen output last checked it still covers its screen (macOS moves it now and then).
+    pub cover_checked: f64,
+    /// When that was last written to the log (once a minute at most).
+    pub cover_logged: f64,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next

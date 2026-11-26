@@ -240,20 +240,57 @@ pub fn cover_window(title: &str, cover: Option<&Display>) -> bool {
                 let _: () = msg_send![&*w, setCollectionBehavior: if on { COVER_BEHAVIOR } else { 0usize }];
                 let _: () = msg_send![&*w, setHasShadow: !on];
                 if let Some(d) = cover {
-                    // Exactly the display, in AppKit coordinates (bottom-left origin, main display
-                    // height as the reference), set directly so nothing nudges it below the menu bar.
-                    let main_h = displays().iter().find(|m| m.main).map_or(d.h, |m| m.h) as f64;
-                    let frame = objc2_foundation::NSRect::new(
-                        objc2_foundation::NSPoint::new(d.x as f64, main_h - (d.y + d.h) as f64),
-                        objc2_foundation::NSSize::new(d.w as f64, d.h as f64),
-                    );
-                    let _: () = msg_send![&*w, setFrame: frame, display: true];
+                    // Exactly the display, set directly so nothing nudges it below the menu bar.
+                    let _: () = msg_send![&*w, setFrame: appkit_frame(d), display: true];
                 }
                 return true;
             }
         }
     }
     false
+}
+
+/// A display's whole area in AppKit coordinates (bottom-left origin, the main display's height as the reference).
+#[cfg(target_os = "macos")]
+fn appkit_frame(d: &Display) -> objc2_foundation::NSRect {
+    let main_h = displays().iter().find(|m| m.main).map_or(d.h, |m| m.h) as f64;
+    objc2_foundation::NSRect::new(
+        objc2_foundation::NSPoint::new(d.x as f64, main_h - (d.y + d.h) as f64),
+        objc2_foundation::NSSize::new(d.w as f64, d.h as f64),
+    )
+}
+
+/// Does the window titled `title` still cover display `d` exactly? macOS moves a window back under the menu bar now
+/// and then (displays or Spaces changing), which slid a mapped output down by the menu bar's height and showed the
+/// desktop above it (report 2026-11-26: slices out of place, then back again later). None = window not found.
+#[cfg(target_os = "macos")]
+pub fn covers(title: &str, d: &Display) -> Option<bool> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use objc2_foundation::{NSArray, NSString};
+    let want = appkit_frame(d);
+    let app_class = AnyClass::get(c"NSApplication")?;
+    // SAFETY: AppKit reads on the main thread (the UI thread), on NSApp's own windows.
+    unsafe {
+        let app: Option<Retained<AnyObject>> = msg_send![app_class, sharedApplication];
+        let windows: Option<Retained<NSArray<AnyObject>>> = msg_send![&*app?, windows];
+        for w in windows.iter().flat_map(|a| a.iter()) {
+            let t: Option<Retained<NSString>> = msg_send![&*w, title];
+            if t.is_some_and(|t| t.to_string() == title) {
+                let f: objc2_foundation::NSRect = msg_send![&*w, frame];
+                let near = |a: f64, b: f64| (a - b).abs() < 1.0;
+                return Some(near(f.origin.x, want.origin.x) && near(f.origin.y, want.origin.y) && near(f.size.width, want.size.width) && near(f.size.height, want.size.height));
+            }
+        }
+    }
+    None
+}
+
+/// Elsewhere a covered window stays where it was put.
+#[cfg(not(target_os = "macos"))]
+pub fn covers(_title: &str, _d: &Display) -> Option<bool> {
+    Some(true)
 }
 
 /// Where the mouse is on the desktop, in points from the main display's top-left (the coordinates egui's
