@@ -57,6 +57,8 @@ mod cache_store;
 #[cfg(not(target_arch = "wasm32"))]
 mod project_files;
 #[cfg(not(target_arch = "wasm32"))]
+mod project_save;
+#[cfg(not(target_arch = "wasm32"))]
 mod gpu_guard;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu_pick;

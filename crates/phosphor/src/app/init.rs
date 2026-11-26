@@ -295,6 +295,8 @@ impl PhosphorApp {
                 autosave: stored(KEY_AUTOSAVE).is_some_and(|v| v == "1"),
                 autosave_at: 0.0,
                 saved_hash: 0,
+                #[cfg(not(target_arch = "wasm32"))]
+                project_saver: Default::default(),
                 account: Default::default(),
                 account_ui: Default::default(),
                 cloud_project: None,

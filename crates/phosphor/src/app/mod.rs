@@ -506,6 +506,9 @@ pub struct State {
     /// When autosave last looked, and a hash of what was last written (only a changed project is saved).
     autosave_at: f64,
     saved_hash: u64,
+    /// Saves are written on a thread of their own (a slow drive never stops the show).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) project_saver: crate::project_save::ProjectSaver,
     /// phosphorfx.com account and the project open from it (id, name).
     pub account: crate::account::Account,
     pub account_ui: crate::panels::AccountUi,
@@ -632,34 +635,9 @@ impl State {
         match &self.project_path {
             Some(p) => {
                 let json = self.comp.to_json();
-                let name = std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
-                // Its folder isn't there (the drive unplugged): the work goes into this computer's copy, and nobody
-                // is stopped. The next save with the drive back writes the file.
-                let away = !std::path::Path::new(p).parent().is_some_and(|d| d.as_os_str().is_empty() || d.exists());
-                if away {
-                    self.notice = Some(match crate::project_files::keep_copy(p, &json, true) {
-                        Ok(()) => {
-                            self.saved_hash = hash_text(&json);
-                            format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else")
-                        }
-                        Err(e) => format!("Save failed: {e}"),
-                    });
-                    return;
-                }
-                // A backup that can't be made (a read-only backups folder, a full drive) is said, but never
-                // stops the save itself.
-                let backup = crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs(), auto).err();
-                match crate::project_files::write_whole(std::path::Path::new(p), &json) {
-                    Ok(()) => {
-                        self.saved_hash = hash_text(&json);
-                        let _ = crate::project_files::keep_copy(p, &json, false);
-                        self.notice = Some(match backup {
-                            None => format!("Saved {name}"),
-                            Some(e) => format!("Saved {name} (its backup couldn't be made: {e})"),
-                        });
-                    }
-                    Err(e) => self.notice = Some(format!("Save failed: {e}")),
-                }
+                let hash = hash_text(&json);
+                let job = crate::project_save::Job { path: p.clone(), json, auto, secs: crate::backups::now_secs() };
+                self.project_saver.save(job, hash);
             }
             None => self.save_project_as(),
         }
@@ -672,11 +650,33 @@ impl State {
             return;
         }
         self.autosave_at = now;
-        if hash_text(&self.comp.to_json()) != self.saved_hash {
+        let hash = hash_text(&self.comp.to_json());
+        if hash != self.saved_hash && !self.project_path.as_deref().is_some_and(|p| self.project_saver.writing(p, hash)) {
             self.save_project_kind(true);
-            if let Some(n) = &mut self.notice {
-                *n = format!("Autosaved ({})", n.trim_start_matches("Saved "));
+        }
+    }
+
+    /// Saves the writer thread has finished: what's saved counts as saved, and the notice says how it went.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn poll_saves(&mut self) {
+        let file_name = |p: &str| std::path::Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
+        if let Some(p) = self.project_saver.newly_slow(std::time::Duration::from_millis(1500)) {
+            self.notice = Some(format!("Saving {}… (its drive is slow to answer; the show goes on meanwhile)", file_name(&p)));
+        }
+        for done in self.project_saver.take_done() {
+            use crate::project_save::Outcome;
+            let name = file_name(&done.path);
+            let current = self.project_path.as_deref() == Some(done.path.as_str());
+            if current && !matches!(done.outcome, Outcome::Failed(_)) {
+                self.saved_hash = done.hash;
             }
+            let said = match done.outcome {
+                Outcome::Saved { backup: None } => format!("Saved {name}"),
+                Outcome::Saved { backup: Some(e) } => format!("Saved {name} (its backup couldn't be made: {e})"),
+                Outcome::KeptHere => format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else"),
+                Outcome::Failed(e) => format!("Save failed: {e}"),
+            };
+            self.notice = Some(if done.auto && said.starts_with("Saved ") { format!("Autosaved ({})", said.trim_start_matches("Saved ")) } else { said });
         }
     }
 
@@ -1383,6 +1383,7 @@ impl eframe::App for PhosphorApp {
             if !self.bench_session {
                 self.state.autosave_tick(now);
             }
+            self.state.poll_saves();
         }
     }
 
@@ -1397,6 +1398,9 @@ impl eframe::App for PhosphorApp {
         for r in std::iter::once(&mut self.state.stream).chain(self.state.recorders.iter_mut()).filter(|r| r.busy()) {
             r.stop_and_wait();
         }
+        // Saves still being written are let finish (a hung drive gets 30 s; the recovery snapshot below keeps the
+        // work either way).
+        self.state.project_saver.finish(std::time::Duration::from_secs(30));
         if !self.bench_session {
             let snap = self.snapshot();
             self.saver.finish();
@@ -1525,7 +1529,7 @@ impl PhosphorApp {
 }
 
 /// A quick fingerprint of a project's text (autosave: has it changed since the last save?).
-fn hash_text(text: &str) -> u64 {
+pub(crate) fn hash_text(text: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut h);

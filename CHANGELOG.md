@@ -4,6 +4,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Unreleased
+
+- Saving no longer stops Phosphor while a slow drive (an external, network or sleeping disk) takes its time: the
+  show keeps playing, the status line says it's still saving, and quitting waits for the save to finish.
+
 ## 0.5.25 (2026-11-25)
 
 - **Mac: the show no longer drops to one frame a second while Phosphor's own window is covered.** With the window

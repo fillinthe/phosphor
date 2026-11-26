@@ -332,6 +332,8 @@ impl PhosphorApp {
             if name == "open" || name == "save" {
                 if name == "save" {
                     self.state.save_project();
+                    self.state.project_saver.finish(std::time::Duration::from_secs(30));
+                    self.state.poll_saves();
                     println!("SAVE {}", self.state.notice.clone().unwrap_or_default());
                 } else if let Ok(path) = std::env::var("PHOSPHOR_OPEN") {
                     let ok = self.state.open_project_file(&path);
