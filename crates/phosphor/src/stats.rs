@@ -51,11 +51,16 @@ pub struct Stats {
     last_hitch_log: f64,
     worst: f64,
     pub latest: Snapshot,
+    /// Graphics memory the device has reserved, MB (None where the backend doesn't say: Metal, GL, the web).
+    pub gpu_mb: Option<f64>,
+    /// When graphics memory was last read, and the amount last written to the log.
+    gpu_checked: f64,
+    gpu_logged: f64,
 }
 
 impl Stats {
     pub fn new(now: f64) -> Self {
-        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), last_frame: None, last_hitch_log: f64::NEG_INFINITY, worst: 0.0, latest: Snapshot::default() }
+        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), last_frame: None, last_hitch_log: f64::NEG_INFINITY, worst: 0.0, latest: Snapshot::default(), gpu_mb: None, gpu_checked: f64::NEG_INFINITY, gpu_logged: 0.0 }
     }
 
     /// Records one frame; returns a fresh snapshot once per second.
@@ -102,6 +107,29 @@ impl Stats {
         self.last_cpu = cpu;
         Some(self.latest)
     }
+
+    /// Every 10 s, reads the graphics memory in use (`read` = reserved and allocated bytes) and logs it each time it
+    /// has grown by a quarter since the last line: a run that ends "out of memory" then shows what it climbed from
+    /// (report 2026-11-26: an Intel HD 620 on DX12 ran out three times, a minute or two after each start).
+    pub fn watch_gpu_memory(&mut self, now: f64, read: impl FnOnce() -> Option<(u64, u64)>) {
+        if now - self.gpu_checked < 10.0 {
+            return;
+        }
+        self.gpu_checked = now;
+        let Some((reserved, allocated)) = read() else { return };
+        let mb = |b: u64| b as f64 / 1_048_576.0;
+        self.gpu_mb = Some(mb(reserved));
+        if let Some(line) = gpu_memory_line(mb(reserved), mb(allocated), self.gpu_logged) {
+            self.gpu_logged = mb(reserved);
+            log::info!(target: "phosphor::gpu", "{line}");
+        }
+    }
+}
+
+/// The log line for graphics memory now, if it's worth one: the first reading past 256 MB, then each 25 % more.
+fn gpu_memory_line(reserved_mb: f64, allocated_mb: f64, logged_mb: f64) -> Option<String> {
+    (reserved_mb >= 256.0 && reserved_mb > logged_mb * 1.25)
+        .then(|| format!("graphics memory: {reserved_mb:.0} MB reserved, {allocated_mb:.0} MB in use"))
 }
 
 #[cfg(windows)]
@@ -178,6 +206,15 @@ fn rss_from_status(status: &str) -> Option<f64> {
 #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
 fn memory_mb() -> Option<f64> {
     None
+}
+
+#[cfg(test)]
+#[test]
+fn graphics_memory_is_logged_as_it_grows() {
+    assert_eq!(gpu_memory_line(100.0, 90.0, 0.0), None, "small amounts aren't logged");
+    assert!(gpu_memory_line(300.0, 250.0, 0.0).unwrap().contains("300 MB reserved, 250 MB in use"));
+    assert_eq!(gpu_memory_line(350.0, 300.0, 300.0), None, "under a quarter more");
+    assert!(gpu_memory_line(400.0, 380.0, 300.0).is_some());
 }
 
 #[cfg(test)]

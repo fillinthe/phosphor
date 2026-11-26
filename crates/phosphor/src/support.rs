@@ -355,6 +355,10 @@ fn diagnostics_named(st: &mut State, crash: bool) -> String {
     );
     out.push_str(&format!("GPU {:.2} ms a frame · longest gap {:.0} ms · {} passes\n", s.gpu_ms, s.worst_ms, s.passes));
     out.push_str(&gpu_lines(st));
+    if let Some(mb) = st.stats.gpu_mb {
+        out.push_str(&format!("Graphics memory: {mb:.0} MB\n"));
+    }
+    out.push_str(&effects_line(comp.all_effects().map(|e| e.effect.as_str())));
     out.push_str(&movies_line(st));
     // (Device names can carry a person's name, "Jane's iPhone Camera": only in reports people write and see first.)
     #[cfg(not(target_arch = "wasm32"))]
@@ -409,6 +413,24 @@ fn gpu_lines(st: &State) -> String {
     }
     let _ = st;
     String::new()
+}
+
+/// Which effects the project uses ("Effects: blur ×2, isf:bad_tv"): a heavy one is often why a weak graphics card
+/// runs out of memory. A shader of the person's own is only counted (its name is theirs).
+fn effects_line<'a>(ids: impl Iterator<Item = &'a str>) -> String {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for id in ids {
+        let id = if id.starts_with(phosphor_engine::shaders::CUSTOM_EFFECT) { "own shader" } else { id };
+        match counts.iter_mut().find(|(n, _)| n == id) {
+            Some((_, k)) => *k += 1,
+            None => counts.push((id.to_string(), 1)),
+        }
+    }
+    if counts.is_empty() {
+        return String::new();
+    }
+    let words: Vec<String> = counts.into_iter().map(|(n, k)| if k > 1 { format!("{n} ×{k}") } else { n }).collect();
+    format!("Effects: {}\n", words.join(", "))
 }
 
 /// How the movies playing now are decoded: on the graphics card or on the processor (many big movies on the
@@ -617,6 +639,13 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_report_names_the_effects_but_not_own_shaders() {
+        let ids = ["blur", "isf:bad_tv", "blur", "custom:my_secret_name"];
+        assert_eq!(super::effects_line(ids.into_iter()), "Effects: blur ×2, isf:bad_tv, own shader\n");
+        assert_eq!(super::effects_line([].into_iter()), "");
+    }
+
     #[test]
     fn the_report_carries_the_recent_log_without_plumbing() {
         let log = "[2026-10-25T09:00:00Z INFO  phosphor::media::video] clip.mov: opened in 6 ms\n[2026-10-25T09:00:00Z INFO  phosphor::media::video] first frame 0 ms after starting (1x1)\n[2026-10-25T09:00:01Z INFO  phosphor::action] effect added: invert on layer \"A\"\n[2026-10-25T09:00:02Z WARN  phosphor::hitch] a frame took 180 ms (render 3.0 ms, GPU 1.0 ms)";
