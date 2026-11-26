@@ -23,19 +23,30 @@ pub(crate) struct Level<'a> {
     log: bool,
     /// An on/off button at the start of the bar (and the control it maps to).
     switch: Option<(&'a mut bool, Option<ControlTarget>)>,
+    /// Shown and typed in other units: (units per 1 of the value, suffix), e.g. canvas pixels.
+    units: Option<(f32, &'static str)>,
+}
+
+/// How a level writes its value.
+#[derive(Clone, Copy)]
+enum Shown {
+    Number,
+    Percent,
+    /// The value times this, with this after it (" px").
+    Units(f32, &'static str),
 }
 
 impl<'a> Level<'a> {
     /// A 0..1 value shown as a percentage.
     pub fn percent(value: &'a mut f32, text: impl Into<String>) -> Self {
-        Self { value, min: 0.0, max: 1.0, default: 1.0, text: text.into(), percent: true, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None }
+        Self { value, min: 0.0, max: 1.0, default: 1.0, text: text.into(), percent: true, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None, units: None }
     }
 
     /// Any range, shown as a number.
     pub fn range(value: &'a mut f32, min: f32, max: f32, text: impl Into<String>) -> Self {
         // A range must run low to high.
         let (min, max) = (min.min(max), max.max(min));
-        Self { value, min, max, default: min, text: text.into(), percent: false, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None }
+        Self { value, min, max, default: min, text: text.into(), percent: false, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None, units: None }
     }
 
     /// Up to this value as a percentage (volume goes to 200%).
@@ -83,13 +94,25 @@ impl<'a> Level<'a> {
         self
     }
 
+    /// Shows (and takes typed) values in other units: `per` of them for each 1 of the value, written with `suffix`.
+    /// Canvas pixels for a position, a percentage for a scale. The stored value doesn't change.
+    pub fn units(mut self, per: f32, suffix: &'static str) -> Self {
+        self.units = (per.is_finite() && per != 0.0).then_some((per, suffix));
+        self
+    }
+
     pub fn tip(mut self, tip: &'a str) -> Self {
         self.tip = Some(tip);
         self
     }
 
     pub fn show(self, ui: &mut egui::Ui) -> egui::Response {
-        let Level { value, min, max, default, text, percent, mut modulation, target, width, vertical, tip, log, switch } = self;
+        let Level { value, min, max, default, text, percent, mut modulation, target, width, vertical, tip, log, switch, units } = self;
+        let shown_as = match units {
+            Some((per, suffix)) => Shown::Units(per, suffix),
+            None if percent => Shown::Percent,
+            None => Shown::Number,
+        };
         // The on/off button first (it takes its room from the bar).
         let mut off = false;
         let mut switch_w = 0.0;
@@ -205,7 +228,7 @@ impl<'a> Level<'a> {
                     .clamp(0.0, 1.0);
                     let u = if low && u < 0.02 { 0.0 } else if !low && u > 0.98 { 1.0 } else { u };
                     super::locks::ask(ui, super::locks::PrefChange::Limit(t.clone(), low, Some(u)));
-                    let shown = format_value(from_t(u), min, max, percent);
+                    let shown = format_value(from_t(u), min, max, shown_as);
                     h.clone().on_hover_text_at_pointer(format!("{} {shown}", if low { "Lowest" } else { "Highest" }));
                     ui.ctx().request_repaint();
                 }
@@ -335,7 +358,7 @@ impl<'a> Level<'a> {
         }
         let font = egui::FontId::proportional(11.0);
         let color = ui_vis.strong_text_color();
-        let shown = format_value(*value, min, max, percent);
+        let shown = format_value(*value, min, max, shown_as);
         match vertical {
             Some(_) => {
                 p.text(rect.center_bottom() - egui::vec2(0.0, 3.0), egui::Align2::CENTER_BOTTOM, &shown, egui::FontId::proportional(9.5), color);
@@ -393,12 +416,12 @@ impl<'a> Level<'a> {
         let before = *value;
         let typed_id = r.id.with("typed");
         let unit_now = to_t(*value);
-        let shown_unit = |u: f32| format_value(from_t(u), min, max, percent);
+        let shown_unit = |u: f32| format_value(from_t(u), min, max, shown_as);
         let mut exact = |ui: &mut egui::Ui| {
             if locked {
                 hint(ui, "Locked: unlock it to change the value");
             } else {
-                typed_value(ui, typed_id, value, min, max, percent);
+                typed_value(ui, typed_id, value, min, max, shown_as);
             }
             // How this slider takes a click (its own way, or one button to set every slider).
             super::locks::click_items(ui, target.as_ref());
@@ -422,13 +445,13 @@ impl<'a> Level<'a> {
 }
 
 /// A field to type an exact value, selected and ready when the menu opens; Enter sets it (a % sign is optional).
-fn typed_value(ui: &mut egui::Ui, id: egui::Id, value: &mut f32, min: f32, max: f32, percent: bool) {
+fn typed_value(ui: &mut egui::Ui, id: egui::Id, value: &mut f32, min: f32, max: f32, shown: Shown) {
     let frame = ui.ctx().cumulative_frame_nr();
     let (mut text, seen): (String, u64) = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
     // Not drawn last frame = the menu just opened: start from the current value.
     let fresh = seen + 1 < frame;
     if fresh {
-        text = format_value(*value, min, max, percent).trim_end_matches('%').to_string();
+        text = format_value(*value, min, max, shown).trim_end_matches(suffix_of(shown)).to_string();
     }
     ui.horizontal(|ui| {
         ui.label("Value");
@@ -440,11 +463,12 @@ fn typed_value(ui: &mut egui::Ui, id: egui::Id, value: &mut f32, min: f32, max: 
             state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(n))));
             state.store(ui.ctx(), out.response.id);
         }
-        if percent {
-            ui.label("%");
+        let suffix = suffix_of(shown).trim();
+        if !suffix.is_empty() {
+            ui.label(suffix);
         }
         if out.response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if let Some(v) = parse_typed(&text, min, max, percent) {
+            if let Some(v) = parse_typed(&text, min, max, shown) {
                 *value = v;
             }
             ui.close();
@@ -454,20 +478,36 @@ fn typed_value(ui: &mut egui::Ui, id: egui::Id, value: &mut f32, min: f32, max: 
     ui.ctx().data_mut(|d| d.insert_temp(id, (text, frame)));
 }
 
-/// A typed value ("75", "75 %", "0.5"), in range; None if it isn't a number.
-fn parse_typed(text: &str, min: f32, max: f32, percent: bool) -> Option<f32> {
-    let v: f32 = text.trim().trim_end_matches('%').trim().parse().ok()?;
-    Some((if percent { v / 100.0 } else { v }).clamp(min, max))
+/// A typed value ("75", "75 %", "0.5", "-480 px"), in range; None if it isn't a number.
+fn parse_typed(text: &str, min: f32, max: f32, shown: Shown) -> Option<f32> {
+    let v: f32 = text.trim().trim_end_matches(suffix_of(shown).trim()).trim().parse().ok()?;
+    let v = match shown {
+        Shown::Number => v,
+        Shown::Percent => v / 100.0,
+        Shown::Units(per, _) => v / per,
+    };
+    Some(v.clamp(min, max))
+}
+
+/// What's written after a value ("%", " px"; nothing for a plain number).
+fn suffix_of(shown: Shown) -> &'static str {
+    match shown {
+        Shown::Number => "",
+        Shown::Percent => "%",
+        Shown::Units(_, suffix) => suffix,
+    }
 }
 
 /// How a level shows its value: a percentage, a whole number for wide ranges, else two decimals.
-fn format_value(v: f32, min: f32, max: f32, percent: bool) -> String {
-    let s = if percent {
-        format!("{:.0}%", v * 100.0)
-    } else if max - min >= 20.0 {
-        format!("{v:.0}")
-    } else {
-        format!("{v:.2}")
+fn format_value(v: f32, min: f32, max: f32, shown: Shown) -> String {
+    let s = match shown {
+        Shown::Percent => format!("{:.0}%", v * 100.0),
+        Shown::Units(per, suffix) => {
+            let span = (max - min) * per.abs();
+            if span >= 20.0 { format!("{:.0}{suffix}", v * per) } else { format!("{:.2}{suffix}", v * per) }
+        }
+        Shown::Number if max - min >= 20.0 => format!("{v:.0}"),
+        Shown::Number => format!("{v:.2}"),
     };
     super::no_minus_zero(s)
 }
@@ -478,20 +518,34 @@ mod tests {
 
     #[test]
     fn zero_never_has_a_minus() {
-        assert_eq!(format_value(-0.001, -1.0, 1.0, false), "0.00");
-        assert_eq!(format_value(-0.0, -1.0, 1.0, false), "0.00");
-        assert_eq!(format_value(-0.3, -180.0, 180.0, false), "0");
-        assert_eq!(format_value(-0.001, 0.0, 1.0, true), "0%");
-        assert_eq!(format_value(-0.5, -1.0, 1.0, false), "-0.50", "real negatives keep their sign");
+        assert_eq!(format_value(-0.001, -1.0, 1.0, Shown::Number), "0.00");
+        assert_eq!(format_value(-0.0, -1.0, 1.0, Shown::Number), "0.00");
+        assert_eq!(format_value(-0.3, -180.0, 180.0, Shown::Number), "0");
+        assert_eq!(format_value(-0.001, 0.0, 1.0, Shown::Percent), "0%");
+        assert_eq!(format_value(-0.5, -1.0, 1.0, Shown::Number), "-0.50", "real negatives keep their sign");
+        assert_eq!(format_value(-0.0001, -1.0, 1.0, Shown::Units(1920.0, " px")), "0 px");
     }
 
     #[test]
     fn typed_values() {
-        assert_eq!(parse_typed("75", 0.0, 1.0, true), Some(0.75));
-        assert_eq!(parse_typed(" 120 % ", 0.0, 2.0, true), Some(1.2));
-        assert_eq!(parse_typed("300", 0.0, 2.0, true), Some(2.0));
-        assert_eq!(parse_typed("0.5", 0.0, 4.0, false), Some(0.5));
-        assert_eq!(parse_typed("abc", 0.0, 1.0, true), None);
+        assert_eq!(parse_typed("75", 0.0, 1.0, Shown::Percent), Some(0.75));
+        assert_eq!(parse_typed(" 120 % ", 0.0, 2.0, Shown::Percent), Some(1.2));
+        assert_eq!(parse_typed("300", 0.0, 2.0, Shown::Percent), Some(2.0));
+        assert_eq!(parse_typed("0.5", 0.0, 4.0, Shown::Number), Some(0.5));
+        assert_eq!(parse_typed("abc", 0.0, 1.0, Shown::Percent), None);
+    }
+
+    #[test]
+    fn pixels_on_a_1920_canvas() {
+        let px = Shown::Units(1920.0, " px");
+        assert_eq!(format_value(0.25, -1.0, 1.0, px), "480 px");
+        assert_eq!(format_value(-0.5, -1.0, 1.0, px), "-960 px");
+        assert_eq!(parse_typed("480", -1.0, 1.0, px), Some(0.25));
+        assert_eq!(parse_typed("-960 px", -1.0, 1.0, px), Some(-0.5));
+        assert_eq!(parse_typed("5000", -1.0, 1.0, px), Some(1.0), "kept in range");
+        let pct = Shown::Units(100.0, "%");
+        assert_eq!(format_value(1.5, 0.05, 4.0, pct), "150%");
+        assert_eq!(parse_typed("150%", 0.05, 4.0, pct), Some(1.5));
     }
 }
 

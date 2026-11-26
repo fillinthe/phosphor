@@ -70,6 +70,12 @@ impl Composition {
         layer.comp.filter(|c| self.comp(*c).is_some()).or_else(|| self.comps.first().map(|c| c.id))
     }
 
+    /// The size of the canvas a layer is placed on: its comp's, or the project's (what Transform's pixels count).
+    pub fn layer_canvas(&self, layer: &LayerState) -> (u32, u32) {
+        let master = (self.width, self.height);
+        self.comp_of(layer).and_then(|c| self.comp(c)).map_or(master, |c| c.size(master))
+    }
+
     /// The comp the panels show (None when the project has no comps: every layer).
     pub fn open_comp(&self) -> Option<u64> {
         self.open_comp.filter(|c| self.comp(*c).is_some()).or_else(|| self.comps.first().map(|c| c.id))

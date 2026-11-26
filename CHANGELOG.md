@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- Transform shows a layer's position in pixels of its canvas (X 480 px) and its size as a percentage (Scale 150%,
+  Scale X / Y too); right-click › Value takes pixels and percentages. Saved projects are unchanged.
 - Saving no longer stops Phosphor while a slow drive (an external, network or sleeping disk) takes its time: the
   show keeps playing, the status line says it's still saving, and quitting waits for the save to finish.
 

@@ -64,6 +64,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let position = st.media.position(sel);
         let has_sound = st.media.has_sound(sel);
         let bpm = st.comp.bpm;
+        let canvas = st.comp.layer(sel).map_or((st.comp.width, st.comp.height), |l| st.comp.layer_canvas(l));
         let st_chapters = st.media.chapters(sel);
         let inherited = st.comp.inherited_effects(sel);
         let numbers = if matches!(st.comp.layer(sel).map(|l| &l.source), Some(SourceSpec::Text(_))) { number_choices(&st.comp) } else { Vec::new() };
@@ -145,7 +146,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one."));
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default(), numbers };
+            let media = LayerMedia { info: info.as_deref(), canvas, position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default(), numbers };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len, clip_slot);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
@@ -213,6 +214,8 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
 /// What a layer's movie is doing, for `layer_editor` (read before the layer is borrowed).
 pub(crate) struct LayerMedia<'a> {
     pub info: Option<&'a str>,
+    /// The canvas the layer is placed on (Transform shows position in its pixels).
+    pub canvas: (u32, u32),
     pub position: Option<(f64, f64)>,
     pub has_sound: bool,
     /// Match the beat: a scan of this movie is running.
@@ -521,7 +524,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
             ui.separator();
         }
-    transform_editor(ui, layer);
+    transform_editor(ui, layer, media.canvas);
     mixer_editor(ui, layer);
     ui.separator();
     // Effects that also act on this layer from above its own chain (they don't show in the list below).
@@ -727,12 +730,14 @@ fn part_row(ui: &mut egui::Ui, t: &mut phosphor_engine::LayerTransform, layer: u
         let level = if part >= 5 { Level::percent(value, p.name).max(p.max) } else { Level::range(value, p.min, p.max, p.name) };
         let level = level.default(p.default).target(target);
         let level = if p.log { level.log() } else { level };
+        // Scale X / Y as percentages, like Scale.
+        let level = if part < 2 { level.units(100.0, "%") } else { level };
         let level = if tip.is_empty() { level } else { level.tip(tip) };
         level.show(ui);
     });
 }
 
-fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
+fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState, canvas: (u32, u32)) {
     let id = layer.id;
     let t = &mut layer.transform;
     let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
@@ -745,11 +750,16 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
                 r.clone().on_hover_text(tip);
             });
         });
-        let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
+        // Position in the canvas's pixels and Scale as a percentage, as in other VJ apps (ticket #50: "on Resolume
+        // it use pixel"); what's saved stays as it was (canvas widths / heights, a multiplier).
+        let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32, units: Option<(f32, &'static str)>| {
             ui.horizontal(|ui| {
                 let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);
                 if log {
                     level = level.log();
+                }
+                if let Some((per, suffix)) = units {
+                    level = level.units(per, suffix);
                 }
                 if let Some(m) = m {
                     level = level.modulation(m);
@@ -757,10 +767,11 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
                 level.show(ui);
             });
         };
-        row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), Some(&mut t.x_mod), false, 0.0);
-        row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), Some(&mut t.y_mod), false, 0.0);
-        row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
-        row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
+        let (w, h) = (canvas.0.max(1) as f32, canvas.1.max(1) as f32);
+        row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), Some(&mut t.x_mod), false, 0.0, Some((w, " px")));
+        row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), Some(&mut t.y_mod), false, 0.0, Some((h, " px")));
+        row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0, Some((100.0, "%")));
+        row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0, None);
         // Scale X / Y apart (with Scale above, a multiplier), depth / tilts in 3D (perspective); crop comes later.
         let tips = ["", "", "Further away (smaller, in perspective) or closer", "Tip it forward / back in 3D", "Turn it left / right in 3D"];
         for (i, tip) in tips.iter().enumerate() {
