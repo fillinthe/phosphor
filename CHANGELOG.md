@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.25 (2026-11-25)
 
 - **Mac: the show no longer drops to one frame a second while Phosphor's own window is covered.** With the window
   under a full-screen output (or anything else covering it), every frame waited a second for a picture macOS never
