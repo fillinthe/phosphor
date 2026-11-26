@@ -6,6 +6,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## Unreleased
 
+- Windows: a full-screen output no longer has a thin white line along its top edge.
 - Transform shows a layer's position in pixels of its canvas (X 480 px) and its size as a percentage (Scale 150%,
   Scale X / Y too); right-click › Value takes pixels and percentages. Saved projects are unchanged.
 - Saving no longer stops Phosphor while a slow drive (an external, network or sleeping disk) takes its time: the

@@ -1179,7 +1179,14 @@ unsafe fn public_window_callback_inner(
                 if let Ok(monitor_info) = monitor::get_monitor_info(monitor) {
                     params.rgrc[0] = monitor_info.monitorInfo.rcWork;
                 }
-            } else if window_flags.contains(WindowFlags::MARKER_UNDECORATED_SHADOW) {
+            } else if window_flags.contains(WindowFlags::MARKER_UNDECORATED_SHADOW)
+                // PHOSPHOR PATCH: a window the app turned into a plain popup (an output covering a screen: no
+                // caption) keeps its whole area. The shadow's 1 px tweak showed as a white line along the top of a
+                // full-screen output (bug report 2026-11-26, Windows 11).
+                && (unsafe { super::get_window_long(window, GWL_STYLE) } as u32
+                    & windows_sys::Win32::UI::WindowsAndMessaging::WS_CAPTION)
+                    != 0
+            {
                 // Extend the client area to cover the whole non-client area.
                 // https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-nccalcsize#remarks
                 //
