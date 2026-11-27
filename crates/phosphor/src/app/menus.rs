@@ -403,6 +403,10 @@ impl PhosphorApp {
                             if crate::ui::toggle(ui, &mut ask, "Ask before removing").on_hover_text("On: an \"are you sure?\" before a watched folder, a collection or its folder is removed. Ticking \"Don't ask again\" there switches this off").changed() {
                                 crate::ui::set_confirm_removes(ask);
                             }
+                            let mut click_plays = crate::panels::media_click_plays();
+                            if crate::ui::toggle(ui, &mut click_plays, "A click in Media plays").on_hover_text("Off (the usual): a click on a file in Media picks it, a double-click or a drag plays it. On: a single click puts it on air").changed() {
+                                crate::panels::set_media_click_plays(click_plays);
+                            }
                             let mut launches = crate::history::undo_playback();
                             if crate::ui::toggle(ui, &mut launches, "Undo includes clip launches").on_hover_text("Off (the usual): Undo steps through your edits (settings, effects, values, layout) and leaves what's playing on each layer alone. On: launching a clip or changing a layer's source is an undo step too").changed() {
                                 crate::history::set_undo_playback(launches);

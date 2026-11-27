@@ -22,6 +22,7 @@ impl PhosphorApp {
         let sliders_jump = stored(KEY_SLIDERS_JUMP).is_none_or(|v| v == "1") && std::env::var_os("PHOSPHOR_SLIDERS_DRAG").is_none();
         let confirm_removes = stored(KEY_CONFIRM_REMOVES).is_none_or(|v| v == "1");
         crate::history::set_undo_playback(stored(KEY_UNDO_PLAYBACK).is_some_and(|v| v == "1"));
+        crate::panels::set_media_click_plays(stored(KEY_MEDIA_CLICK_PLAYS).is_some_and(|v| v == "1"));
         crate::support::set_donate_shown(stored(KEY_DONATE_SHOWN).is_none_or(|v| v == "1"));
         // The cache: its size and clean-up as chosen, then the clean-up of what went unused (on its own thread).
         #[cfg(not(target_arch = "wasm32"))]

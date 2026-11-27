@@ -53,6 +53,7 @@ impl PhosphorApp {
         storage.set_string(KEY_DONATE_SHOWN, if crate::support::donate_shown() { "1" } else { "0" }.into());
         storage.set_string(KEY_UNDO_PLAYBACK, if crate::history::undo_playback() { "1" } else { "0" }.into());
         storage.set_string(KEY_CONFIRM_REMOVES, if crate::ui::confirm_removes() { "1" } else { "0" }.into());
+        storage.set_string(KEY_MEDIA_CLICK_PLAYS, if crate::panels::media_click_plays() { "1" } else { "0" }.into());
         storage.set_string(KEY_LANGUAGE, crate::i18n::chosen().code().into());
         storage.set_string(KEY_TOOLTIPS, if crate::theme::tooltips_on() { "1" } else { "0" }.into());
         storage.set_string(KEY_PROJECTS_AT_START, if self.state.projects.at_start { "1" } else { "0" }.into());

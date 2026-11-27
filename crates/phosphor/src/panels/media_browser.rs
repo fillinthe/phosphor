@@ -421,11 +421,13 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         }
     }
     let uses = st.comp.media_uses();
+    let picked = st.media_view.picked.clone();
     let targets = MediaTargets {
         layers: &layers,
         click: click_target.as_deref(),
         playing: &playing,
         uses: &uses,
+        picked: picked.as_deref(),
     };
     let collections = st.comp.media_collections.clone();
     let mut open_dir = None;

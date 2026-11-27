@@ -90,8 +90,10 @@ pub struct MediaView {
     pub classic: bool,
     /// Videos / pictures only (`All`, `Videos`, `Images`).
     pub only: MediaFilter,
-    /// Where a click on a tile plays.
+    /// Where a double-click (or a click, `media_click_plays`) on a tile plays.
     pub plays_on: PlaysOn,
+    /// The tile last clicked (its file's path): framed, not playing.
+    pub picked: Option<String>,
     pub follow_open: bool,
     pub follow_text: String,
     #[cfg(not(target_arch = "wasm32"))]
@@ -124,6 +126,7 @@ impl Default for MediaView {
             classic: false,
             only: MediaFilter::All,
             plays_on: PlaysOn::Selected,
+            picked: None,
             follow_open: false,
             follow_text: String::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -166,8 +169,31 @@ fn playable(st: &State, shown: &[usize]) -> Vec<usize> {
     shown.iter().copied().filter(|&i| st.comp.media_bin.get(i).is_some_and(|m| !m.skip)).collect()
 }
 
+/// A click on a media tile only picks it (double-click or drag plays it): one slip in the bin used to put a file on
+/// air. On = the old way, a click plays (the brightness menu: "A click in Media plays").
+static CLICK_PLAYS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn media_click_plays() -> bool {
+    CLICK_PLAYS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn set_media_click_plays(on: bool) {
+    CLICK_PLAYS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// What a click and a double-click on a tile do: (click, double-click). A skipped file only shows what it is.
+fn tile_acts(i: usize, skip: bool, click_plays: bool) -> (MediaAct, Option<MediaAct>) {
+    match (skip, click_plays) {
+        (true, _) => (MediaAct::Info(i), None),
+        (false, true) => (MediaAct::Assign(i), None),
+        (false, false) => (MediaAct::Pick(i), Some(MediaAct::Assign(i))),
+    }
+}
+
 pub(crate) enum MediaAct {
     Assign(usize),
+    /// Picked (framed), not played: a click with "A click in Media plays" off.
+    Pick(usize),
     NewLayer(usize),
     /// Play this item on that layer.
     PlayOn(usize, u64),
@@ -380,7 +406,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     let uses = st.comp.media_uses();
-    let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing, uses: &uses };
+    let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing, uses: &uses, picked: st.media_view.picked.as_deref() };
     let State { comp, thumbs, .. } = st;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
@@ -503,6 +529,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                 };
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
             }
+            MediaAct::Pick(i) => st.media_view.picked = st.comp.media_bin.get(i).map(|m| m.path.clone()),
             MediaAct::Convert(i) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(item) = st.comp.media_bin.get(i).cloned() {
@@ -694,6 +721,8 @@ pub(crate) struct MediaTargets<'a> {
     pub playing: &'a std::collections::HashMap<String, Vec<String>>,
     /// How many layers and clips use each file.
     pub uses: &'a std::collections::HashMap<String, usize>,
+    /// The tile last clicked (`MediaView::picked`).
+    pub picked: Option<&'a str>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -734,7 +763,17 @@ pub(crate) fn media_tile(
         crate::ui::away_mark(p, thumb_rect, crate::ui::plays_away(&item.path));
     }
     let on = targets.playing.get(&item.path);
-    let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
+    // On screen: the accent, thick. Picked (clicked, not playing): a white frame. Under the pointer: a quiet one.
+    let picked = targets.picked == Some(item.path.as_str());
+    let stroke = if on.is_some() {
+        Stroke::new(2.5, accent())
+    } else if picked {
+        Stroke::new(2.0, ui.visuals().strong_text_color())
+    } else if resp.hovered() {
+        Stroke::new(1.5, crate::theme::faint())
+    } else {
+        Stroke::new(1.0, crate::theme::line())
+    };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
     if item.skip {
         // Skipped: dimmed, with the sign in the middle (it stays here but isn't played).
@@ -786,13 +825,18 @@ pub(crate) fn media_tile(
     if star.clicked() {
         acts.push(MediaAct::Favorite(i));
     }
-    if resp.clicked() {
-        acts.push(if item.skip { MediaAct::Info(i) } else { MediaAct::Assign(i) });
+    let click_plays = media_click_plays();
+    let (on_click, on_double) = tile_acts(i, item.skip, click_plays);
+    match on_double {
+        Some(a) if resp.double_clicked() => acts.push(a),
+        _ if resp.clicked() => acts.push(on_click),
+        _ => {}
     }
+    let play = if click_plays { "Click" } else { "Double-click" };
     let click = match (item.skip, targets.click) {
         (true, _) => "Skipped: it stays here but doesn't play. Click: see what it is · right-click › Play it again".to_string(),
-        (false, Some(name)) => format!("Click: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
-        (false, None) => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
+        (false, Some(name)) => format!("{play}: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
+        (false, None) => format!("{play}: play on a new layer · drag onto any layer or clip slot · right-click: Play on…"),
     };
     let showing = on.map_or(String::new(), |ls| format!("\nOn screen now: {}", ls.join(", ")));
     let used = match targets.uses.get(&item.path).copied().unwrap_or(0) {
@@ -953,4 +997,19 @@ fn folder_of(m: &phosphor_engine::MediaItem) -> String {
         return String::new();
     }
     std::path::Path::new(&m.path).parent().map_or_else(|| m.folder.clone(), |p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod click_tests {
+    use super::*;
+
+    /// A click on a media tile picks it and a double-click plays it, unless "A click in Media plays" is on; a skipped
+    /// file only ever shows what it is.
+    #[test]
+    fn a_click_picks_and_a_double_click_plays() {
+        assert!(matches!(tile_acts(3, false, false), (MediaAct::Pick(3), Some(MediaAct::Assign(3)))));
+        assert!(matches!(tile_acts(3, false, true), (MediaAct::Assign(3), None)));
+        assert!(matches!(tile_acts(3, true, false), (MediaAct::Info(3), None)));
+        assert!(matches!(tile_acts(3, true, true), (MediaAct::Info(3), None)));
+    }
 }
