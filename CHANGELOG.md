@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Unreleased
+## 0.5.26 (2026-11-26)
 
 - Mac: a full-screen output stays put. macOS sometimes moved it back under the menu bar, so the picture (and every
   mapped slice) slid down and the desktop showed above it; Phosphor now notices within a second and puts it back.
