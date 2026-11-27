@@ -536,7 +536,9 @@ impl PhosphorApp {
                             for p in self.state.recent.clone() {
                                 let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
                                 if crate::ui::command(ui, name).on_hover_text(&p).clicked() {
-                                    let _ = self.state.open_project_file(&p);
+                                    // (Asks first when the project open now has unsaved edits or is on the outputs.)
+                                    let ctx = ui.ctx().clone();
+                                    self.guard(&ctx, super::guard::Guarded::OpenFile(p, false));
                                     ui.close();
                                 }
                             }

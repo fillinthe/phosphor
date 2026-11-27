@@ -64,6 +64,10 @@ pub struct BenchConfig {
     pub drag: Option<(String, String)>,
     /// `--clicks "x,y@secs;x,y@secs"`: real left-clicks in order, each at its time (open a menu, then click in it).
     pub clicks: Vec<(String, f64)>,
+    /// `--keys "cmd+n@3;delete@4>600,420"`: real key presses in order, each at its time (`cmd`, `shift`, `alt` joined
+    /// with `+`; egui's key names), the pointer moved to `>x,y` first when given. Show-ending keys only ask when
+    /// `PHOSPHOR_BENCH_ASK=1` (a bench does them at once otherwise).
+    pub keys: Vec<BenchKey>,
     pub stream2: Option<String>,
     pub stream_copy: Option<String>,
     /// Open the import chooser for this Resolume / VDMX file.
@@ -95,6 +99,46 @@ pub struct BenchConfig {
     pub previews: usize,
 }
 
+/// One `--keys` press: the key, its modifiers, when (seconds), and where the pointer goes first.
+#[derive(Clone, Debug)]
+pub struct BenchKey {
+    pub text: String,
+    pub key: eframe::egui::Key,
+    pub modifiers: eframe::egui::Modifiers,
+    pub at: f64,
+    pub pointer: Option<(f32, f32)>,
+}
+
+impl BenchKey {
+    /// "cmd+shift+z@2.5>100,200": None when the key's name isn't one egui knows.
+    pub fn parse(spec: &str) -> Option<Self> {
+        let spec = spec.trim();
+        let (rest, pointer) = spec.split_once('>').map_or((spec, None), |(k, p)| (k, p.split_once(',').and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)))));
+        let (combo, at) = rest.split_once('@').map_or((rest, 1.0), |(k, t)| (k, t.trim().parse().unwrap_or(1.0)));
+        let mut modifiers = eframe::egui::Modifiers::NONE;
+        let mut key = None;
+        for part in combo.split('+').map(str::trim) {
+            match part.to_lowercase().as_str() {
+                "cmd" | "ctrl" => {
+                    modifiers.command = true;
+                    modifiers.mac_cmd = cfg!(target_os = "macos");
+                    modifiers.ctrl = !cfg!(target_os = "macos");
+                }
+                "shift" => modifiers.shift = true,
+                "alt" => modifiers.alt = true,
+                _ => key = eframe::egui::Key::from_name(&capitalized(part)),
+            }
+        }
+        Some(Self { text: spec.to_string(), key: key?, modifiers, at, pointer })
+    }
+}
+
+/// "delete" → "Delete", "n" → "N" (egui's key names).
+fn capitalized(s: &str) -> String {
+    let mut c = s.chars();
+    c.next().map_or(String::new(), |f| f.to_uppercase().chain(c).collect())
+}
+
 impl BenchConfig {
     pub fn from_args(args: impl Iterator<Item = String>) -> Option<Self> {
         let args: Vec<String> = args.collect();
@@ -121,6 +165,7 @@ impl BenchConfig {
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
                 ("--drag", Some(v)) => cfg.drag = v.split_once(':').map(|(a, b)| (a.to_string(), b.to_string())),
+                ("--keys", Some(v)) => cfg.keys = v.split(';').filter_map(BenchKey::parse).collect(),
                 ("--clicks", Some(v)) => {
                     cfg.clicks = v.split(';').filter_map(|c| c.split_once('@').map(|(p, t)| (p.trim().to_string(), t.trim().parse().unwrap_or(1.0)))).collect();
                 }
@@ -294,5 +339,21 @@ impl BenchConfig {
             }
         }
         comp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui::Key;
+
+    #[test]
+    fn bench_keys_read_as_typed() {
+        let k = super::BenchKey::parse("cmd+n@3").unwrap();
+        assert_eq!((k.key, k.modifiers.command, k.modifiers.shift, k.at, k.pointer), (Key::N, true, false, 3.0, None));
+        let k = super::BenchKey::parse(" delete@4.5>600,420 ").unwrap();
+        assert_eq!((k.key, k.modifiers.command, k.at, k.pointer), (Key::Delete, false, 4.5, Some((600.0, 420.0))));
+        let k = super::BenchKey::parse("cmd+shift+z").unwrap();
+        assert_eq!((k.key, k.modifiers.shift, k.at), (Key::Z, true, 1.0));
+        assert!(super::BenchKey::parse("cmd+nokey@2").is_none());
     }
 }

@@ -1,5 +1,6 @@
 //! Show-ending actions ask first. Quitting or closing the output windows while they're showing, and replacing a
-//! project that has unsaved edits or is on the outputs (New Project, a template, a project from the account), each
+//! project that has unsaved edits or is on the outputs (New Project, a template, a project file opened by File ›
+//! Open, Open Recent, the Projects window or the Finder, a project from the account), each
 //! wait for an "are you sure?" (`ui::ask_confirm_always`): one slip of the hand at a show must never black out the
 //! room or lose the night's work. Undo can't bring a replaced project back (`History::start_over`), so the question
 //! is the only safety there is. Nothing is asked when nothing would be lost.
@@ -16,6 +17,15 @@ pub(crate) enum Guarded {
     Template(usize),
     /// A project opened from the account: (id, name, the project).
     FromAccount(String, String, Box<Composition>),
+    /// A project file (File › Open, Open Recent, the Projects window, the Finder); `true` = from the Projects
+    /// window, which comes back when the file couldn't be opened (so another can be picked).
+    OpenFile(String, bool),
+}
+
+/// A bench (`PHOSPHOR_BENCH_ASK=1`) asks as the app does, so `--keys` can show the questions; otherwise a bench does
+/// everything at once (nobody is there to answer).
+fn bench_asks() -> bool {
+    std::env::var_os("PHOSPHOR_BENCH_ASK").is_some()
 }
 
 /// The pop-up's id (one question at a time).
@@ -47,6 +57,7 @@ fn question(g: &Guarded, showing: usize, edited: bool) -> (String, String, &'sta
         Guarded::NewProject => replaced("Start a new project?".into(), "New project"),
         Guarded::Template(k) => replaced(format!("New project from \"{}\"?", phosphor_engine::TEMPLATES.get(*k).map_or("", |t| t.0)), "New project"),
         Guarded::FromAccount(_, name, _) => replaced(format!("Open \"{name}\" from your account?"), "Open"),
+        Guarded::OpenFile(path, _) => replaced(format!("Open \"{}\"?", std::path::Path::new(path).file_stem().map_or(path.as_str().into(), |n| n.to_string_lossy())), "Open"),
     }
 }
 
@@ -54,7 +65,7 @@ fn question(g: &Guarded, showing: usize, edited: bool) -> (String, String, &'sta
 fn needs_asking(g: &Guarded, showing: usize, edited: bool) -> bool {
     match g {
         Guarded::Quit | Guarded::OutputsOff => showing > 0,
-        Guarded::NewProject | Guarded::Template(_) | Guarded::FromAccount(..) => showing > 0 || edited,
+        Guarded::NewProject | Guarded::Template(_) | Guarded::FromAccount(..) | Guarded::OpenFile(..) => showing > 0 || edited,
     }
 }
 
@@ -63,12 +74,15 @@ impl PhosphorApp {
     pub(crate) fn guard(&mut self, ctx: &egui::Context, g: Guarded) {
         let showing = self.state.output.lock().map_or(0, |m| m.values().filter(|o| o.open).count());
         let edited = self.state.edited();
-        if self.bench_session || !needs_asking(&g, showing, edited) {
+        if (self.bench_session && !bench_asks()) || !needs_asking(&g, showing, edited) {
             self.perform(ctx, g);
             return;
         }
         let (title, body, yes) = question(&g, showing, edited);
         log::info!(target: "phosphor::action", "asking first: {title}");
+        if self.bench.is_some() {
+            println!("ASK {title} | {body}");
+        }
         crate::ui::ask_confirm_always(ctx, ASK, &title, &body, yes);
         self.guarded = Some(g);
     }
@@ -89,7 +103,7 @@ impl PhosphorApp {
 
     /// The main window asked to close (⌘Q, the red button, the Dock): while outputs are showing it waits for a yes.
     pub(crate) fn guard_close(&mut self, ctx: &egui::Context) {
-        if !ctx.input(|i| i.viewport().close_requested()) || self.quit_confirmed || self.bench_session || !self.state.output_open() {
+        if !ctx.input(|i| i.viewport().close_requested()) || self.quit_confirmed || (self.bench_session && !bench_asks()) || !self.state.output_open() {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -131,6 +145,11 @@ impl PhosphorApp {
                 st.notice = Some(format!("Opened {name} from your account"));
                 st.cloud_project = Some((id, name));
             }
+            Guarded::OpenFile(path, from_projects) => {
+                if !st.open_project_file(&path) && from_projects {
+                    st.projects.open = true;
+                }
+            }
         }
     }
 }
@@ -146,7 +165,7 @@ mod tests {
             assert!(!needs_asking(&g, 0, true), "nothing showing: nothing goes dark");
             assert!(needs_asking(&g, 1, false));
         }
-        for g in [Guarded::NewProject, Guarded::Template(0)] {
+        for g in [Guarded::NewProject, Guarded::Template(0), Guarded::OpenFile("/shows/Club.phosphor".into(), false)] {
             assert!(!needs_asking(&g, 0, false), "a saved project with no output open is replaced at once");
             assert!(needs_asking(&g, 0, true), "unsaved edits");
             assert!(needs_asking(&g, 2, false), "on the outputs");
@@ -161,6 +180,10 @@ mod tests {
         assert_eq!(yes, "New project");
         let (_, body, _) = question(&Guarded::Template(0), 2, false);
         assert!(body.contains("2 outputs") && !body.contains("saved"), "{body}");
+        let (title, body, yes) = question(&Guarded::OpenFile("/shows/Club night.phosphor".into(), true), 0, true);
+        assert_eq!(title, "Open \"Club night\"?");
+        assert!(body.contains("aren't saved"), "{body}");
+        assert_eq!(yes, "Open");
         let (title, body, _) = question(&Guarded::Quit, 1, false);
         assert!(title.starts_with("Quit") && body.contains("1 output"), "{body}");
     }

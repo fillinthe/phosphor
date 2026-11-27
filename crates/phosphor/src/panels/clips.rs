@@ -179,7 +179,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let (grid, mut out) = Grid::new(ui, st);
     let mut add_layer = false;
     {
-        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, .. } = st;
+        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, controls_locked, .. } = st;
         let ctx = ui.ctx().clone();
         let mut cx = CellCtx { thumbs, clip_cells, preview_wants, preview_keys, preview_textures, also_clips, ctx };
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
@@ -218,7 +218,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             }
-            if n == 0 {
+            if n == 0 && *controls_locked {
+                // Locked (player mode): nothing here may add to the show, so no Add layer.
+                crate::ui::empty_note(ui, "No layers in this show yet. Unlock to add some.");
+            } else if n == 0 {
                 crate::ui::toolbar(ui, |ui| {
                     crate::ui::empty_note(ui, "Add layers first; each layer gets a row of clip slots.");
                     add_layer = crate::ui::command(ui, label(icon::PLUS, "Add layer")).clicked();

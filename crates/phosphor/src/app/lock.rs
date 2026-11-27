@@ -43,6 +43,7 @@ pub fn allowed_when_locked(a: &crate::menu::Action) -> bool {
 impl PhosphorApp {
     pub(crate) fn lock_now(&mut self, password: String) {
         self.lock.active = true;
+        self.state.controls_locked = true;
         self.lock.password = password;
         self.lock.window = false;
         self.lock.draft.clear();
@@ -60,6 +61,7 @@ impl PhosphorApp {
             self.detached = detached;
         }
         self.lock = Lock::default();
+        self.state.controls_locked = false;
     }
 
     /// The Lock / Unlock dialog (View › Lock Controls…, or the lock button in the top bar).

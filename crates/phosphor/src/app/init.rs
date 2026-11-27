@@ -301,6 +301,7 @@ impl PhosphorApp {
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
                 map_mode: false,
+                controls_locked: false,
                 fx_fades: Vec::new(),
                 project_path: stored(KEY_PROJECT_PATH).filter(|p| !p.is_empty()),
                 autosave: stored(KEY_AUTOSAVE).is_some_and(|v| v == "1"),
@@ -513,6 +514,7 @@ impl PhosphorApp {
                 app.lock = lock::Lock { active: true, password: p, ..Default::default() };
             }
         }
+        app.state.controls_locked = app.lock.active;
         if app.bench.is_none() && !library_default_done && !super::areas::library_open(&app.dock) {
             app.toggle_library();
         }

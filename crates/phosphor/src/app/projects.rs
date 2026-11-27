@@ -360,8 +360,10 @@ impl PhosphorApp {
         }
         match pick {
             Some(Pick::File(path)) => {
-                // (The window stays up when it couldn't be opened, so another one can be picked.)
-                st.projects.open = !st.open_project_file(&path);
+                // Asks first when the project open now has unsaved edits or is on the outputs. (The window comes back
+                // when the file couldn't be opened, so another one can be picked.)
+                st.projects.open = false;
+                self.guard(ctx, super::guard::Guarded::OpenFile(path, true));
             }
             Some(Pick::Cloud(id)) => {
                 st.account.open(ctx, &id);

@@ -92,6 +92,7 @@ impl PhosphorApp {
         }
         // The layout text is only needed by an export; dialogs rarely finish, so build it then, not every frame.
         let current_layout = to_text(&SavedLayout { name: "Show".into(), dock: self.dock.clone(), detached: self.detached.clone() });
+        let mut open_file = None;
         for (purpose, paths) in dialogs {
             let st = &mut self.state;
             match purpose {
@@ -170,14 +171,10 @@ impl PhosphorApp {
                     }
                 }
                 Purpose::OpenProject => {
+                    // Opened once any unsaved edits or a showing output have had their question (`guard`), the same
+                    // way as Open Recent (this computer's copy, a newer version's warning, the saved state).
                     if let Some(p) = paths.first() {
-                        match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
-                            Ok(comp) => {
-                                st.load_composition(comp);
-                                st.set_project_path(&p.to_string_lossy());
-                            }
-                            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Open failed: {e}"))),
-                        }
+                        open_file = Some(p.to_string_lossy().into_owned());
                     }
                 }
                 Purpose::SaveProject => {
@@ -526,6 +523,10 @@ impl PhosphorApp {
                 }
             }
         }
+        if let Some(path) = open_file {
+            let ctx = self.egui_ctx.clone();
+            self.guard(&ctx, super::guard::Guarded::OpenFile(path, false));
+        }
     }
 
     /// Files and folders dropped from the Finder:
@@ -543,7 +544,9 @@ impl PhosphorApp {
             }
             match crate::open_files::kind(&path) {
                 crate::open_files::Opened::Project(p) => {
-                    let _ = self.state.open_project_file(&p.to_string_lossy());
+                    // (Asks first when the project open now has unsaved edits or is on the outputs.)
+                    let ctx = self.egui_ctx.clone();
+                    self.guard(&ctx, super::guard::Guarded::OpenFile(p.to_string_lossy().into_owned(), false));
                 }
                 crate::open_files::Opened::Pack(p) => crate::panels::open_pack(&mut self.state, p),
                 crate::open_files::Opened::Other => {}

@@ -289,7 +289,13 @@ impl PhosphorApp {
                 }
             }
         }
+        // What a `--keys` run left: the window's title (Edited), a question still waiting, the show's state.
+        let showing = self.state.output.lock().map_or(0, |m| m.values().filter(|o| o.open).count());
+        let (asking, layers, blackout) = (crate::ui::asking(ctx, "show_guard"), self.state.comp.layers.len(), self.state.comp.blackout_on);
+        println!("BENCH_STATE title=\"{}\" asking={asking} layers={layers} outputs_open={showing} blackout={blackout}", self.title);
         self.bench = None;
+        // (The bench's own end needs no question, even with `PHOSPHOR_BENCH_ASK`.)
+        self.quit_confirmed = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 

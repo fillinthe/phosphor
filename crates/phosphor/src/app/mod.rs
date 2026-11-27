@@ -521,6 +521,8 @@ pub struct State {
     pub media_view: panels::MediaView,
     /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
     pub map_mode: bool,
+    /// The controls are locked (player mode, `app::lock`): panels still shown leave out what edits the show.
+    pub controls_locked: bool,
     /// Effects fading in after being added: (effect id, start time, seconds, final mix).
     pub fx_fades: Vec<(u64, f32, f32, f32)>,
     /// The project file being worked on (Save writes here).
@@ -1385,6 +1387,19 @@ impl eframe::App for PhosphorApp {
             }
             run.cfg.clicks.remove(0);
             println!("CLICK {at}@{when}");
+        }
+        // `--keys`: the next one whose time has come (one a frame), as a real press and release.
+        if let Some(k) = run.cfg.keys.first().cloned()
+            && ctx.input(|i| i.time) >= k.at
+        {
+            if let Some((x, y)) = k.pointer {
+                raw.events.push(egui::Event::PointerMoved(egui::pos2(x, y)));
+            }
+            for pressed in [true, false] {
+                raw.events.push(egui::Event::Key { key: k.key, physical_key: None, pressed, repeat: false, modifiers: k.modifiers });
+            }
+            run.cfg.keys.remove(0);
+            println!("KEY {}", k.text);
         }
         let Some(at) = run.cfg.right_click.clone() else { return };
         // "x,y@3": at 3 seconds instead of 1 (tiles and thumbnails settle first).
