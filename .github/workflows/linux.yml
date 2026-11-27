@@ -1,6 +1,9 @@
 # Linux ARM build of Phosphor (Raspberry Pi 5 and other 64-bit ARM boards): the "Phosphor Player" that follows a Mac
 # over the network (Follow another Phosphor) and shows its outputs. Built on GitHub's ARM Linux machines with
 # BtbN's shared FFmpeg n9.0 (same as Windows); its libraries ship next to the binary.
+# Built on Ubuntu 22.04 (glibc 2.35), not 24.04: a binary built against a newer glibc than the board's doesn't start
+# ("GLIBC_2.38 not found"), and Raspberry Pi OS Bookworm has glibc 2.36. A step below fails the build if anything in
+# the package asks for more.
 name: Linux ARM build
 
 on:
@@ -10,14 +13,26 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+  # Pull requests build and test too (no secrets are used, so a fork's pull request runs safely).
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-22.04-arm
     env:
       CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          command -v rustup >/dev/null || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install stable --profile minimal && rustup default stable
 
       - name: System libraries
         run: |
@@ -26,11 +41,13 @@ jobs:
             libwayland-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb mesa-vulkan-drivers \
             libvulkan1 libssl-dev libxkbcommon-x11-0 libxcb1 libusb-1.0-0-dev
 
+      # A dated build, not "latest": the same FFmpeg every run until this line is changed on purpose (BtbN keeps the
+      # build of each month's last day).
       - name: FFmpeg (BtbN n9.0 shared, arm64)
         run: |
-          curl -sL -o ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linuxarm64-gpl-shared-9.0.tar.xz"
+          curl -sfL -o ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-linuxarm64-gpl-shared-9.0.tar.xz"
           tar xf ffmpeg.tar.xz -C "$RUNNER_TEMP"
-          D=$(ls -d "$RUNNER_TEMP"/ffmpeg-n9.0-*)
+          D=$(ls -d "$RUNNER_TEMP"/ffmpeg-n9.0*)
           echo "FFMPEG_DIR=$D" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$D/lib/pkgconfig" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$D/lib" >> "$GITHUB_ENV"
@@ -41,15 +58,25 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: linux-arm-${{ hashFiles('Cargo.lock') }}
+          # (22.04: its own cache; objects built against 24.04's glibc must not be reused.)
+          key: linux-arm-2204-${{ hashFiles('Cargo.lock') }}
           # A release changes Cargo.lock (the version number): start from the last build's cache instead of from nothing.
-          restore-keys: linux-arm-
+          restore-keys: linux-arm-2204-
 
       - name: Engine and ISF crates
         run: cargo test -p phosphor-engine -p phosphor-isf --release
 
       - name: App
         run: cargo build -p phosphor --release
+
+      # The app's own tests (recording smoke test included), on a virtual display with software Vulkan.
+      - name: App tests
+        env:
+          WGPU_BACKEND: vulkan
+        run: |
+          # The sound test's movie (media/test/av.mp4 isn't in git): 2.5 s test card, a 1 kHz beep at 1.0-1.1 s.
+          "$FFMPEG_DIR/bin/ffmpeg" -v error -y -f lavfi -i "testsrc=size=320x180:rate=30:duration=2.5" -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=2.5" -af "volume=enable='not(between(t,1.0,1.1))':volume=0" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest media/test/av.mp4
+          PATH="$FFMPEG_DIR/bin:$PATH" xvfb-run -a -s "-screen 0 1440x900x24" cargo test -p phosphor --release --bins
 
       - name: Package (binary + FFmpeg libraries)
         run: |
@@ -64,6 +91,26 @@ jobs:
           chmod +x dist/Phosphor/Phosphor.sh
           cp scripts/linux/README-player.md dist/Phosphor/README.md
           tar czf dist/Phosphor-linux-arm64.tar.gz -C dist Phosphor
+
+      # Raspberry Pi OS Bookworm: glibc 2.36, libstdc++ from GCC 12 (GLIBCXX_3.4.30). Every program and library in
+      # the package must ask for no more, or it won't start there.
+      - name: Starts on Raspberry Pi OS Bookworm (glibc 2.36)
+        run: |
+          newest() { objdump -T "$1" 2>/dev/null | grep -o "$2_[0-9][0-9.]*" | sed "s/$2_//" | sort -uV | tail -1; }
+          bad=0
+          for f in dist/Phosphor/phosphor dist/Phosphor/ffmpeg dist/Phosphor/lib/*.so*; do
+            [ -L "$f" ] && continue
+            for pair in GLIBC:2.36 GLIBCXX:3.4.30; do
+              name=${pair%%:*}; max=${pair#*:}; need=$(newest "$f" "$name")
+              [ -z "$need" ] && continue
+              if [ "$(printf '%s\n%s\n' "$need" "$max" | sort -V | tail -1)" != "$max" ]; then
+                echo "TOO NEW: $f needs ${name}_$need (Bookworm has $max)"; bad=1
+              else
+                echo "ok: $f needs ${name}_$need"
+              fi
+            done
+          done
+          exit $bad
 
       - uses: actions/upload-artifact@v4
         with:

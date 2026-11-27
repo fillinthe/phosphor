@@ -12,6 +12,11 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+  # Pull requests build and test too (no secrets are used, so a fork's pull request runs safely).
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 jobs:
   build:
