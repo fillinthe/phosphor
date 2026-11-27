@@ -7,7 +7,7 @@ pub mod custom;
 mod engine;
 mod gpu;
 /// Deep color: whether the graphics card can mix at 16 bits a channel (`gpu::deep_colour_usable`).
-pub use gpu::{deep_colour, deep_colour_features, deep_colour_usable, set_deep_colour};
+pub use gpu::{deep_colour, deep_colour_features, deep_colour_usable, max_texture_side, set_deep_colour};
 pub mod expr;
 pub mod graph;
 pub mod ilda;

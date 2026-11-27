@@ -54,6 +54,18 @@ pub fn deep_colour_features() -> wgpu::Features {
     wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
 }
 
+/// The longest side of any picture the engine makes: 8192, or what the device allows where that's less (an older
+/// card or OpenGL driver at 4096 refused bigger textures, and a refused texture ends the app). Set by `Engine::new`.
+static MAX_SIDE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(8192);
+
+pub fn max_texture_side() -> u32 {
+    MAX_SIDE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn set_max_texture_side(device_allows: u32) {
+    MAX_SIDE.store(device_allows.clamp(256, 8192), std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Tells the engine the device was made with deep color's features.
 pub fn set_deep_colour(on: bool) {
     DEEP_COLOUR.store(on, std::sync::atomic::Ordering::Relaxed);
