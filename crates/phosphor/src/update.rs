@@ -372,7 +372,8 @@ impl Updater {
         };
         if let Some(text) = text
             && ui
-                .add(crate::ui::callout(text, crate::theme::accent()))
+                // (Neutral, not the accent: green means on / playing / go, and an update is none of those.)
+                .add(crate::ui::callout(text, crate::theme::ON_PICTURE))
                 .on_hover_text("A new Phosphor is out: click to see what's new and install it")
                 .clicked()
         {

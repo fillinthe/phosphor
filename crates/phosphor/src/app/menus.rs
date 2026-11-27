@@ -309,7 +309,8 @@ impl PhosphorApp {
                 // Short on room (narrow window, in-window menus): the next buttons become icons, names on hover.
                 // (Also when, last frame, these ran into the buttons on the right: longer words in another language,
                 // a narrow window. It goes back once there's plenty of room.)
-                // Output, Blackout and Search go to icons.
+                // Search goes to an icon and Donate and the account's name step aside; Output and Blackout keep their
+                // words at any width (what ends or saves a show must read at a glance).
                 let squeezed_key = egui::Id::new("top_bar_squeezed");
                 let squeezed: u8 = ui.ctx().data(|d| d.get_temp(squeezed_key)).unwrap_or(0);
                 let narrow = ui.available_width() < 560.0;
@@ -317,7 +318,7 @@ impl PhosphorApp {
                 let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
                 // (Surprise and the other Quick actions: the Quick menu, ⌘R, the Layers panel's Quick menu and each
                 // layer's own buttons. Not a big button here: most shows never press it.)
-                let (stop, play) = (named(icon::STOP, "Output"), named(icon::PLAY, "Output"));
+                let (stop, play) = (format!("{} Output", icon::STOP), format!("{} Output", icon::PLAY));
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
                 let r = crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off (they go back to the screens they filled last time) · right-click: pick a screen");
                 if r.clicked() {
@@ -330,7 +331,8 @@ impl PhosphorApp {
                 // Blackout: every output fades to black (and back on the next press); right-click maps it.
                 let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
                 let black = self.state.comp.blackout_on;
-                let r = crate::ui::mode_button(ui, black, named(icon::MOON, "Blackout")).on_hover_text("Every output fades to black; press again to bring the show back (fade time: Outputs › Master) · right-click: map to a key or pad");
+                let tip = format!("Every output fades to black; press again to bring the show back ({}; fade time: Outputs › Master) · right-click: map to a key or pad", crate::menu::shortcut_of(crate::menu::Action::Blackout));
+                let r = crate::ui::mode_button(ui, black, format!("{} Blackout", icon::MOON)).on_hover_text(tip);
                 if r.clicked() && !crate::ui::is_locked(ui, &target) {
                     self.state.comp.blackout_on = !black;
                 }
@@ -351,8 +353,10 @@ impl PhosphorApp {
                 }
                 let left_end = ui.cursor().left();
                 let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    account_button(ui, &mut self.state);
-                    crate::support::donate_button(ui);
+                    account_button(ui, &mut self.state, compact);
+                    if !compact {
+                        crate::support::donate_button(ui);
+                    }
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
                     self.state.updater.top_bar_button(ui);
                     // Help: the manual lives on the website (always the latest), in the app's language.
@@ -458,7 +462,7 @@ impl PhosphorApp {
                     0 if gap < 8.0 => 1,
                     1 if gap < 8.0 && in_window => 2,
                     2 if gap > 330.0 => 1,
-                    1 if gap > 270.0 => 0,
+                    1 if gap > 300.0 => 0,
                     s => s,
                 };
                 if now_squeezed != squeezed {
@@ -661,8 +665,10 @@ pub(crate) fn open_doc(name: &str) {
 }
 
 /// Top bar: who's signed in (or "Sign in"); opens the Account window.
-fn account_button(ui: &mut egui::Ui, st: &mut State) {
+/// `compact`: the icon alone (the top bar is short of room; the name is in its tooltip).
+fn account_button(ui: &mut egui::Ui, st: &mut State, compact: bool) {
     let text = match &st.account.user {
+        _ if compact => icon::USER_CIRCLE.to_string(),
         Some(u) => {
             let name = u.email.split('@').next().unwrap_or(&u.email);
             let short: String = name.chars().take(14).collect();
