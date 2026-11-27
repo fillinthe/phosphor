@@ -31,8 +31,9 @@ impl State {
                 continue;
             }
             let (tx, id, path) = (tx.clone(), o.id, o.background.clone());
+            let max_side = crate::media::still_size::longest_side((o.width.max(self.comp.width), o.height.max(self.comp.height)), engine.device().limits().max_texture_dimension_2d);
             std::thread::spawn(move || {
-                let img = crate::media::decode_still(&path).ok().map(|i| i.to_rgba8());
+                let img = crate::media::decode_still(&path).ok().map(|i| crate::media::still_size::fit(i, max_side).to_rgba8());
                 let _ = tx.send((id, path, img));
             });
         }

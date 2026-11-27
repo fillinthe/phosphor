@@ -2,7 +2,51 @@
 
 use super::*;
 
+/// How often hidden tooltips, menus and pop-ups are forgotten (`forget_areas`).
+const FORGET_AREAS_EVERY: f64 = 60.0;
+
+/// Areas egui needn't remember once they're off screen: tooltips, menus and pop-ups (placed by their code each time
+/// they show). Windows the user moved (`Order::Middle`) keep their place.
+fn ephemeral(layer: &egui::LayerId) -> bool {
+    matches!(layer.order, egui::Order::Foreground | egui::Order::Tooltip | egui::Order::Debug)
+}
+
+/// Forgets the tooltips, menus and pop-ups egui has kept since they were last shown (one entry each, forever, and all
+/// saved with the settings: 1,185 in one owner's file). Returns how many.
+pub(crate) fn forget_areas(ctx: &egui::Context) -> usize {
+    ctx.memory_mut(|m| m.forget_hidden_areas(ephemeral))
+}
+
 impl PhosphorApp {
+    /// On the first frame and once a minute: `forget_areas` (cheap: one walk over the list).
+    pub(crate) fn forget_areas_now_and_then(&mut self, ctx: &egui::Context, now: f64) {
+        if now < self.areas_forget_at {
+            return;
+        }
+        self.areas_forget_at = now + FORGET_AREAS_EVERY;
+        let n = forget_areas(ctx);
+        if n > 0 {
+            log::info!("forgot {n} hidden tooltips / menus");
+        }
+    }
+
+    /// Where the project is kept between runs. Native: the recovery snapshot (written every 2 s off the UI thread,
+    /// and on quit) holds it, so the settings only say so; while that can't be written they carry a copy (compact).
+    /// The settings used to hold it as pretty JSON, made on the UI thread at every autosave.
+    fn save_project(&self, storage: &mut dyn eframe::Storage) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let in_recovery = self.saver.holds_project();
+        #[cfg(target_arch = "wasm32")]
+        let in_recovery = false;
+        if in_recovery {
+            storage.remove_string(KEY_COMPOSITION);
+            storage.set_string(KEY_PROJECT_IN_RECOVERY, "1".into());
+        } else {
+            storage.set_string(KEY_COMPOSITION, self.state.comp.to_json_compact());
+            storage.remove_string(KEY_PROJECT_IN_RECOVERY);
+        }
+    }
+
     pub(crate) fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
         // Keys from settings that were renamed or retired: dropped so the file holds only what the app reads.
         for key in ["help_icons", "areas_v1", "use_areas"] {
@@ -12,7 +56,12 @@ impl PhosphorApp {
         if self.bench_session && std::env::var_os("PHOSPHOR_BENCH_KEEP_SETTINGS").is_none() {
             return;
         }
-        storage.set_string(KEY_COMPOSITION, self.state.comp.to_json());
+        self.save_project(storage);
+        // The interface's memory (window places, open sections), without what it no longer shows.
+        if cfg!(not(target_arch = "wasm32")) {
+            forget_areas(&self.egui_ctx);
+            self.egui_ctx.memory(|m| eframe::set_value(storage, KEY_EGUI_MEMORY, m));
+        }
         storage.set_string(KEY_STACK_RETIRED, "1".into());
         if let Some(text) = to_text(&self.dock) {
             storage.set_string(KEY_DOCK, text);

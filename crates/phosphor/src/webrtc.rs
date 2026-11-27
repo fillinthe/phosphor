@@ -89,12 +89,24 @@ impl Hub {
         self.inner.lock().unwrap().fps = fps.clamp(5, 60);
     }
 
-    /// A frame from the output (RGBA): encoded only while someone watches over WebRTC. Never blocks: a busy
-    /// encoder drops the frame.
-    pub fn push(&self, w: u32, h: u32, rgba: &[u8]) {
-        if self.viewers.load(Ordering::Relaxed) == 0 {
-            let mut inner = self.inner.lock().unwrap();
-            inner.encoder = None;
+    /// Someone watches over WebRTC (frames are worth capturing for it).
+    pub fn watched(&self) -> bool {
+        self.viewers.load(Ordering::Relaxed) > 0
+    }
+
+    /// Stops the encoder (an `ffmpeg` process) once nobody watches. The app calls this when it stops capturing
+    /// frames for the session: `push`, which also stops it, isn't called then.
+    pub fn stop_unwatched(&self) {
+        if !self.watched() {
+            self.inner.lock().unwrap().encoder = None;
+        }
+    }
+
+    /// A frame from the output (RGBA, handed over: no copy): encoded only while someone watches over WebRTC.
+    /// Never blocks: a busy encoder drops the frame.
+    pub fn push(&self, w: u32, h: u32, rgba: Vec<u8>) {
+        if !self.watched() {
+            self.stop_unwatched();
             return;
         }
         let mut inner = self.inner.lock().unwrap();
@@ -103,7 +115,7 @@ impl Hub {
             inner.encoder = start_encoder(self.inner.clone(), (w, h), fps);
         }
         if let Some(e) = &inner.encoder
-            && let Err(TrySendError::Disconnected(_)) = e.frames.try_send(rgba.to_vec())
+            && let Err(TrySendError::Disconnected(_)) = e.frames.try_send(rgba)
         {
             inner.encoder = None;
         }

@@ -1462,3 +1462,34 @@ fn zero_copy_frames_reuse_their_bind_groups() {
     }
     assert!(made[4..].iter().all(|n| *n == 0), "round the ring again: no new bind groups ({made:?})");
 }
+
+/// One-off reads come back without waiting on the GPU: the whole program, and one pixel of it, the same as the
+/// blocking read; a missing picture isn't queued.
+#[test]
+fn one_off_reads_come_back_later_and_match() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 16, ..Default::default() };
+    let mut red = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    red.generator_values = vec![1.0, 0.0, 0.0];
+    comp.layers.push(red);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, whole) = engine.read_output().expect("output");
+    assert!(engine.request_read(ReadSource::Output, 7));
+    assert!(engine.request_read(ReadSource::OutputPixel([0.9, 0.1]), 8));
+    assert!(!engine.request_read(ReadSource::OutputOf(99), 9), "no such output");
+    assert!(!engine.request_read(ReadSource::LayerThumbnail(99), 9), "no such layer");
+    let mut got = Vec::new();
+    for _ in 0..500 {
+        got.extend(engine.take_reads());
+        if got.len() == 2 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    got.sort_by_key(|f| f.tag);
+    assert_eq!(got.iter().map(|f| (f.tag, f.width, f.height)).collect::<Vec<_>>(), vec![(7, w, h), (8, 1, 1)]);
+    assert_eq!(got[0].rgba, whole);
+    let (x, y) = ((0.9 * w as f32) as u32, (0.1 * h as f32) as u32);
+    let i = ((y * w + x) * 4) as usize;
+    assert_eq!(got[1].rgba, whole[i..i + 4].to_vec());
+}

@@ -834,6 +834,12 @@ impl Memory {
         self.areas.entry(self.viewport_id).or_default()
     }
 
+    /// PHOSPHOR PATCH: [`Areas::forget_hidden`] in every viewport. Returns how many were forgotten.
+    #[expect(clippy::iter_over_hash_type)]
+    pub fn forget_hidden_areas(&mut self, forget: impl Fn(&LayerId) -> bool) -> usize {
+        self.areas.values_mut().map(|a| a.forget_hidden(&forget)).sum()
+    }
+
     /// Top-most layer at the given position.
     pub fn layer_id_at(&self, pos: Pos2) -> Option<LayerId> {
         let layer_id = self.areas().layer_id_at(pos, &self.to_global)?;
@@ -1355,6 +1361,32 @@ impl Areas {
         self.parent_layer(*layer).is_some()
     }
 
+    /// PHOSPHOR PATCH: forgets the layers `forget` picks that aren't on screen (shown neither last frame nor this
+    /// one): their area, their place in the order and their sublayers. egui keeps every tooltip, menu and pop-up it
+    /// has ever shown (each with an id of its own), saves them all with the app's settings and scans the list each
+    /// time an area shows: 1,185 in one owner's settings. Returns how many were forgotten.
+    pub fn forget_hidden(&mut self, forget: impl Fn(&LayerId) -> bool) -> usize {
+        let gone: HashSet<LayerId> = {
+            let shown = |l: &LayerId| self.visible_areas_last_frame.contains(l) || self.visible_areas_current_frame.contains(l);
+            self.order.iter().filter(|l| !shown(l) && forget(l)).copied().collect()
+        };
+        if gone.is_empty() {
+            return 0;
+        }
+        self.order.retain(|l| !gone.contains(l));
+        #[expect(clippy::iter_over_hash_type)]
+        for l in &gone {
+            self.areas.remove(&l.id);
+            self.sublayers.remove(l);
+            self.wants_to_be_on_top.remove(l);
+        }
+        #[expect(clippy::iter_over_hash_type)]
+        for children in self.sublayers.values_mut() {
+            children.retain(|l| !gone.contains(l));
+        }
+        gone.len()
+    }
+
     pub(crate) fn end_pass(&mut self) {
         let Self {
             visible_areas_last_frame,
@@ -1401,6 +1433,30 @@ impl Areas {
 }
 
 // ----------------------------------------------------------------------------
+
+/// PHOSPHOR PATCH: `forget_hidden` drops what it's told to, except what's on screen.
+#[test]
+fn hidden_areas_are_forgotten() {
+    let mut areas = Areas::default();
+    let tip = LayerId::new(Order::Tooltip, Id::new("tip"));
+    let menu = LayerId::new(Order::Foreground, Id::new("menu"));
+    let window = LayerId::new(Order::Middle, Id::new("window"));
+    for l in [tip, menu, window] {
+        areas.set_state(l, area::AreaState::default());
+    }
+    areas.end_pass();
+    // The menu is still open this frame.
+    areas.set_state(menu, area::AreaState::default());
+    areas.end_pass();
+    areas.end_pass();
+    let ephemeral = |l: &LayerId| matches!(l.order, Order::Tooltip | Order::Foreground);
+    assert_eq!(areas.forget_hidden(ephemeral), 1, "the tooltip, not the menu shown last frame");
+    assert!(areas.get(tip.id).is_none() && areas.get(menu.id).is_some() && areas.get(window.id).is_some());
+    assert!(!areas.order().contains(&tip));
+    areas.end_pass();
+    assert_eq!(areas.forget_hidden(ephemeral), 1, "the menu once it's gone too");
+    assert_eq!(areas.order(), &[window]);
+}
 
 #[test]
 fn memory_impl_send_sync() {

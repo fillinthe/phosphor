@@ -60,8 +60,14 @@ impl PhosphorApp {
                 let show = crate::show::bundled().and_then(|b| crate::show::load(b).map_err(|e| eprintln!("show: {e}")).ok());
                 #[cfg(target_arch = "wasm32")]
                 let show: Option<Composition> = None;
+                // The project in the settings (older versions, or while the recovery snapshot couldn't be written),
+                // else in the recovery snapshot of the last run (`save_project`).
+                #[cfg(not(target_arch = "wasm32"))]
+                let last = || stored(KEY_PROJECT_IN_RECOVERY).and_then(|_| crate::recovery::last_project());
+                #[cfg(target_arch = "wasm32")]
+                let last = || None;
                 // An exported show always starts from its own project (unless recovering from a crash).
-                recovered.or(show).or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::opening)
+                recovered.or(show).or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).or_else(last).unwrap_or_else(Composition::opening)
             }
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
@@ -154,7 +160,7 @@ impl PhosphorApp {
         let now = cc.egui_ctx.input(|i| i.time);
 
         let open_audio = bench.as_ref().is_some_and(|b| b.audio);
-        let fresh_install = bench.is_none() && stored(KEY_COMPOSITION).is_none();
+        let fresh_install = bench.is_none() && stored(KEY_COMPOSITION).is_none() && stored(KEY_PROJECT_IN_RECOVERY).is_none();
         let library_default_done = stored(KEY_LIBRARY_DEFAULT).is_some();
         let mut app = Self {
             #[cfg(target_arch = "wasm32")]
@@ -286,6 +292,7 @@ impl PhosphorApp {
                 snapshot_requested: false,
                 snapshot_source: None,
                 snapshot_ready: None,
+                readbacks: Default::default(),
                 project_picture: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 isf: crate::isf_lib::IsfLibrary::scan(),
@@ -422,7 +429,11 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             pending_snapshot: None,
             #[cfg(not(target_arch = "wasm32"))]
+            snapshot_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
             saver: Default::default(),
+            egui_ctx: cc.egui_ctx.clone(),
+            areas_forget_at: 0.0,
             recovered: None,
             panics: Vec::new(),
             detached,

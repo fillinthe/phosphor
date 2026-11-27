@@ -228,8 +228,34 @@ impl Engine {
         self.thumb_capture.poll(&self.gpu.device)
     }
 
+    /// Queues a copy of `source` as it is now (the last frame drawn); it comes back a few frames later from
+    /// `take_reads` with `tag`. Never waits for the GPU: one-off reads the app makes (eyedropper, snapshot, palette,
+    /// clip picture) used `read_output`, which blocked the UI thread with no time limit. False when there's no such
+    /// picture or the ring is busy.
+    pub fn request_read(&mut self, source: ReadSource, tag: u64) -> bool {
+        let (device, queue) = (&self.gpu.device, &self.gpu.queue);
+        let target = match source {
+            ReadSource::Output | ReadSource::OutputPixel(_) => self.output.as_ref(),
+            ReadSource::OutputOf(id) => self.output_targets.get(&id).and_then(Option::as_ref),
+            ReadSource::LayerThumbnail(id) => self.layers.get(&id).and_then(|l| l.thumbnail.as_ref()),
+        };
+        let Some(t) = target else { return false };
+        match source {
+            ReadSource::OutputPixel(uv) => {
+                let at = |v: f32, n: u32| ((v.clamp(0.0, 1.0) * n as f32) as u32).min(n.saturating_sub(1));
+                self.one_off_reads.enqueue_region(device, queue, t, [at(uv[0], t.width), at(uv[1], t.height)], [1, 1], tag)
+            }
+            _ => self.one_off_reads.enqueue_tagged(device, queue, t, tag),
+        }
+    }
+
+    /// One-off reads (`request_read`) that have finished. Never blocks; nothing to do when none were asked.
+    pub fn take_reads(&mut self) -> Vec<CapturedFrame> {
+        self.one_off_reads.poll(&self.gpu.device)
+    }
+
     /// Copies the output texture back to the CPU as tightly packed RGBA8 (for snapshots/tests).
-    /// Blocks until the GPU is done, so never call this during a live show.
+    /// Blocks until the GPU is done, so never call this during a live show (`request_read` doesn't).
     pub fn read_output(&self) -> Option<(u32, u32, Vec<u8>)> {
         self.read_target(self.output.as_ref()?)
     }

@@ -221,6 +221,23 @@ pub fn begin_session() -> Option<Snapshot> {
     serde_json::from_str(&json).ok()
 }
 
+/// The project in the snapshot the last run left (whatever way it ended): the app's settings leave it out while the
+/// snapshot holds it (`Saver::holds_project`).
+pub fn last_project() -> Option<phosphor_engine::Composition> {
+    project_in(&std::fs::read_to_string(snapshot_path()?).ok()?)
+}
+
+/// The project in a snapshot's text, read the way a project file is (`Composition::from_json`: older formats brought
+/// up to date, groups tidied, the id counter past every id), as the settings' copy was.
+fn project_in(snapshot: &str) -> Option<phosphor_engine::Composition> {
+    let mut snap: serde_json::Value = serde_json::from_str(snapshot).ok()?;
+    let comp = snap.get_mut("comp")?.take();
+    if comp.is_null() {
+        return None;
+    }
+    phosphor_engine::Composition::from_json(&comp.to_string()).ok()
+}
+
 /// The snapshot left by the last run, whatever way it ended (a normal quit writes one too): to reopen as it was.
 pub fn last_snapshot() -> Option<Snapshot> {
     serde_json::from_str(&std::fs::read_to_string(snapshot_path()?).ok()?).ok()
@@ -243,6 +260,8 @@ pub struct Saver {
     worker: Option<(std::sync::mpsc::SyncSender<Snapshot>, std::thread::JoinHandle<()>)>,
     /// Where it writes (None = `snapshot_path`; tests give their own).
     to: Option<PathBuf>,
+    /// The file on disk holds the project as of the last write, and that write went through (a failed one clears it).
+    written: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Saver {
@@ -256,13 +275,19 @@ impl Saver {
             let Some(path) = self.to.clone().or_else(snapshot_path) else { return };
             // (No room to queue: a copy is only taken while the writer waits, so the newest one is what gets written.)
             let (tx, rx) = std::sync::mpsc::sync_channel::<Snapshot>(0);
+            let written = self.written.clone();
             let Ok(handle) = std::thread::Builder::new().name("recovery-snapshot".into()).spawn(move || {
                 let mut last = String::new();
                 while let Ok(snap) = rx.recv() {
-                    let Ok(json) = serde_json::to_string(&snap) else { continue };
+                    let Ok(json) = serde_json::to_string(&snap) else {
+                        written.store(false, std::sync::atomic::Ordering::Relaxed);
+                        continue;
+                    };
                     if json != last {
-                        let _ = crate::project_files::write_whole(&path, &json);
-                        last = json;
+                        let ok = crate::project_files::write_whole(&path, &json).is_ok();
+                        written.store(ok && snap.comp.is_some(), std::sync::atomic::Ordering::Relaxed);
+                        // (A failed write is tried again with the next snapshot, even if nothing changed.)
+                        last = if ok { json } else { String::new() };
                     }
                 }
             }) else {
@@ -274,6 +299,12 @@ impl Saver {
         if let Some((tx, _)) = &self.worker {
             let _ = tx.try_send(snapshot);
         }
+    }
+
+    /// The snapshot on disk holds the project, freshly (written within the last couple of seconds, the last write
+    /// went through): the app's settings needn't carry a second copy (`save_settings`). False until the first write.
+    pub fn holds_project(&self) -> bool {
+        self.worker.is_some() && self.written.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Lets the writer finish what it has and stop (before the last snapshot is written on quit).
@@ -749,22 +780,39 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("recovery.json");
         let mut saver = super::Saver { to: Some(path.clone()), ..Default::default() };
-        let snap = |selected| super::Snapshot { selected: Some(selected), ..Default::default() };
+        let snap = |selected| super::Snapshot { selected: Some(selected), comp: Some(phosphor_engine::Composition::default()), ..Default::default() };
+        assert!(!saver.holds_project(), "nothing written yet");
         saver.save(0.0, snap(1));
         assert!(!saver.due(1.0) && saver.due(2.0));
         // Let the writer take it, then hand over a newer one.
         for k in 0..200 {
             std::thread::sleep(std::time::Duration::from_millis(5));
             saver.save(2.0 + k as f64, snap(7));
-            if std::fs::read_to_string(&path).is_ok_and(|t| t.contains("\"selected\":7")) {
+            if saver.holds_project() && std::fs::read_to_string(&path).is_ok_and(|t| t.contains("\"selected\":7")) {
                 break;
             }
         }
+        assert!(saver.holds_project(), "written, with the project in it");
         saver.finish();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("\"selected\":7"), "{text}");
+        assert!(serde_json::from_str::<super::Snapshot>(&text).unwrap().comp.is_some());
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no part files left");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The project comes back from a snapshot exactly as from the settings' copy it replaces.
+    #[test]
+    fn the_project_reads_back_from_a_snapshot() {
+        let mut comp = phosphor_engine::Composition::opening();
+        comp.notes = "show notes".into();
+        let snap = super::Snapshot { comp: Some(comp.clone()), selected: Some(3), ..Default::default() };
+        let text = serde_json::to_string(&snap).unwrap();
+        assert_eq!(super::project_in(&text), phosphor_engine::Composition::from_json(&comp.to_json()).ok());
+        assert_eq!(super::project_in(&text).map(|c| c.notes), Some("show notes".to_string()));
+        let empty = serde_json::to_string(&super::Snapshot::default()).unwrap();
+        assert!(super::project_in(&empty).is_none(), "no project in it");
+        assert!(super::project_in("{cut off").is_none());
     }
 
     #[test]

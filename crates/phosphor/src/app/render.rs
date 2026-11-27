@@ -331,12 +331,22 @@ impl PhosphorApp {
             let playback = led_scan.universes(&comp.dmx).or(playback);
             // Finding a string (Flash / Chase) wins over everything: it's what someone across the venue is looking for.
             let playback = led_identify.universes(&comp.dmx, now).or(playback);
-            let points = if comp.dmx.enabled && playback.is_none() { comp.dmx.sample_points() } else { Vec::new() };
-            engine.set_sample_points(&points);
+            // The points to sample go to the engine only when a fixture changed (`DmxOut::sample_points`), and only
+            // when a frame of lights is due; with nothing to sample the engine's sampler is emptied once.
+            let sampling = comp.dmx.enabled && playback.is_none();
+            if !sampling && dmx.has_points() {
+                dmx.forget_points();
+                engine.set_sample_points(&[]);
+            }
             if dmx.frame_due(now, &comp.dmx) {
                 match &playback {
                     Some(unis) => dmx.send(&comp.dmx, unis),
-                    None => engine.request_samples(),
+                    None => {
+                        if let Some(points) = dmx.sample_points(&comp.dmx) {
+                            engine.set_sample_points(points);
+                        }
+                        engine.request_samples();
+                    }
                 }
             }
         }
@@ -486,22 +496,36 @@ impl PhosphorApp {
         for f in engine.poll_captures() {
             let wants = |bit: u64| f.tag & bit != 0;
             #[cfg(any(target_os = "macos", windows))]
-            if wants(TO_NDI) && ndi.connections() > 0 {
-                ndi.push(f.width, f.height, f.rgba.clone(), comp.ndi.fps);
-            }
+            let to_ndi = wants(TO_NDI) && ndi.connections() > 0;
+            #[cfg(not(any(target_os = "macos", windows)))]
+            let to_ndi = false;
             #[cfg(windows)]
-            if wants(TO_SPOUT) && spout.running() {
-                spout.push(f.width, f.height, f.rgba.clone());
-            }
+            let to_spout = wants(TO_SPOUT) && spout.running();
+            #[cfg(not(windows))]
+            let to_spout = false;
+            let to_net = wants(TO_NET) && net.running();
+            let to_stream = wants(TO_STREAM) && stream.running() && rec_src.is_none();
             #[cfg(target_os = "macos")]
             if wants(TO_VCAM) && vcam.connected() {
                 vcam.push(f.width, f.height, &f.rgba);
             }
-            if wants(TO_NET) && net.running() {
-                net.push_frame(f.width, f.height, f.rgba.clone());
+            // A picture is 8 MB at 1080p, 33 MB at 4K: copied only when a second output takes it too (each used to
+            // get a copy and the last one the original).
+            let (width, height) = (f.width, f.height);
+            let mut picture = Handout::new(f.rgba, [to_ndi, to_spout, to_net, to_stream].into_iter().filter(|t| *t).count());
+            #[cfg(any(target_os = "macos", windows))]
+            if to_ndi {
+                ndi.push(width, height, picture.take(), comp.ndi.fps);
             }
-            if wants(TO_STREAM) && stream.running() && rec_src.is_none() {
-                stream.push(f.width, f.height, f.rgba);
+            #[cfg(windows)]
+            if to_spout {
+                spout.push(width, height, picture.take());
+            }
+            if to_net {
+                net.push_frame(width, height, picture.take());
+            }
+            if to_stream {
+                stream.push(width, height, picture.take());
             }
         }
 
@@ -657,5 +681,44 @@ impl PhosphorApp {
             fx.mix = target * t * t * (3.0 - 2.0 * t);
             t < 1.0
         });
+    }
+}
+
+/// One captured picture for several outputs: each but the last taker gets a copy, the last one the picture itself.
+struct Handout {
+    picture: Option<Vec<u8>>,
+    takers: usize,
+}
+
+impl Handout {
+    fn new(picture: Vec<u8>, takers: usize) -> Self {
+        Self { picture: Some(picture), takers }
+    }
+
+    fn take(&mut self) -> Vec<u8> {
+        self.takers = self.takers.saturating_sub(1);
+        if self.takers == 0 { self.picture.take().unwrap_or_default() } else { self.picture.clone().unwrap_or_default() }
+    }
+}
+
+#[cfg(test)]
+mod handout_tests {
+    use super::Handout;
+
+    #[test]
+    fn the_last_taker_gets_the_picture_itself() {
+        let picture = vec![7u8; 64];
+        let at = picture.as_ptr();
+        let mut one = Handout::new(picture, 1);
+        let only = one.take();
+        assert_eq!(only.as_ptr(), at, "one output: no copy");
+        let picture = vec![7u8; 64];
+        let at = picture.as_ptr();
+        let mut two = Handout::new(picture, 2);
+        let first = two.take();
+        assert_ne!(first.as_ptr(), at, "the first of two gets a copy");
+        assert_eq!(first, vec![7u8; 64]);
+        let last = two.take();
+        assert_eq!(last.as_ptr(), at, "the last gets the original");
     }
 }

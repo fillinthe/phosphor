@@ -780,11 +780,20 @@ impl Composition {
 
     /// Saves in the current project format (`FORMAT`).
     pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(&*self.current_format()).expect("composition serializes")
+    }
+
+    /// `to_json` without the indentation (a third smaller, quicker to write): for copies no one reads by eye.
+    pub fn to_json_compact(&self) -> String {
+        serde_json::to_string(&*self.current_format()).expect("composition serializes")
+    }
+
+    fn current_format(&self) -> std::borrow::Cow<'_, Self> {
         let mut c = std::borrow::Cow::Borrowed(self);
         if c.version != FORMAT {
             c.to_mut().version = FORMAT;
         }
-        serde_json::to_string_pretty(&*c).expect("composition serializes")
+        c
     }
 
     /// Reads a project; older formats are brought up to date (`migrate`). A newer format still opens (unknown
@@ -835,6 +844,9 @@ mod voice_tests {
         }
         assert_eq!(c.layers[1].blend, BlendMode::Normal, "black letters vanish on Add");
         assert_eq!(Composition::from_json(&c.to_json()).unwrap(), c);
+        let compact = c.to_json_compact();
+        assert_eq!(Composition::from_json(&compact).unwrap(), c, "the compact form reads back the same");
+        assert!(compact.len() < c.to_json().len() && !compact.contains('\n'));
     }
 
     use super::*;

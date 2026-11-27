@@ -11,8 +11,50 @@ pub const THUMB_W: u32 = 192;
 /// Between a path and its size in a `get_sized` key.
 const SIZE_SEP: char = '\u{1}';
 
+/// Pictures kept on the graphics card at most (bytes, 4 a pixel). Past it the ones unused longest go (made again from
+/// the disk cache when they're shown again). A long show browsing a big library kept every thumbnail it ever showed.
+const CACHE_BYTES: usize = 128 << 20;
+
+/// One kept picture: its texture (None = couldn't be made), its size in bytes and the frame it was last asked for.
+struct Kept {
+    handle: Option<egui::TextureHandle>,
+    bytes: usize,
+    used: u64,
+}
+
+impl Kept {
+    fn new(handle: Option<egui::TextureHandle>, used: u64) -> Self {
+        // (A picture that couldn't be made still takes a little: the key.)
+        let bytes = handle.as_ref().map_or(64, |h| h.size()[0] * h.size()[1] * 4);
+        Self { handle, bytes, used }
+    }
+}
+
+/// Keys to drop (unused longest first) so `entries` (key, bytes, last used) fit in `cap`; never one used in frame
+/// `now` (it's on screen).
+fn to_evict(mut entries: Vec<(&str, usize, u64)>, cap: usize, now: u64) -> Vec<String> {
+    let mut total: usize = entries.iter().map(|e| e.1).sum();
+    if total <= cap {
+        return Vec::new();
+    }
+    entries.sort_by_key(|e| e.2);
+    let mut out = Vec::new();
+    // Down to three quarters, so a cache at its cap doesn't evict a little every frame.
+    for (key, bytes, used) in entries {
+        if total <= cap / 4 * 3 || used >= now {
+            break;
+        }
+        total -= bytes;
+        out.push(key.to_string());
+    }
+    out
+}
+
 pub struct Thumbs {
-    cache: HashMap<String, Option<egui::TextureHandle>>,
+    cache: HashMap<String, Kept>,
+    /// Bytes of every kept picture, and the frame count (`poll`): what "last used" is measured in.
+    bytes: usize,
+    frame: u64,
     pending: HashSet<String>,
     #[cfg(not(target_arch = "wasm32"))]
     worker: native::Worker,
@@ -25,6 +67,8 @@ impl Thumbs {
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
+            bytes: 0,
+            frame: 0,
             pending: HashSet::new(),
             #[cfg(not(target_arch = "wasm32"))]
             worker: native::Worker::new(1),
@@ -36,8 +80,9 @@ impl Thumbs {
     /// The thumbnail texture for `path`, requesting it on first call. `None` while loading or if
     /// it couldn't be made.
     pub fn get(&mut self, path: &str) -> Option<egui::TextureId> {
-        if let Some(entry) = self.cache.get(path) {
-            return entry.as_ref().map(|h| h.id());
+        if let Some(entry) = self.cache.get_mut(path) {
+            entry.used = self.frame;
+            return entry.handle.as_ref().map(|h| h.id());
         }
         if self.pending.insert(path.to_string()) {
             #[cfg(not(target_arch = "wasm32"))]
@@ -62,14 +107,16 @@ impl Thumbs {
     pub fn get_or_build(&mut self, ctx: &egui::Context, key: &str, build: impl FnOnce() -> Option<egui::ColorImage>) -> Option<egui::TextureId> {
         if !self.cache.contains_key(key) {
             let handle = build().map(|img| ctx.load_texture(format!("thumb:{key}"), img, egui::TextureOptions::LINEAR));
-            self.cache.insert(key.to_string(), handle);
+            self.keep(key.to_string(), handle);
         }
-        self.cache.get(key).and_then(|h| h.as_ref().map(|h| h.id()))
+        let entry = self.cache.get_mut(key)?;
+        entry.used = self.frame;
+        entry.handle.as_ref().map(|h| h.id())
     }
 
     /// A loaded thumbnail's width / height (to fit it in a tile without stretching).
     pub fn aspect(&self, path: &str) -> Option<f32> {
-        let size = self.cache.get(path)?.as_ref()?.size();
+        let size = self.cache.get(path)?.handle.as_ref()?.size();
         (size[1] > 0).then(|| size[0] as f32 / size[1] as f32)
     }
 
@@ -82,20 +129,39 @@ impl Thumbs {
         self.pending.contains(path)
     }
 
-    /// Uploads finished thumbnails; call once per frame.
+    /// Uploads finished thumbnails, and lets the ones unused longest go past `CACHE_BYTES` (only then: a sum the
+    /// cache keeps as it goes, no walk). Call once per frame.
     pub fn poll(&mut self, ctx: &egui::Context) {
+        self.frame += 1;
         #[cfg(not(target_arch = "wasm32"))]
         for (path, image) in self.worker.finished().into_iter().chain(self.web.as_ref().map(|w| w.finished()).unwrap_or_default()) {
             self.pending.remove(&path);
             let handle = image.map(|img| ctx.load_texture(format!("thumb:{path}"), img, egui::TextureOptions::LINEAR));
-            self.cache.insert(path, handle);
+            self.keep(path, handle);
         }
         #[cfg(target_arch = "wasm32")]
         let _ = ctx;
+        if self.bytes > CACHE_BYTES {
+            // (Last frame's pictures are the ones on screen now: this frame's haven't been asked for yet.)
+            let gone = to_evict(self.cache.iter().map(|(k, e)| (k.as_str(), e.bytes, e.used)).collect(), CACHE_BYTES, self.frame - 1);
+            for key in gone {
+                self.forget(&key);
+            }
+        }
+    }
+
+    fn keep(&mut self, key: String, handle: Option<egui::TextureHandle>) {
+        let kept = Kept::new(handle, self.frame);
+        self.bytes += kept.bytes;
+        if let Some(old) = self.cache.insert(key, kept) {
+            self.bytes -= old.bytes;
+        }
     }
 
     pub fn forget(&mut self, path: &str) {
-        self.cache.remove(path);
+        if let Some(old) = self.cache.remove(path) {
+            self.bytes -= old.bytes;
+        }
         self.pending.remove(path);
     }
 
@@ -269,6 +335,18 @@ mod native {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use native::cache_dir;
+
+#[cfg(test)]
+mod evict_tests {
+    #[test]
+    fn the_pictures_unused_longest_go_first_never_those_on_screen() {
+        let mb = 1 << 20;
+        let entries = vec![("a", 40 * mb, 5), ("b", 40 * mb, 1), ("c", 40 * mb, 9), ("d", 40 * mb, 3)];
+        assert!(super::to_evict(entries.clone(), 200 * mb, 9).is_empty(), "under the cap: nothing");
+        assert_eq!(super::to_evict(entries.clone(), 100 * mb, 9), vec!["b", "d", "a"], "oldest first, down to 3/4 of the cap");
+        assert_eq!(super::to_evict(entries, 10 * mb, 5), vec!["b", "d"], "never one used in the frame on screen");
+    }
+}
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {

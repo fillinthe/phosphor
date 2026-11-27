@@ -3,36 +3,28 @@
 use super::*;
 
 impl PhosphorApp {
-    /// Grabs the output now; the save dialog opens as a sheet (the show keeps running).
+    /// Asks for the output as it is now; the save dialog opens as a sheet meanwhile (the show keeps running, the
+    /// picture comes back a frame or two later: `run_readbacks`).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn save_snapshot(&mut self) {
-        let Some(engine) = &self.state.engine else { return };
-        self.pending_snapshot = engine.read_output();
-        self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), "Phosphor snapshot.png");
+        self.snapshot_of(phosphor_engine::ReadSource::Output, "Phosphor snapshot.png");
     }
 
     /// The same for one output, after its mapping (as the projector gets it).
     #[cfg(not(target_arch = "wasm32"))]
     fn save_output_snapshot(&mut self, id: u64) {
-        let Some(engine) = &self.state.engine else { return };
-        self.pending_snapshot = engine.read_output_of(id);
         let name = self.state.comp.outputs.iter().find(|o| o.id == id).map_or_else(|| "Output".to_string(), |o| o.name.clone());
-        self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), &format!("{name} snapshot.png"));
+        self.snapshot_of(phosphor_engine::ReadSource::OutputOf(id), &format!("{name} snapshot.png"));
     }
 
-    /// The layer's thumbnail now, saved next to the settings (clip thumbnails/<clip id>.png) as the clip's picture.
     #[cfg(not(target_arch = "wasm32"))]
-    fn save_clip_thumbnail(&mut self, layer: u64, slot: usize) -> Result<(), String> {
-        let (w, h, px) = self.state.engine.as_ref().and_then(|e| e.read_layer_thumbnail(layer)).ok_or("the layer has no picture (is it on?)")?;
-        let dir = crate::show::storage_dir().ok_or("no settings folder")?.join("clip thumbnails");
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let clip = self.state.comp.layer_mut(layer).and_then(|l| l.clips.get_mut(slot)).ok_or("that clip is gone")?;
-        let path = dir.join(format!("{}.png", clip.id));
-        image::save_buffer(&path, &px, w, h, image::ExtendedColorType::Rgba8).map_err(|e| e.to_string())?;
-        clip.thumb = path.to_string_lossy().to_string();
-        // The same file gets a new picture: drop the old one from the cache.
-        self.state.thumbs.forget(&clip.thumb);
-        Ok(())
+    fn snapshot_of(&mut self, source: phosphor_engine::ReadSource, file: &str) {
+        self.pending_snapshot = None;
+        self.snapshot_path = None;
+        self.state.read_back(source, readbacks::ReadFor::Snapshot);
+        if self.state.readbacks.waiting_for(&readbacks::ReadFor::Snapshot) {
+            self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), file);
+        }
     }
 
     /// Answers from file dialogs, and files found in watched folders.
@@ -42,27 +34,20 @@ impl PhosphorApp {
         if let Some(id) = self.state.snapshot_output.take() {
             self.save_output_snapshot(id);
         }
-        // A reference picture's colors are ready: match the layer's (its picture now) to them.
+        // A reference picture's colors are ready: match the layer's (its picture now, read back) to them.
         if let Some((layer, found)) = self.state.color_ref.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.state.color_ref = None;
-            let now_px = self.state.engine.as_ref().and_then(|e| e.read_layer_thumbnail(layer));
-            self.state.notice = Some(match (found, now_px) {
-                (Ok(to), Some((_, _, px))) => {
-                    let from = phosphor_engine::color_stats(&px);
-                    match self.state.comp.add_color_match(layer, from, to) {
-                        Some(_) => "Color Match added: the layer's colors follow the picture (tweak it in its effects)".into(),
-                        None => "That layer is gone".into(),
-                    }
-                }
-                (Err(e), _) => format!("Couldn't read that picture: {e}"),
-                (_, None) => "The layer has no picture to match (is it on?)".into(),
-            });
+            match found {
+                Ok(to) => self.state.read_back(phosphor_engine::ReadSource::LayerThumbnail(layer), readbacks::ReadFor::ColorMatch { layer, to }),
+                Err(e) => self.state.notice = Some(format!("Couldn't read that picture: {e}")),
+            }
         }
+        // The layer's picture now becomes the clip's picture in the grid (once it's read back).
         if let Some((layer, slot)) = self.state.clip_thumb_request.take() {
-            self.state.notice = Some(match self.save_clip_thumbnail(layer, slot) {
-                Ok(()) => "The clip shows this picture in the grid now".into(),
-                Err(e) => format!("Couldn't keep the picture: {e}"),
-            });
+            match self.state.comp.layer(layer).and_then(|l| l.clips.get(slot)).map(|c| c.id) {
+                Some(clip) => self.state.read_back(phosphor_engine::ReadSource::LayerThumbnail(layer), readbacks::ReadFor::ClipPicture { clip }),
+                None => self.state.notice = Some("Couldn't keep the picture: that clip is gone".into()),
+            }
         }
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
         // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.
@@ -228,10 +213,12 @@ impl PhosphorApp {
                     }
                 }
                 Purpose::SaveSnapshot => {
-                    if let (Some(p), Some((w, h, px))) = (paths.first().cloned(), self.pending_snapshot.take()) {
-                        std::thread::spawn(move || {
-                            let _ = image::save_buffer(&p, &px, w, h, image::ColorType::Rgba8);
-                        });
+                    if let Some(p) = paths.first().cloned() {
+                        match self.pending_snapshot.take() {
+                            Some((w, h, px)) => readbacks::save_png(p, w, h, px),
+                            // Its picture isn't back yet: written when it comes (`run_readbacks`).
+                            None => self.snapshot_path = Some(p),
+                        }
                     }
                 }
                 Purpose::ReportSnapshot => {

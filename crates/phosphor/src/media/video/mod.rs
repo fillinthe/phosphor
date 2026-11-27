@@ -61,9 +61,10 @@ pub enum VideoFrame {
         width: u32,
         height: u32,
         format: phosphor_engine::CompressedFormat,
-        data: Vec<u8>,
+        /// Shared, so a second handle (`cheap_clone`) costs no copy.
+        data: Arc<[u8]>,
         /// Hap Q Alpha: RGTC1 (BC4) blocks of the alpha plane.
-        alpha: Option<Vec<u8>>,
+        alpha: Option<Arc<[u8]>>,
     },
 }
 
@@ -75,7 +76,7 @@ impl VideoFrame {
             #[cfg(target_os = "macos")]
             VideoFrame::Surface(pb) => Some(VideoFrame::Surface(pb.clone())),
             VideoFrame::Compressed { width, height, format, data, alpha } => {
-                Some(VideoFrame::Compressed { width: *width, height: *height, format: *format, data: data.clone(), alpha: alpha.clone() })
+                Some(VideoFrame::Compressed { width: *width, height: *height, format: *format, data: Arc::clone(data), alpha: alpha.clone() })
             }
             _ => None,
         }
@@ -117,6 +118,20 @@ impl VideoFrame {
 
     fn is_rgba(&self) -> bool {
         matches!(self, Self::Rgba { .. })
+    }
+
+    /// Memory the frame holds (a hardware surface: its NV12 planes).
+    fn bytes(&self) -> usize {
+        match self {
+            Self::Nv12 { luma, chroma, .. } => luma.len() + chroma.len(),
+            Self::Rgba { data, .. } => data.len(),
+            Self::Compressed { data, alpha, .. } => data.len() + alpha.as_ref().map_or(0, |a| a.len()),
+            #[cfg(target_os = "macos")]
+            Self::Surface(pb) => {
+                let (w, h) = pb.size();
+                w as usize * h as usize * 3 / 2
+            }
+        }
     }
 }
 
@@ -164,6 +179,8 @@ pub struct VideoPlayer {
     size: (u32, u32),
     /// Live input (camera, stream): always show the newest frame, no clock or looping.
     live: bool,
+    /// `set_expect_reverse`.
+    expect_reverse: bool,
     /// Seek generation: frames decoded before the latest seek carry an older number and are dropped.
     generation: u64,
     /// Dragging along the timeline: the jump still on its way (and when it was asked), and the newest one asked for
@@ -232,6 +249,8 @@ struct Ctl {
     quit: bool,
     /// Jump to this media time (seconds) and tag following frames with `generation`.
     seek: Option<(f64, u64)>,
+    /// A turn to reverse may come at any moment (the layer's direction is mapped): keep the end of the forward pass.
+    expect_reverse: bool,
 }
 
 /// Random-frames play: one jump per frame time (at the speed), each waiting for the frame before it.
@@ -245,7 +264,7 @@ struct Jumps {
 impl Shared {
     fn new(codec: String) -> Self {
         Shared {
-            ctl: Mutex::new(Ctl { looping: true, mode: PlayMode::default(), quit: false, seek: None }),
+            ctl: Mutex::new(Ctl { looping: true, mode: PlayMode::default(), quit: false, seek: None, expect_reverse: false }),
             cv: Condvar::new(),
             clock: AtomicU64::new(0f64.to_bits()),
             hardware: AtomicBool::new(false),
@@ -396,6 +415,7 @@ impl VideoPlayer {
             duration,
             size,
             live,
+            expect_reverse: false,
             generation: 0,
             scrub: Scrub::default(),
             mode: PlayMode::default(),
@@ -442,6 +462,7 @@ impl VideoPlayer {
             duration,
             size: (0, 0),
             live: false,
+            expect_reverse: false,
             generation: 0,
             scrub: Scrub::default(),
             mode: PlayMode::default(),
@@ -479,6 +500,18 @@ impl VideoPlayer {
             ctl.looping = looping;
         }
         self.shared.cv.notify_all();
+    }
+
+    /// The layer's direction can be switched by a controller at any moment: the frames just shown are kept (within a
+    /// budget shared by every player) so a switch to reverse plays backwards at once. Off, only ping-pong keeps them.
+    pub fn set_expect_reverse(&mut self, on: bool) {
+        if self.expect_reverse == on || self.live {
+            return;
+        }
+        self.expect_reverse = on;
+        if let Ok(mut ctl) = self.shared.ctl.lock() {
+            ctl.expect_reverse = on;
+        }
     }
 
     /// Direction and loop region (seconds; None = whole movie). Changing direction restarts
@@ -848,17 +881,17 @@ impl Drop for VideoPlayer {
             ctl.quit = true;
         }
         self.shared.cv.notify_all();
-        // Dropping the receiver unblocks a decoder waiting on a full queue.
+        // Dropping the receiver unblocks a decoder waiting on a full queue. Its thread ends on its own time.
         self.rx = None;
         if let Some(t) = self.thread.take() {
-            join_briefly(t);
+            reaper::join_later(t);
         }
     }
 }
 
 /// Waits for a clip's worker thread to finish, but only for a moment: one stuck reading a pulled drive or a stalled
 /// network share is left to end by itself (it has been told to quit), where waiting for it froze the whole app
-/// the next time a layer changed.
+/// the next time a layer changed. Owners hand their threads to `reaper::join_later` instead (this is its fallback).
 pub(crate) fn join_briefly(thread: std::thread::JoinHandle<()>) {
     let until = std::time::Instant::now() + std::time::Duration::from_millis(60);
     while !thread.is_finished() && std::time::Instant::now() < until {
@@ -898,6 +931,8 @@ fn err(e: ff::Error) -> String {
 
 mod convert;
 mod decoder;
+pub(crate) mod reaper;
+mod tail;
 mod bc7;
 mod hap;
 pub mod hap_encode;

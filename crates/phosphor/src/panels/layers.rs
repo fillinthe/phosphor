@@ -841,14 +841,8 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
         LayerAction::Up => st.comp.move_layer(id, true),
         LayerAction::Down => st.comp.move_layer(id, false),
         LayerAction::GroupWithBelow => group_with_below(&mut st.comp, &mut st.selected, id),
-        LayerAction::Palette => {
-            // The layer's small thumbnail now (a one-off readback).
-            let px = st.engine.as_ref().and_then(|e| e.read_layer_thumbnail(id));
-            st.notice = Some(match px.map(|(_, _, px)| phosphor_engine::palette_of(&px, 6)) {
-                Some(pal) if !pal.is_empty() && st.comp.add_palette(id, &pal).is_some() => "Palette added with this layer's six main colors".into(),
-                _ => "The layer has no picture to take colors from (is it on?)".into(),
-            });
-        }
+        // The layer's small thumbnail now, read back (a frame or two later: `PhosphorApp::run_readbacks`).
+        LayerAction::Palette => st.read_back(phosphor_engine::ReadSource::LayerThumbnail(id), crate::app::ReadFor::Palette(id)),
         LayerAction::MatchColour => {
             #[cfg(not(target_arch = "wasm32"))]
             st.dialogs.pick_file(crate::dialogs::Purpose::MatchColour(id), Some(("Picture", &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "heic", "psd", "exr"])));
