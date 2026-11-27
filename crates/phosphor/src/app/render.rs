@@ -50,9 +50,9 @@ impl PhosphorApp {
         #[cfg(target_arch = "wasm32")]
         let beside = false;
         let heard = {
-            let State { clip_page, comp, core, audio, mod_inputs, clock, net, net_audio, notice, models, tracker, #[cfg(not(target_arch = "wasm32"))] milkdrop, #[cfg(not(target_arch = "wasm32"))] gdrop, .. } = &mut self.state;
+            let State { clip_page, comp, core, audio, mod_inputs, clock, net, net_audio, notice, models, #[cfg(not(target_arch = "wasm32"))] tracker, #[cfg(not(target_arch = "wasm32"))] milkdrop, #[cfg(not(target_arch = "wasm32"))] gdrop, .. } = &mut self.state;
             #[cfg(target_arch = "wasm32")]
-            let _ = (tracker, clip_page);
+            let _ = clip_page;
             let mut held = core.lock();
             let RenderCore { engine, media, mod_phases, .. } = &mut *held;
             let Some(engine) = engine.as_mut() else { return };

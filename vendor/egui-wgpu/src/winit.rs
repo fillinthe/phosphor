@@ -107,6 +107,30 @@ pub fn shared_surface(viewport_id: ViewportId) -> Option<Arc<SharedSurface>> {
     all.iter().find(|(id, _)| *id == viewport_id).and_then(|(_, s)| s.upgrade())
 }
 
+/// PHOSPHOR PATCH: configures a surface inside an error scope (error scopes are per thread) and gives the error, if
+/// any. wgpu waits for the whole device to go idle before configuring, and refuses ("Failed to wait for GPU to come
+/// idle") when another thread submitted meanwhile: with the app presenting from its own thread that's a race, not a
+/// refusal, so it's tried again a few times.
+pub fn configure_retrying(device: &wgpu::Device, surface: &wgpu::Surface<'static>, config: &wgpu::SurfaceConfiguration) -> Option<wgpu::Error> {
+    let mut tries = 0;
+    loop {
+        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        surface.configure(device, config);
+        let error = {
+            let mut fut = std::pin::pin!(scope.pop());
+            match std::future::Future::poll(fut.as_mut(), &mut std::task::Context::from_waker(std::task::Waker::noop())) {
+                std::task::Poll::Ready(e) => e,
+                std::task::Poll::Pending => None,
+            }
+        };
+        tries += 1;
+        let raced = matches!(&error, Some(wgpu::Error::Validation { description, .. }) if description.contains("come idle"));
+        if !raced || tries >= 5 {
+            return error;
+        }
+    }
+}
+
 struct SurfaceState {
     surface: Arc<SharedSurface>,
     alpha_mode: wgpu::CompositeAlphaMode,
@@ -271,19 +295,8 @@ impl Painter {
 
         // PHOSPHOR PATCH: configure inside an error scope, so a refusal is known here (and logged whole) instead
         // of the next `get_current_texture` panicking on an unconfigured surface.
-        let scope = render_state.device.push_error_scope(wgpu::ErrorFilter::Validation);
-        surface_state
-            .surface
-            .surface
-            .configure(&render_state.device, &surf_config);
+        let error = configure_retrying(&render_state.device, &surface_state.surface.surface, &surf_config);
         surface_state.surface.configured_by.store(BY_EGUI, std::sync::atomic::Ordering::Release);
-        let error = {
-            let mut fut = std::pin::pin!(scope.pop());
-            match std::future::Future::poll(fut.as_mut(), &mut std::task::Context::from_waker(std::task::Waker::noop())) {
-                std::task::Poll::Ready(e) => e,
-                std::task::Poll::Pending => None,
-            }
-        };
         surface_state.configure_tried = Some(web_time::Instant::now());
         surface_state.configured = match error {
             None => true,

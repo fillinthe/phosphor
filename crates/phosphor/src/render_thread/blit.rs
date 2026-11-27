@@ -270,10 +270,8 @@ impl Presenter {
             desired_maximum_frame_latency: 2,
             ..base
         };
-        // (Error scopes are per thread: this one only sees this configure.)
-        let scope = self.gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
-        surface.configure(&self.gpu.device, &config);
-        let error = pollster_now(scope.pop());
+        // (Tried again if another thread submitted while wgpu waited for the device to go idle.)
+        let error = eframe::egui_wgpu::winit::configure_retrying(&self.gpu.device, surface, &config);
         match error {
             None => {
                 self.refused.remove(&viewport);
@@ -281,20 +279,15 @@ impl Presenter {
             }
             Some(e) => {
                 if self.refused.insert(viewport) {
-                    log::error!("an output window's surface couldn't be set up for the render thread ({}x{}): {e}", setup.width, setup.height);
+                    let detail = match &e {
+                        wgpu::Error::Validation { description, .. } => description.split_whitespace().collect::<Vec<_>>().join(" "),
+                        other => other.to_string(),
+                    };
+                    log::error!("an output window's surface couldn't be set up for the render thread ({}x{}): {detail}", setup.width, setup.height);
                 }
                 false
             }
         }
-    }
-}
-
-/// The finished value of a future that is ready at once (wgpu's error scope pops without waiting); None if it isn't.
-fn pollster_now<T: Default>(fut: impl std::future::Future<Output = T>) -> T {
-    let mut fut = std::pin::pin!(fut);
-    match fut.as_mut().poll(&mut std::task::Context::from_waker(std::task::Waker::noop())) {
-        std::task::Poll::Ready(v) => v,
-        std::task::Poll::Pending => T::default(),
     }
 }
 
