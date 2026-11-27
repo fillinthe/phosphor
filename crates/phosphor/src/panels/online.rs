@@ -164,7 +164,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
                         f.free.sort();
                     }
                 }
-                _ => st.notice = Some(format!("Couldn't download \"{}\": {e}", d.item.title)),
+                _ => st.notice = Some(crate::ui::notice::failure(format!("Couldn't download \"{}\": {e}", d.item.title))),
             }
             false
         }

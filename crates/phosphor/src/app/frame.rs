@@ -15,7 +15,7 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(msg) = self.state.gpu_guard.as_ref().and_then(|g| g.poll()) {
-            self.state.notice = Some(msg);
+            self.state.notice = Some(crate::ui::notice::failure(msg));
         }
         // Buttons counted afresh; mapped presses handed to the buttons they're for.
         crate::ui::press::begin_frame(&ctx, wall);

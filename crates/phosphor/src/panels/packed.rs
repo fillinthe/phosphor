@@ -84,7 +84,7 @@ pub(crate) fn send_show(st: &mut State, to: Target) {
     if !st.net.running()
         && let Err(e) = st.net.start()
     {
-        st.notice = Some(format!("Couldn't start the Session to send from: {e}"));
+        st.notice = Some(crate::ui::notice::problem(format!("Couldn't start the Session to send from: {e}")));
         return;
     }
     let who = to.name.clone();

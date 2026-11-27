@@ -342,9 +342,9 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         match picked {
             Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<Vec<phosphor_engine::ControlMap>>(&json) {
                 Ok(maps) => comp.control_maps = maps,
-                Err(e) => *notice = Some(format!("Couldn't load those mappings: {e}")),
+                Err(e) => *notice = Some(crate::ui::notice::failure(format!("Couldn't load those mappings: {e}"))),
             },
-            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
+            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(crate::ui::notice::failure(e)),
             None => {}
         }
         if listening {

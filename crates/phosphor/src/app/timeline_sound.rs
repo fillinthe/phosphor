@@ -39,7 +39,7 @@ impl State {
             let player = match VideoPlayer::open(&track.path) {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    self.notice = Some(format!("The timeline's sound: {e}"));
+                    self.notice = Some(crate::ui::notice::failure(format!("The timeline's sound: {e}")));
                     None
                 }
             };

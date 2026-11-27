@@ -142,7 +142,9 @@ impl PhosphorApp {
                 }
             }
         }
-        self.state.notice = crate::screen_watch::notice(&acts);
+        // (A screen gone is something to see to: it stays until OK. One back is news.)
+        let gone = acts.iter().any(|a| matches!(a, Act::Hide(_)));
+        self.state.notice = crate::screen_watch::notice(&acts).map(|n| if gone { crate::ui::notice::problem(n) } else { n });
     }
 
     /// Phone/tablet remote: apply what remotes sent, then publish the state (≈20 times a second).
@@ -247,7 +249,7 @@ impl PhosphorApp {
             }
         }
         if shown.blocked {
-            self.state.notice = Some("The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again.".into());
+            self.state.notice = Some(crate::ui::notice::problem("The browser blocked the output window: allow pop-ups for this site (the icon at the right of the address bar), then press Output again."));
         }
     }
 

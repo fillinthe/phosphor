@@ -75,7 +75,7 @@ fn layout_menu(ui: &mut egui::Ui, st: &mut State) {
             if crate::ui::command(ui, label(icon::PLAY, "Start the session")).clicked()
                 && let Err(e) = st.net.start()
             {
-                st.notice = Some(format!("Couldn't start the session: {e}"));
+                st.notice = Some(crate::ui::notice::problem(format!("Couldn't start the session: {e}")));
             }
             return;
         }

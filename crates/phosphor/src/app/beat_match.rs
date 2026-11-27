@@ -70,7 +70,7 @@ impl State {
         for (_, target, r) in self.rhythm.poll() {
             match r {
                 Ok(r) => self.apply_rhythm(target, &r),
-                Err(e) => self.notice = Some(format!("Match the beat: {e}")),
+                Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Match the beat: {e}"))),
             }
         }
     }

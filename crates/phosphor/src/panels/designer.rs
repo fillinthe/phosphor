@@ -141,7 +141,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     let State { comp, .. } = st;
     if let Some(e) = error {
-        *notice = Some(e);
+        *notice = Some(crate::ui::notice::problem(e));
     }
     if let Some(p) = go {
         path = p;

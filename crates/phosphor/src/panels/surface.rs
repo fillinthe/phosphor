@@ -147,9 +147,9 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         match picked {
             Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<phosphor_engine::ControlSurface>(&json) {
                 Ok(sf) => st.comp.surface = sf,
-                Err(e) => st.notice = Some(format!("Couldn't load that surface: {e}")),
+                Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't load that surface: {e}"))),
             },
-            Some(crate::ui::SaveAction::Error(e)) => st.notice = Some(e),
+            Some(crate::ui::SaveAction::Error(e)) => st.notice = Some(crate::ui::notice::failure(e)),
             None => {}
         }
     });

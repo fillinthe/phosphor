@@ -454,7 +454,7 @@ impl State {
         let path = dir.join(format!("scan-to-play-{:?}{}.png", self.comp.play.qr_style, if self.comp.play.qr_caption { "" } else { "-plain" }).to_lowercase());
         let Some(png) = qr_card(&url, &self.comp.play.title, self.comp.play.qr_style, self.comp.play.qr_caption) else { return };
         if std::fs::write(&path, png).is_err() {
-            self.notice = Some("Couldn't write the QR picture".into());
+            self.notice = Some(crate::ui::notice::failure("Couldn't write the QR picture"));
             return;
         }
         let layer = self.comp.add_layer();

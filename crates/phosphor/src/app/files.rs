@@ -100,7 +100,7 @@ impl PhosphorApp {
         }
         let dialogs = self.state.dialogs.poll();
         if self.state.dialogs.take_failed() {
-            self.state.notice = Some("macOS didn't open the file window. Drag the file onto Phosphor instead, or quit and open Phosphor again.".into());
+            self.state.notice = Some(crate::ui::notice::problem("macOS didn't open the file window. Drag the file onto Phosphor instead, or quit and open Phosphor again."));
         }
         if dialogs.is_empty() {
             return;
@@ -191,7 +191,7 @@ impl PhosphorApp {
                                 st.load_composition(comp);
                                 st.set_project_path(&p.to_string_lossy());
                             }
-                            Err(e) => st.notice = Some(format!("Open failed: {e}")),
+                            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Open failed: {e}"))),
                         }
                     }
                 }
@@ -370,7 +370,7 @@ impl PhosphorApp {
                                     st.notice = Some(format!("{} parts from {}", style.parts.len(), name_of(p)));
                                 }
                             }
-                            Err(e) => st.notice = Some(format!("Couldn't read that file: {e}")),
+                            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't read that file: {e}"))),
                         }
                     }
                 }
@@ -401,7 +401,7 @@ impl PhosphorApp {
                                 st.notice = Some(format!("DMX take: {:.1} s from {} (press Play)", t.length(), name_of(p)));
                                 st.dmx_rec.take = Some(t);
                             }
-                            Err(e) => st.notice = Some(format!("Couldn't open that take: {e}")),
+                            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't open that take: {e}"))),
                         }
                     }
                 }
@@ -460,7 +460,7 @@ impl PhosphorApp {
                                 }
                                 st.notice = Some(format!("{} masks and {lines} line slices from {}", drawing.shapes.len(), name_of(p)));
                             }
-                            Err(e) => st.notice = Some(format!("Couldn't read that drawing: {e}")),
+                            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't read that drawing: {e}"))),
                         }
                     }
                 }
@@ -477,7 +477,7 @@ impl PhosphorApp {
                 Purpose::LayersFromFolder => {
                     if let Some(p) = paths.first() {
                         let n = crate::panels::layers_from_folder(st, p);
-                        st.notice = Some(if n == 0 { "No clips found in that folder".into() } else { crate::ui::plural(n, "{0} layer from {1}", "{0} layers from {1}").replace("{1}", &name_of(p)) });
+                        st.notice = Some(if n == 0 { crate::ui::notice::problem("No clips found in that folder") } else { crate::ui::plural(n, "{0} layer from {1}", "{0} layers from {1}").replace("{1}", &name_of(p)) });
                     }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -592,7 +592,7 @@ impl PhosphorApp {
         let now = ctx.input(|i| i.time);
         let files = dropped_media(&dropped);
         if files.is_empty() {
-            self.state.notice = Some("Nothing Phosphor can play in what was dropped (movies and pictures)".into());
+            self.state.notice = Some(crate::ui::notice::problem("Nothing Phosphor can play in what was dropped (movies and pictures)"));
             return;
         }
         let st = &mut self.state;

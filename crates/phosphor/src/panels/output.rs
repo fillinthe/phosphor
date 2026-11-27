@@ -168,7 +168,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         {
             let mut at_login = crate::login_item::is_enabled();
             if crate::ui::toggle(ui, &mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
-                st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| format!("Couldn't change the login item: {e}")));
+                st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| crate::ui::notice::failure(format!("Couldn't change the login item: {e}"))));
             }
         }
         crate::ui::toggle(ui, &mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")

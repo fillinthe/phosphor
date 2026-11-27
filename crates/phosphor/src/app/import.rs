@@ -84,7 +84,7 @@ impl State {
                     self.mad_probe.begin(&file);
                     self.mad_import = Some(file);
                 }
-                Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+                Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Couldn't import {path}: {e}"))),
             }
             return;
         }
@@ -97,7 +97,7 @@ impl State {
                 let with_screens = screens.is_some();
                 self.avc_import = Some(AvcImport { file, chosen, vdmx, screens, with_screens });
             }
-            Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+            Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Couldn't import {path}: {e}"))),
         }
     }
 
@@ -135,7 +135,8 @@ impl State {
         if missing > 0 {
             msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
         }
-        self.notice = Some(msg);
+        // (Files not here are something to fix: it stays until OK.)
+        self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
     }
 
     /// Brings the MadMapper project waiting in `mad_import` in: as a new project, or added to this one. Says what
@@ -170,7 +171,8 @@ impl State {
         if missing > 0 {
             msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
         }
-        self.notice = Some(msg);
+        // (Files not here are something to fix: it stays until OK.)
+        self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
     }
 
     /// Media files the project uses that aren't where it says.

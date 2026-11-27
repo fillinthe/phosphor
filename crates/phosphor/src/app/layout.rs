@@ -165,7 +165,7 @@ impl PhosphorApp {
                 if st.net.running() {
                     st.net.stop();
                 } else if let Err(e) = st.net.start() {
-                    st.notice = Some(e);
+                    st.notice = Some(crate::ui::notice::problem(e));
                 }
             }
         }

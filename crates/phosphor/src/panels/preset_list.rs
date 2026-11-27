@@ -44,9 +44,9 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
                 }
                 st.load_composition(comp);
             }
-            Err(e) => st.notice = Some(format!("Couldn't load preset: {e}")),
+            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't load preset: {e}"))),
         },
-        Some(SaveAction::Error(e)) => st.notice = Some(e),
+        Some(SaveAction::Error(e)) => st.notice = Some(crate::ui::notice::failure(e)),
         None => {}
     }
     match layer_pick {
@@ -61,17 +61,17 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
                 st.comp.layers.insert(at, l);
                 st.comp.normalize_groups();
             }
-            Err(e) => st.notice = Some(format!("Couldn't load the layer: {e}")),
+            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't load the layer: {e}"))),
         },
-        Some(SaveAction::Error(e)) => st.notice = Some(e),
+        Some(SaveAction::Error(e)) => st.notice = Some(crate::ui::notice::failure(e)),
         None => {}
     }
     match chain_pick {
         Some(SaveAction::Load(json)) => match serde_json::from_str::<Vec<EffectState>>(&json) {
             Ok(fx) => append_effects(st, target, fx),
-            Err(e) => st.notice = Some(format!("Couldn't load the chain: {e}")),
+            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't load the chain: {e}"))),
         },
-        Some(SaveAction::Error(e)) => st.notice = Some(e),
+        Some(SaveAction::Error(e)) => st.notice = Some(crate::ui::notice::failure(e)),
         None => {}
     }
 }

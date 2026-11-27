@@ -101,7 +101,7 @@ impl State {
                 // No input or no permission: the motion still runs from the LFOs; say so once.
                 Err(e) => {
                     self.audio_declined = true;
-                    self.notice = Some(format!("No audio input ({e}); music-following motion is off, beat-synced motion still runs"));
+                    self.notice = Some(crate::ui::notice::problem(format!("No audio input ({e}); music-following motion is off, beat-synced motion still runs")));
                 }
             }
         }

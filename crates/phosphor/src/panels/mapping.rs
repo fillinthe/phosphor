@@ -1411,9 +1411,9 @@ pub(crate) fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
                 st.mapping_output = st.primary_output();
                 st.notice = Some("Venue loaded: outputs and mapping replaced (Undo brings the previous ones back)".into());
             }
-            Err(e) => st.notice = Some(format!("Couldn't load the venue: {e}")),
+            Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't load the venue: {e}"))),
         },
-        Some(SaveAction::Error(e)) => st.notice = Some(e),
+        Some(SaveAction::Error(e)) => st.notice = Some(crate::ui::notice::failure(e)),
         None => {}
     }
 }

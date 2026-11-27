@@ -874,7 +874,7 @@ pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
         st.feeds.find_zone(layer, &name);
     }
     if let Some(p) = st.feeds.take_problems().pop() {
-        st.notice = Some(p);
+        st.notice = Some(crate::ui::notice::problem(p));
     }
 }
 

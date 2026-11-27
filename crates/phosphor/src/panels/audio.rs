@@ -15,7 +15,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             if crate::ui::pick_item(ui, audio.current().is_none(), "Default input").clicked()
                 && let Err(e) = audio.open(None)
             {
-                *notice = Some(e);
+                *notice = Some(crate::ui::notice::problem(e));
             }
             if crate::ui::pick_item(ui, audio.is_network(), "Session viewers (network)").on_hover_text("Audio sent back by people watching your session link").clicked() {
                 audio.use_network();
@@ -30,14 +30,14 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::pick_item(ui, audio.current() == Some(name.as_str()), &name).on_hover_text("The sound sent with this NDI source").clicked()
                     && let Err(e) = audio.open(Some(&name))
                 {
-                    *notice = Some(e);
+                    *notice = Some(crate::ui::notice::problem(e));
                 }
             }
             for d in devices {
                 if crate::ui::pick_item(ui, audio.current() == Some(d.as_str()), &d).clicked()
                     && let Err(e) = audio.open(Some(&d))
                 {
-                    *notice = Some(e);
+                    *notice = Some(crate::ui::notice::problem(e));
                 }
             }
         });
@@ -48,7 +48,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         if toggle(ui, &mut on, label(icon::MICROPHONE, "Listen")).clicked() {
             if on {
                 if let Err(e) = audio.open(audio.current().map(str::to_string).as_deref()) {
-                    *notice = Some(e);
+                    *notice = Some(crate::ui::notice::problem(e));
                 }
             } else {
                 audio.close();
