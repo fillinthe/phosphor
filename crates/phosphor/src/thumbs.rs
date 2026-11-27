@@ -218,7 +218,7 @@ mod native {
 
     /// The folder of thumbnails kept on this computer.
     pub(crate) fn cache_dir() -> Option<std::path::PathBuf> {
-        Some(crate::show::storage_dir()?.join("cache").join("thumbs"))
+        crate::cache_store::folder("thumbs")
     }
 
     /// The note that says which thumbnail was last made of `path` (by the path alone: it's read when the file itself

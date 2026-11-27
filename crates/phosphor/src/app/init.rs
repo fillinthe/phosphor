@@ -33,6 +33,8 @@ impl PhosphorApp {
                 crate::cache_store::set_days(days);
             }
             if bench.is_none() {
+                // (Off the UI thread: the first look moves the cache out of the settings folder.)
+                crate::cache_store::prepare();
                 crate::cache_store::sweep();
                 // Every Recent project whose drive is plugged in now gets a fresh copy here (opens without it later).
                 let recent: Vec<String> = stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
