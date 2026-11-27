@@ -20,7 +20,8 @@ pub struct OutputWindowState {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Snapshot {
-    pub comp: Option<phosphor_engine::Composition>,
+    /// Shared with the UI thread (`State::shared_comp`): handing it to the writer copies nothing while it's unchanged.
+    pub comp: Option<std::sync::Arc<phosphor_engine::Composition>>,
     pub dock: Option<serde_json::Value>,
     pub detached: Vec<Tab>,
     pub outputs: Vec<OutputWindowState>,
@@ -252,8 +253,9 @@ pub fn end_session() {
     }
 }
 
-/// Writes the snapshot every couple of seconds when something changed. The UI thread only hands over a copy; one
-/// writer thread of its own turns it into text, compares it with the last and writes it whole (never two at once).
+/// Writes the snapshot every couple of seconds when something changed. The UI thread only hands over the project it
+/// shares (a copy only when it changed since the last time); one writer thread of its own turns it into text, compares
+/// it with the last and writes it whole (never two at once).
 #[derive(Default)]
 pub struct Saver {
     last_time: f64,
@@ -780,7 +782,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("recovery.json");
         let mut saver = super::Saver { to: Some(path.clone()), ..Default::default() };
-        let snap = |selected| super::Snapshot { selected: Some(selected), comp: Some(phosphor_engine::Composition::default()), ..Default::default() };
+        let snap = |selected| super::Snapshot { selected: Some(selected), comp: Some(std::sync::Arc::new(phosphor_engine::Composition::default())), ..Default::default() };
         assert!(!saver.holds_project(), "nothing written yet");
         saver.save(0.0, snap(1));
         assert!(!saver.due(1.0) && saver.due(2.0));
@@ -806,7 +808,7 @@ mod tests {
     fn the_project_reads_back_from_a_snapshot() {
         let mut comp = phosphor_engine::Composition::opening();
         comp.notes = "show notes".into();
-        let snap = super::Snapshot { comp: Some(comp.clone()), selected: Some(3), ..Default::default() };
+        let snap = super::Snapshot { comp: Some(std::sync::Arc::new(comp.clone())), selected: Some(3), ..Default::default() };
         let text = serde_json::to_string(&snap).unwrap();
         assert_eq!(super::project_in(&text), phosphor_engine::Composition::from_json(&comp.to_json()).ok());
         assert_eq!(super::project_in(&text).map(|c| c.notes), Some("show notes".to_string()));

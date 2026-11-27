@@ -2,19 +2,50 @@
 //! keeps this computer's copy; on a slow or sleeping drive any of those can take many seconds (a report,
 //! 2026-11-26: a backup copy sat 20 s in the file system and the watchdog restarted Phosphor), so one writer thread
 //! of its own does them in order and says how each went. Saves are never dropped: when several for the same file
-//! wait, only the newest is written.
+//! wait, only the newest is written. The UI thread hands over the project itself (a shared copy, `State::shared_comp`):
+//! its text and hash are made here, so neither Save nor autosave builds a show's JSON on the UI thread.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-/// One save asked for.
-pub struct Job {
+/// What a save writes: the project (turned into text on the writer thread), or text made already.
+pub enum Content {
+    Project(Arc<phosphor_engine::Composition>),
+    Text(String),
+}
+
+impl Content {
+    /// The file's text (`Composition::to_json`, as Save has always written it).
+    fn into_text(self) -> String {
+        match self {
+            Content::Project(comp) => comp.to_json(),
+            Content::Text(text) => text,
+        }
+    }
+}
+
+/// One save asked for (`ProjectSaver::save`).
+pub struct Request {
     pub path: String,
-    pub json: String,
+    pub content: Content,
     /// Made by autosave (its backups are kept apart).
     pub auto: bool,
     /// Unix seconds when asked (names the backup).
+    pub secs: u64,
+    /// `History::generation` when asked: the project is saved as of then (handed back in `Done`).
+    pub generation: u64,
+    /// Not written when its text hashes to this (autosave: what was last saved; an unchanged project is left alone).
+    pub unless: Option<u64>,
+}
+
+/// One save being written: its text made.
+pub struct Job {
+    pub path: String,
+    pub json: String,
+    pub auto: bool,
     pub secs: u64,
 }
 
@@ -26,14 +57,20 @@ pub enum Outcome {
     /// The file's folder isn't there (its drive unplugged): kept on this computer instead.
     KeptHere,
     Failed(String),
+    /// Nothing written: an autosave of a project that hasn't changed since it was saved (`Request::unless`).
+    Unchanged,
 }
 
-/// A finished save: which file, the hash of what was written, and how it went.
+/// A finished save: which file, the hash of what was written (or found unchanged), the project's generation it
+/// holds, and how it went.
 pub struct Done {
     pub path: String,
     pub hash: u64,
+    pub generation: u64,
     pub auto: bool,
     pub outcome: Outcome,
+    /// Which `save` it answers (and every earlier one for the same file it replaced).
+    id: u64,
 }
 
 /// Does one save, the way Save always has (runs on the writer thread; tests call it directly).
@@ -62,11 +99,13 @@ pub fn save_now(job: &Job) -> Outcome {
 /// The writer thread and what it has handed back.
 #[derive(Default)]
 pub struct ProjectSaver {
-    worker: Option<(Sender<Job>, Receiver<Done>, std::thread::JoinHandle<()>)>,
+    worker: Option<(Sender<(u64, Request)>, Receiver<Done>, std::thread::JoinHandle<()>)>,
     /// Results still to be read after the writer stopped (quit, or no thread could be started).
     leftover: Option<Receiver<Done>>,
-    /// Saves handed over and not yet back: (path, hash, when asked).
+    /// Saves handed over and not yet back: (path, id, when asked).
     pending: Vec<(String, u64, Instant)>,
+    /// The id of the next save.
+    next_id: u64,
     /// What a save does (None = `save_now`; tests give their own, so nothing lands in the settings folder).
     write: Option<fn(&Job) -> Outcome>,
     /// The save (by when it was asked) already said to be slow.
@@ -75,26 +114,27 @@ pub struct ProjectSaver {
 
 impl ProjectSaver {
     /// Hands a save to the writer (started on first use).
-    pub fn save(&mut self, job: Job, hash: u64) {
+    pub fn save(&mut self, request: Request) {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending.push((request.path.clone(), id, Instant::now()));
         if self.worker.is_none() {
-            let (tx, rx) = std::sync::mpsc::channel::<Job>();
+            let (tx, rx) = std::sync::mpsc::channel::<(u64, Request)>();
             let (done_tx, done_rx) = std::sync::mpsc::channel::<Done>();
             let write = self.write.unwrap_or(save_now);
-            let Ok(handle) = std::thread::Builder::new().name("project-save".into()).spawn(move || run(&rx, &done_tx, write)) else {
-                // No thread to be had: saved here and now, as before.
-                let outcome = write(&job);
-                let (done_tx, done_rx) = std::sync::mpsc::channel();
-                let _ = done_tx.send(Done { path: job.path.clone(), hash, auto: job.auto, outcome });
-                self.pending.push((job.path, hash, Instant::now()));
-                self.worker = None;
-                self.leftover = Some(done_rx);
-                return;
-            };
-            self.worker = Some((tx, done_rx, handle));
+            match std::thread::Builder::new().name("project-save".into()).spawn(move || run(&rx, &done_tx, write)) {
+                Ok(handle) => self.worker = Some((tx, done_rx, handle)),
+                Err(_) => {
+                    // No thread to be had: saved here and now, as before.
+                    let (done_tx, done_rx) = std::sync::mpsc::channel();
+                    let _ = done_tx.send(write_one(id, request, &mut HashMap::new(), write));
+                    self.leftover = Some(done_rx);
+                    return;
+                }
+            }
         }
-        self.pending.push((job.path.clone(), hash, Instant::now()));
         if let Some((tx, _, _)) = &self.worker {
-            let _ = tx.send(job);
+            let _ = tx.send((id, request));
         }
     }
 
@@ -109,7 +149,7 @@ impl ProjectSaver {
         }
         for d in &out {
             // Saves for this file asked before (or as) this one are settled by it.
-            if let Some(i) = self.pending.iter().rposition(|(p, h, _)| *p == d.path && *h == d.hash) {
+            if let Some(i) = self.pending.iter().rposition(|(p, id, _)| *p == d.path && *id == d.id) {
                 let mut k = 0;
                 self.pending.retain(|(p, _, _)| {
                     let keep = !(k <= i && *p == d.path);
@@ -119,11 +159,6 @@ impl ProjectSaver {
             }
         }
         out
-    }
-
-    /// A save of `path` with this content is on its way (so autosave doesn't ask again).
-    pub fn writing(&self, path: &str, hash: u64) -> bool {
-        self.pending.iter().any(|(p, h, _)| p == path && *h == hash)
     }
 
     /// The file of a save that has now taken longer than `after`: once per save (to say it's still going).
@@ -156,20 +191,38 @@ impl ProjectSaver {
     }
 }
 
+/// Makes one request's text and writes it, unless it's an autosave of what that file already holds (`unless`, or
+/// what this writer last wrote there). `written` = the hash last written per file.
+fn write_one(id: u64, r: Request, written: &mut HashMap<String, u64>, write: fn(&Job) -> Outcome) -> Done {
+    let json = r.content.into_text();
+    let hash = crate::app::hash_text(&json);
+    let unchanged = r.unless == Some(hash) || (r.auto && written.get(&r.path) == Some(&hash));
+    let outcome = if unchanged {
+        Outcome::Unchanged
+    } else {
+        let job = Job { path: r.path.clone(), json, auto: r.auto, secs: r.secs };
+        let outcome = write(&job);
+        if matches!(outcome, Outcome::Saved { .. } | Outcome::KeptHere) {
+            written.insert(r.path.clone(), hash);
+        }
+        outcome
+    };
+    Done { path: r.path, hash, generation: r.generation, auto: r.auto, outcome, id }
+}
+
 /// The writer: takes everything waiting, keeps the newest save per file (in the order first asked), writes them.
-fn run(rx: &Receiver<Job>, done: &Sender<Done>, write: fn(&Job) -> Outcome) {
+fn run(rx: &Receiver<(u64, Request)>, done: &Sender<Done>, write: fn(&Job) -> Outcome) {
+    let mut written = HashMap::new();
     while let Ok(first) = rx.recv() {
         let mut jobs = vec![first];
-        for job in rx.try_iter() {
-            match jobs.iter_mut().find(|j| j.path == job.path) {
-                Some(j) => *j = job,
-                None => jobs.push(job),
+        for (id, r) in rx.try_iter() {
+            match jobs.iter_mut().find(|(_, j)| j.path == r.path) {
+                Some(j) => *j = (id, r),
+                None => jobs.push((id, r)),
             }
         }
-        for job in jobs {
-            let outcome = write(&job);
-            let hash = crate::app::hash_text(&job.json);
-            if done.send(Done { path: job.path, hash, auto: job.auto, outcome }).is_err() {
+        for (id, r) in jobs {
+            if done.send(write_one(id, r, &mut written, write)).is_err() {
                 return;
             }
         }
@@ -187,28 +240,91 @@ mod tests {
         d
     }
 
+    fn write(job: &Job) -> Outcome {
+        match crate::project_files::write_whole(Path::new(&job.path), &job.json) {
+            Ok(()) => Outcome::Saved { backup: None },
+            Err(e) => Outcome::Failed(e.to_string()),
+        }
+    }
+
+    fn text(path: &str, text: &str, auto: bool, unless: Option<u64>) -> Request {
+        Request { path: path.into(), content: Content::Text(text.into()), auto, secs: 1_000, generation: 7, unless }
+    }
+
     #[test]
     fn saves_are_written_in_order_and_the_newest_wins() {
         let d = dir("order");
         let path = d.join("Show.phosphor").to_string_lossy().into_owned();
-        fn write(job: &Job) -> Outcome {
-            match crate::project_files::write_whole(Path::new(&job.path), &job.json) {
-                Ok(()) => Outcome::Saved { backup: None },
-                Err(e) => Outcome::Failed(e.to_string()),
-            }
-        }
         let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
-        for (k, text) in ["{\"v\":1}", "{\"v\":2}", "{\"v\":3}"].iter().enumerate() {
-            let hash = crate::app::hash_text(text);
-            saver.save(Job { path: path.clone(), json: (*text).into(), auto: false, secs: 1_000 + k as u64 }, hash);
-            assert!(saver.writing(&path, hash));
+        for (k, t) in ["{\"v\":1}", "{\"v\":2}", "{\"v\":3}"].iter().enumerate() {
+            saver.save(Request { secs: 1_000 + k as u64, ..text(&path, t, false, None) });
+            assert!(!saver.pending.is_empty());
         }
         assert!(saver.finish(Duration::from_secs(10)));
         let done = saver.take_done();
         assert!(!done.is_empty() && done.iter().all(|d| matches!(d.outcome, Outcome::Saved { backup: None })));
         assert_eq!(done.last().unwrap().hash, crate::app::hash_text("{\"v\":3}"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":3}");
-        assert!(!saver.writing(&path, crate::app::hash_text("{\"v\":3}")), "nothing left on its way");
+        assert!(saver.pending.is_empty(), "nothing left on its way");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// The UI thread hands over the project; its text (the same as Save always wrote) and hash are made by the writer,
+    /// and the generation it was asked at comes back with the answer.
+    #[test]
+    fn the_project_is_turned_into_text_on_the_writer() {
+        let d = dir("project");
+        let path = d.join("Show.phosphor").to_string_lossy().into_owned();
+        let mut comp = phosphor_engine::Composition::opening();
+        comp.notes = "doors at nine".into();
+        let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
+        saver.save(Request { path: path.clone(), content: Content::Project(Arc::new(comp.clone())), auto: false, secs: 1, generation: 42, unless: None });
+        assert!(saver.finish(Duration::from_secs(10)));
+        let done = saver.take_done();
+        assert_eq!(done.len(), 1);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), comp.to_json());
+        assert_eq!((done[0].hash, done[0].generation), (crate::app::hash_text(&comp.to_json()), 42));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Autosave leaves a file alone when the project hasn't changed since it was saved (as when the UI thread made the
+    /// hash itself), and a manual save always writes.
+    #[test]
+    fn an_unchanged_autosave_writes_nothing() {
+        let d = dir("unchanged");
+        let path = d.join("Show.phosphor").to_string_lossy().into_owned();
+        let saved = crate::app::hash_text("{\"v\":1}");
+        let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
+        // Unchanged since the last save: not written (the file isn't even made).
+        saver.save(text(&path, "{\"v\":1}", true, Some(saved)));
+        assert!(saver.finish(Duration::from_secs(10)));
+        let done = saver.take_done();
+        assert_eq!(done[0].outcome, Outcome::Unchanged);
+        assert_eq!((done[0].hash, done[0].generation), (saved, 7));
+        assert!(!Path::new(&path).exists());
+        // Changed: written.
+        saver.save(text(&path, "{\"v\":2}", true, Some(saved)));
+        assert!(saver.finish(Duration::from_secs(10)));
+        assert!(matches!(saver.take_done()[0].outcome, Outcome::Saved { .. }));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":2}");
+        // A manual save of the same text is written anyway.
+        std::fs::remove_file(&path).unwrap();
+        saver.save(text(&path, "{\"v\":2}", false, None));
+        assert!(saver.finish(Duration::from_secs(10)));
+        assert!(matches!(saver.take_done()[0].outcome, Outcome::Saved { .. }));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":2}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// One writer remembers what it wrote: an autosave of exactly that is left alone.
+    #[test]
+    fn an_autosave_of_what_was_just_written_is_left_alone() {
+        let mut written = HashMap::new();
+        let first = write_one(0, text("/nowhere/Show.phosphor", "{\"v\":2}", false, None), &mut written, |_| Outcome::Saved { backup: None });
+        assert!(matches!(first.outcome, Outcome::Saved { .. }));
+        let again = write_one(1, text("/nowhere/Show.phosphor", "{\"v\":2}", true, Some(0)), &mut written, |_| panic!("not written"));
+        assert_eq!(again.outcome, Outcome::Unchanged);
+        let other = write_one(2, text("/nowhere/Show.phosphor", "{\"v\":3}", true, Some(0)), &mut written, |_| Outcome::Saved { backup: None });
+        assert!(matches!(other.outcome, Outcome::Saved { .. }));
     }
 }

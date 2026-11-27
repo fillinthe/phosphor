@@ -51,7 +51,8 @@ impl PhosphorApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn snapshot(&self) -> crate::recovery::Snapshot {
+    pub(crate) fn snapshot(&mut self) -> crate::recovery::Snapshot {
+        let comp = self.state.shared_comp();
         let st = &self.state;
         let outputs = st
             .output
@@ -61,7 +62,7 @@ impl PhosphorApp {
             .map(|(id, o)| crate::recovery::OutputWindowState { id: *id, open: o.open, display: o.display, fullscreen: o.fullscreen })
             .collect();
         crate::recovery::Snapshot {
-            comp: Some(st.comp.clone()),
+            comp: Some(comp),
             dock: to_text(&self.dock).map(serde_json::Value::String),
             detached: self.detached.clone(),
             outputs,

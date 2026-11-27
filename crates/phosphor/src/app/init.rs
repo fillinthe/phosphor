@@ -54,7 +54,7 @@ impl PhosphorApp {
             Some(cfg) => cfg.composition(),
             None => {
                 #[cfg(not(target_arch = "wasm32"))]
-                let recovered = snapshot.as_ref().and_then(|s| s.comp.clone());
+                let recovered = snapshot.as_ref().and_then(|s| s.comp.clone()).map(std::sync::Arc::unwrap_or_clone);
                 #[cfg(target_arch = "wasm32")]
                 let recovered: Option<Composition> = None;
                 #[cfg(not(target_arch = "wasm32"))]
@@ -308,7 +308,7 @@ impl PhosphorApp {
                 saved_hash: 0,
                 saved_generation: 0,
                 #[cfg(not(target_arch = "wasm32"))]
-                saving: Vec::new(),
+                shared: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 project_saver: Default::default(),
                 account: Default::default(),

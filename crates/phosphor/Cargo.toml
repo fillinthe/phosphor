@@ -18,7 +18,7 @@ ron = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "exr", "hdr", "tga", "qoi"] }
 log = "0.4"
 egui_dock = { version = "0.21", features = ["serde"] }
-serde = { version = "1.0.229", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive", "rc"] }
 web-time = "1"
 ehttp = "0.6"
 roxmltree = "0.20"

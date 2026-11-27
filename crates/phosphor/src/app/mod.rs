@@ -531,10 +531,12 @@ pub struct State {
     autosave_at: f64,
     saved_hash: u64,
     /// `history.generation()` as of the last save or open: the project is "edited" (window title, the question
-    /// before New) while they differ. `saving` = (hash, generation) of saves still being written.
+    /// before New) while they differ.
     saved_generation: u64,
+    /// The project as last handed to a thread (saves, the recovery snapshot), shared: handed over again without a copy
+    /// while it hasn't changed (`shared_comp`).
     #[cfg(not(target_arch = "wasm32"))]
-    saving: Vec<(u64, u64)>,
+    shared: Option<std::sync::Arc<Composition>>,
     /// Saves are written on a thread of their own (a slow drive never stops the show).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) project_saver: crate::project_save::ProjectSaver,
@@ -663,17 +665,34 @@ impl State {
         #[cfg(not(target_arch = "wasm32"))]
         match &self.project_path {
             Some(p) => {
-                let json = self.comp.to_json();
-                let hash = hash_text(&json);
-                let job = crate::project_save::Job { path: p.clone(), json, auto, secs: crate::backups::now_secs() };
-                self.project_saver.save(job, hash);
-                self.saving.retain(|(h, _)| *h != hash);
-                self.saving.push((hash, self.history.generation()));
-                if self.saving.len() > 8 {
-                    self.saving.remove(0);
-                }
+                // The writer thread makes the text and its hash (a big show's JSON took milliseconds here). An
+                // autosave of what's saved already writes nothing (`unless`).
+                let request = crate::project_save::Request {
+                    path: p.clone(),
+                    content: crate::project_save::Content::Project(self.shared_comp()),
+                    auto,
+                    secs: crate::backups::now_secs(),
+                    generation: self.history.generation(),
+                    unless: auto.then_some(self.saved_hash),
+                };
+                self.project_saver.save(request);
             }
             None => self.save_project_as(),
+        }
+    }
+
+    /// The project as it is now, shared with a thread that turns it into text (saves, the recovery snapshot): one
+    /// copy while it changes, none while it doesn't (a comparison, tens of microseconds on a big show, instead of a
+    /// whole copy every two seconds).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn shared_comp(&mut self) -> std::sync::Arc<Composition> {
+        match &self.shared {
+            Some(shared) if **shared == self.comp => shared.clone(),
+            _ => {
+                let shared = std::sync::Arc::new(self.comp.clone());
+                self.shared = Some(shared.clone());
+                shared
+            }
         }
     }
 
@@ -684,10 +703,8 @@ impl State {
             return;
         }
         self.autosave_at = now;
-        let hash = hash_text(&self.comp.to_json());
-        if hash != self.saved_hash && !self.project_path.as_deref().is_some_and(|p| self.project_saver.writing(p, hash)) {
-            self.save_project_kind(true);
-        }
+        // (Whether it changed since the last save is found on the writer thread: its text is made there.)
+        self.save_project_kind(true);
     }
 
     /// Saves the writer thread has finished: what's saved counts as saved, and the notice says how it went.
@@ -702,13 +719,14 @@ impl State {
             let name = file_name(&done.path);
             let current = self.project_path.as_deref() == Some(done.path.as_str());
             if current && !matches!(done.outcome, Outcome::Failed(_)) {
+                // The file holds the project as it was when this save was asked for.
                 self.saved_hash = done.hash;
-                if let Some(k) = self.saving.iter().position(|(h, _)| *h == done.hash) {
-                    self.saved_generation = self.saving.remove(k).1;
-                }
+                self.saved_generation = done.generation;
             }
             use crate::ui::notice::Kind;
             let (said, kind) = match done.outcome {
+                // (An autosave with nothing new to write: nothing to say.)
+                Outcome::Unchanged => continue,
                 Outcome::Saved { backup: None } => (format!("Saved {name}"), Kind::News),
                 Outcome::Saved { backup: Some(e) } => (format!("Saved {name} (its backup couldn't be made: {e})"), Kind::Problem),
                 Outcome::KeptHere => (format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else"), Kind::Problem),
