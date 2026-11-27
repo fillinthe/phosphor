@@ -80,7 +80,8 @@ pub(crate) fn confirmed(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt
             toggle(ui, &mut ask.dont_ask, "Don't ask again").on_hover_text("Removes happen straight away from now on. Switch asking back on in the brightness menu at the top: Ask before removing");
         }
         ui.horizontal(|ui| {
-            yes = danger_button(ui, ask.yes.as_str()).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter));
+            // (Enter alone: a shortcut pressed again, Cmd+Return, isn't a yes.)
+            yes = danger_button(ui, ask.yes.as_str()).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.command);
             no = ui.button("Cancel").clicked();
         });
     });

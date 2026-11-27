@@ -93,7 +93,8 @@ impl PhosphorApp {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        if self.guarded.is_none() {
+        // (Quitting is the question now, whatever was being asked before.)
+        if !matches!(self.guarded, Some(Guarded::Quit)) {
             self.guard(ctx, Guarded::Quit);
         }
     }

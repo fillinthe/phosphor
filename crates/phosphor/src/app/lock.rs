@@ -133,6 +133,8 @@ impl PhosphorApp {
                 if crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output window. In it: F twice = fullscreen, Esc twice = back to a window").clicked() {
                     self.state.request_output_toggle();
                 }
+                // (Blackout stays in reach while locked.)
+                super::menus::blackout_button(ui, &mut self.state);
                 ui.label(format!("{} {}", icon::LIGHTNING, super::menus::launch_summary(&self.state.comp)));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if crate::ui::command(ui, format!("{} Unlock", icon::LOCK_OPEN)).clicked() {
