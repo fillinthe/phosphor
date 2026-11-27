@@ -39,14 +39,14 @@ impl PhosphorApp {
             self.state.color_ref = None;
             match found {
                 Ok(to) => self.state.read_back(phosphor_engine::ReadSource::LayerThumbnail(layer), readbacks::ReadFor::ColorMatch { layer, to }),
-                Err(e) => self.state.notice = Some(format!("Couldn't read that picture: {e}")),
+                Err(e) => self.state.notice = Some(crate::ui::notice::failure(format!("Couldn't read that picture: {e}"))),
             }
         }
         // The layer's picture now becomes the clip's picture in the grid (once it's read back).
         if let Some((layer, slot)) = self.state.clip_thumb_request.take() {
             match self.state.comp.layer(layer).and_then(|l| l.clips.get(slot)).map(|c| c.id) {
                 Some(clip) => self.state.read_back(phosphor_engine::ReadSource::LayerThumbnail(layer), readbacks::ReadFor::ClipPicture { clip }),
-                None => self.state.notice = Some("Couldn't keep the picture: that clip is gone".into()),
+                None => self.state.notice = Some(crate::ui::notice::problem("Couldn't keep the picture: that clip is gone")),
             }
         }
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
