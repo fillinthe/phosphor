@@ -87,6 +87,13 @@ pub(crate) use layout::*;
 pub(crate) use menus::*;
 
 const KEY_COMPOSITION: &str = "composition";
+/// Set while the project lives in the recovery snapshot instead of `KEY_COMPOSITION` (`save_settings`).
+const KEY_PROJECT_IN_RECOVERY: &str = "project_in_recovery";
+/// Where eframe keeps the interface's memory (its `STORAGE_EGUI_MEMORY_KEY`): saved by `save_settings` here.
+const KEY_EGUI_MEMORY: &str = "egui";
+/// How often eframe saves the settings (and on quit). The project is in the recovery snapshot every 2 s; the rest
+/// (layout, preferences) can wait: every 30 s it was a hitch in a big show.
+const SETTINGS_EVERY: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 const KEY_LAYOUTS: &str = "layouts";
 const KEY_DOCK: &str = "dock";
 /// Set once the Stack trial is over (Clips and Layers are the layout again).
@@ -493,6 +500,8 @@ pub struct State {
     /// A layer / group / comp to save a picture of (read back next frame), and the picture once it's here.
     pub snapshot_source: Option<u64>,
     pub snapshot_ready: Option<(u32, u32, Vec<u8>)>,
+    /// Pictures read back once for the app, not here yet (`read_back`).
+    pub(crate) readbacks: readbacks::Readbacks,
     /// A project just saved whose picture (of the mix) is being read back for the Projects window.
     pub(crate) project_picture: Option<String>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -500,8 +509,6 @@ pub struct State {
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
-    /// Pictures read back once for the app, not here yet (`read_back`).
-    pub(crate) readbacks: readbacks::Readbacks,
     pub media_view: panels::MediaView,
     /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
     pub map_mode: bool,
@@ -1209,16 +1216,20 @@ pub struct PhosphorApp {
     remote_published: f64,
     #[cfg(not(target_arch = "wasm32"))]
     pending_snapshot: Option<(u32, u32, Vec<u8>)>,
+    /// The snapshot's file, picked before its picture came back (`run_readbacks` writes it then).
+    #[cfg(not(target_arch = "wasm32"))]
+    snapshot_path: Option<std::path::PathBuf>,
     #[cfg(not(target_arch = "wasm32"))]
     saver: crate::recovery::Saver,
+    /// The interface's context: `save_settings` saves its memory (without the areas it forgets: `forget_areas`).
+    egui_ctx: egui::Context,
+    /// When hidden tooltips, menus and pop-ups are next forgotten (`forget_areas`).
+    areas_forget_at: f64,
     /// Shown after restoring from an unexpected quit; `true` if a stream was live.
     recovered: Option<bool>,
     /// Panics caught in the last few seconds (UI keeps running instead of closing).
     panics: Vec<f64>,
     /// Panels living in their own OS windows.
-    /// The snapshot's file, picked before its picture came back (`run_readbacks` writes it then).
-    #[cfg(not(target_arch = "wasm32"))]
-    snapshot_path: Option<std::path::PathBuf>,
     detached: Vec<Tab>,
     /// Built-in and saved layouts, and which opens at startup.
     layouts: Layouts,
@@ -1374,6 +1385,7 @@ impl eframe::App for PhosphorApp {
         }
         self.last_ui = (web_time::Instant::now(), ui.ctx().input(|i| i.time));
         self.ui_frames += 1;
+        self.forget_areas_now_and_then(ui.ctx(), self.last_ui.1);
         // A bug in one frame should not take the show down: skip that frame and carry on.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
         crate::explorer::end_stale_looks(&mut self.state);
@@ -1400,6 +1412,16 @@ impl eframe::App for PhosphorApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         self.save_settings(storage);
+    }
+
+    fn auto_save_interval(&self) -> std::time::Duration {
+        SETTINGS_EVERY
+    }
+
+    /// Native: `save_settings` saves the interface's memory itself, after forgetting what it no longer shows. (The
+    /// browser keeps eframe's own place for it.)
+    fn persist_egui_memory(&self) -> bool {
+        cfg!(target_arch = "wasm32")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
