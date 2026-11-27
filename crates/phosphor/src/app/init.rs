@@ -217,6 +217,7 @@ impl PhosphorApp {
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
                 render_rate: stored(KEY_RENDER_RATE).and_then(|t| layout::from_text(&t)).unwrap_or_default(),
                 render_pacer: Default::default(),
+                screens_dont_wait: stored(KEY_SCREENS_DONT_WAIT).is_some_and(|v| v == "1"),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 web_activity: None,
                 web_log: Vec::new(),

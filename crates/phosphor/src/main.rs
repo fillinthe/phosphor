@@ -92,6 +92,8 @@ mod stream_audio;
 #[cfg(not(target_arch = "wasm32"))]
 mod video_encoders;
 #[cfg(not(target_arch = "wasm32"))]
+mod present;
+#[cfg(not(target_arch = "wasm32"))]
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
 mod pad_kit;
@@ -322,6 +324,8 @@ fn main() -> eframe::Result {
     };
     // Files double-clicked in Finder / dropped on the Dock icon reach the app (open_files.rs).
     let _ = eframe::AFTER_EVENT_LOOP.set(open_files::install);
+    // Each window's present mode is asked of present.rs (one window paces; the others needn't wait).
+    present::install();
     let quiet = bench.is_some();
     let ran = eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))));
     if let Err(e) = &ran {

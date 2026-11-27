@@ -168,6 +168,12 @@ impl PhosphorApp {
         crate::screens::keep_display_awake(any_open);
         let open: Vec<(u64, String)> =
             self.state.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
+        // The first output open (in the project's order) paces the show; Phosphor's own window when none is.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let first = self.state.comp.outputs.iter().find(|o| open.iter().any(|(id, _)| *id == o.id));
+            crate::present::set(self.state.screens_dont_wait, first.map(|o| egui::ViewportId::from_hash_of(("phosphor_output", o.id))));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         for (oid, name) in open {
             self.output_window(ctx, oid, &name);

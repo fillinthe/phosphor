@@ -12,6 +12,12 @@ use core::num::NonZeroU32;
 use egui::{Context, Event, UserData, ViewportId, ViewportIdMap, ViewportIdSet};
 use std::sync::Arc;
 
+/// PHOSPHOR PATCH: the present mode one window's surface uses, asked for each window when its surface is configured
+/// and before each paint; `None` = [`crate::SurfaceConfig::present_mode`]. A changed answer reconfigures that surface. A
+/// mode the surface can't do falls back to `SurfaceConfig::present_mode`. (Phosphor: outputs on several screens
+/// mustn't each wait for their own screen's refresh, one after another, on the one thread that paints them.)
+pub static PRESENT_MODE_FOR: std::sync::OnceLock<fn(egui::ViewportId) -> Option<wgpu::PresentMode>> = std::sync::OnceLock::new();
+
 struct SurfaceState {
     surface: wgpu::Surface<'static>,
     alpha_mode: wgpu::CompositeAlphaMode,
@@ -25,6 +31,14 @@ struct SurfaceState {
     // skips its frames and configure is tried again every 2 s.
     configured: bool,
     configure_tried: Option<web_time::Instant>,
+    // PHOSPHOR PATCH: whose surface this is, and the present mode last asked for it (`PRESENT_MODE_FOR`).
+    viewport_id: ViewportId,
+    present_mode_asked: Option<wgpu::PresentMode>,
+}
+
+/// PHOSPHOR PATCH: the present mode `PRESENT_MODE_FOR` asks for this window (None = the configured one).
+fn present_mode_asked(viewport_id: ViewportId) -> Option<wgpu::PresentMode> {
+    PRESENT_MODE_FOR.get().and_then(|f| f(viewport_id))
 }
 
 /// Everything you need to paint egui with [`wgpu`] on [`winit`].
@@ -121,6 +135,15 @@ impl Painter {
 
         let width = surface_state.width;
         let height = surface_state.height;
+
+        // PHOSPHOR PATCH: this window's own present mode, when one is asked for and its surface can do it.
+        let asked = present_mode_asked(surface_state.viewport_id);
+        surface_state.present_mode_asked = asked;
+        let present_mode = match asked {
+            Some(m @ (wgpu::PresentMode::AutoVsync | wgpu::PresentMode::AutoNoVsync)) => m,
+            Some(m) if surface_state.surface.get_capabilities(&render_state.adapter).present_modes.contains(&m) => m,
+            _ => present_mode,
+        };
 
         let mut surf_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -324,6 +347,8 @@ impl Painter {
                 needs_recreate: false,
                 configured: false,
                 configure_tried: None,
+                viewport_id,
+                present_mode_asked: None,
             },
         );
         let Some(width) = NonZeroU32::new(width) else {
@@ -611,6 +636,11 @@ impl Painter {
                 &screen_descriptor,
             )
         };
+
+        // PHOSPHOR PATCH: a window asked for another present mode since its surface was configured.
+        if surface_state.configured && present_mode_asked(viewport_id) != surface_state.present_mode_asked {
+            surface_state.needs_reconfigure = true;
+        }
 
         if surface_state.needs_reconfigure {
             Self::configure_surface(surface_state, render_state, &self.config.surface);

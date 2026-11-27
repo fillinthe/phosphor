@@ -114,6 +114,7 @@ const KEY_FOLLOW_PASSWORD: &str = "follow_password";
 const KEY_LOCK: &str = "lock";
 const KEY_PANELS_LOCKED: &str = "panels_locked";
 const KEY_RENDER_RATE: &str = "render_rate";
+const KEY_SCREENS_DONT_WAIT: &str = "screens_dont_wait";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
@@ -393,6 +394,8 @@ pub struct State {
     /// How often the engine draws (Output panel); the UI repaints at the same pace.
     pub render_rate: phosphor_engine::RenderRate,
     pub render_pacer: crate::pacing::FramePacer,
+    /// Output windows don't wait for each other's screens (`present`; Output panel).
+    pub screens_dont_wait: bool,
     pub require_password: bool,
     /// When someone last changed something from the web, and who (the web control badge).
     pub web_activity: Option<(f64, String)>,
