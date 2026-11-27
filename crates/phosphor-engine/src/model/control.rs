@@ -578,6 +578,23 @@ impl crate::Composition {
             .collect()
     }
 
+    /// Layers whose play direction a controller can switch at any moment: a mapping (MIDI / OSC / keys / DMX…) or a
+    /// Control Surface widget aims at it. Their movies keep the frames just shown so a turn to reverse is instant.
+    pub fn direction_switchable(&self) -> Vec<u64> {
+        let widgets = self.surface.widgets.iter().flat_map(|w| w.bindings.iter().chain(&w.bindings_y).chain(&w.bindings_z).map(|b| &b.target));
+        let mut out: Vec<u64> = self
+            .control_maps
+            .iter()
+            .filter(|m| m.enabled)
+            .map(|m| &m.target)
+            .chain(widgets)
+            .filter_map(|t| if let ControlTarget::LayerDirection(id) = t { Some(*id) } else { None })
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Copies of `maps` (input, range, value effects) aimed at `target` too; one already the same isn't added twice.
     pub fn paste_mappings(&mut self, maps: &[ControlMap], target: &ControlTarget) {
         for m in maps {
@@ -825,6 +842,27 @@ mod value_fx_tests {
         assert_eq!((m.shape(0.0), m.shape(0.25), m.shape(0.5), m.shape(1.0)), (1.0, 0.5, 0.0, 1.0));
         m.fx = vec![ValueFx::Fall(0.8)];
         assert_eq!((m.shape(0.3), m.fall()), (0.3, 0.8));
+    }
+}
+
+#[cfg(test)]
+mod direction_tests {
+    use super::*;
+
+    #[test]
+    fn layers_with_a_mapped_direction_are_found() {
+        let mut c = crate::Composition::default();
+        assert!(c.direction_switchable().is_empty());
+        c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 1 }, ControlTarget::LayerDirection(7)));
+        c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 2 }, ControlTarget::LayerOpacity(8)));
+        let mut off = ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 3 }, ControlTarget::LayerDirection(9));
+        off.enabled = false;
+        c.control_maps.push(off);
+        let mut w = crate::SurfaceWidget::default();
+        w.bindings_y.push(Binding::new(ControlTarget::LayerDirection(3)));
+        w.bindings.push(Binding::new(ControlTarget::LayerDirection(7)));
+        c.surface.widgets.push(w);
+        assert_eq!(c.direction_switchable(), vec![3, 7], "mapped or on a widget, each once; a switched-off mapping doesn't count");
     }
 }
 

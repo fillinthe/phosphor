@@ -608,9 +608,13 @@ impl MediaManager {
                 }
             }
         }
+        // Layers a controller can turn round at any moment (one walk over the mappings, only while movies play).
+        #[cfg(not(target_arch = "wasm32"))]
+        let switchable = if self.players.is_empty() { Vec::new() } else { comp.direction_switchable() };
         #[cfg(not(target_arch = "wasm32"))]
         for layer in &comp.layers {
             let Some(player) = self.players.get_mut(&layer.id) else { continue };
+            player.set_expect_reverse(switchable.binary_search(&layer.id).is_ok());
             // During a transition the sound crossfades too (the outgoing player gets the rest below).
             let fade_in = layer.transition.as_ref().map_or(1.0, |t| t.progress(now as f32));
             player.set_volume(comp.sound_gain(layer) * fade_in);

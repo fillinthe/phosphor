@@ -52,9 +52,9 @@ pub(super) struct Decoder {
     rev_buf: Vec<(f64, f64, VideoFrame)>,
     rev_next: Vec<(f64, f64, VideoFrame)>,
     rev_job: Option<RevJob>,
-    /// Ping-pong: the last frames of the forward pass (cheap handles), so turning around plays backwards
-    /// straight from them, without decoding.
-    tail: Vec<(f64, f64, VideoFrame)>,
+    /// The last frames of the forward pass (cheap handles), so turning around plays backwards straight from them,
+    /// without decoding. Kept only while a turn can come (`tail_frames`), within a budget all players share.
+    tail: super::tail::Tail,
     frames_in_loop: u64,
     skips: u32,
     errors: u32,
@@ -68,6 +68,21 @@ pub(super) struct Decoder {
     /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
     /// sources, recorded streams) are slowed to their timestamps; cameras already are.
     live_start: Option<(f64, std::time::Instant)>,
+}
+
+/// How many of the frames just shown to keep (only ones cheap to keep; `Tail`), `cap` = one reverse group: ping-pong
+/// keeps the end of the forward pass for its turn; about a second while a switch to reverse may come (the direction
+/// is mapped, or ping-pong doesn't know where the end is); none otherwise. Every playing 4K clip used to keep a
+/// second (400–500 MB each) whichever way it played.
+pub(super) fn tail_frames(cap: usize, mode: PlayMode, expect_reverse: bool, rel: f64, dur: f64, hi: f64) -> usize {
+    let pingpong = mode.direction == PlayDirection::PingPong;
+    if pingpong && hi.is_finite() && rel >= hi - (cap as f64 + 1.0) * dur.max(1e-3) {
+        cap
+    } else if expect_reverse || (pingpong && !hi.is_finite()) {
+        ((1.0 / dur.max(1e-3)).ceil() as usize + 2).min(cap)
+    } else {
+        0
+    }
 }
 
 /// An FFmpeg input type known by several names answers to each ("video4linux2,v4l2" is "v4l2" on Linux).
@@ -184,7 +199,7 @@ impl Decoder {
             rev_buf: Vec::new(),
             rev_next: Vec::new(),
             rev_job: None,
-            tail: Vec::new(),
+            tail: super::tail::Tail::default(),
             frames_in_loop: 0,
             skips: 0,
             errors: 0,
@@ -198,8 +213,8 @@ impl Decoder {
 
     pub(super) fn run(&mut self, sh: &Shared, tx: &SyncSender<Msg>) -> Result<(), String> {
         loop {
-            let (seek, mode) = match sh.ctl.lock() {
-                Ok(mut c) if !c.quit => (c.seek.take(), c.mode),
+            let (seek, mode, expect_reverse) = match sh.ctl.lock() {
+                Ok(mut c) if !c.quit => (c.seek.take(), c.mode, c.expect_reverse),
                 _ => return Ok(()),
             };
             if let Some((t, generation)) = seek {
@@ -209,7 +224,7 @@ impl Decoder {
                 let turning = mode.direction == PlayDirection::Reverse && !self.live && !self.reversing;
                 // Turning around where we are: the frames just shown play backwards straight away (no wait for
                 // decoding); the group before them is decoded while they play.
-                let mut kept = if turning { std::mem::take(&mut self.tail) } else { Vec::new() };
+                let mut kept = if turning { self.tail.take() } else { Vec::new() };
                 self.drop_reverse(sh);
                 self.reversing = mode.direction == PlayDirection::Reverse && !self.live;
                 if self.reversing {
@@ -329,23 +344,9 @@ impl Decoder {
             let busy_pic = CpuClock::start();
             let out = self.picture(sh)?;
             sh.busy_ns.fetch_add(busy_pic.spent_ns(), Ordering::Relaxed);
-            // Keep the frames just shown (only ones that are cheap to keep): about a second, so a switch to reverse
-            // starts at once; ping-pong keeps the end of the forward pass for its turn.
-            let pingpong_end = mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3);
-            let keep = if pingpong_end { self.rev_cap(sh) } else { ((1.0 / dur.max(1e-3)).ceil() as usize + 2).min(self.rev_cap(sh)) };
-            match out.cheap_clone() {
-                Some(c) => {
-                    self.tail.push((rel, dur, c));
-                    while self.tail.len() > keep {
-                        let (_, _, old) = self.tail.remove(0);
-                        sh.recycle(old);
-                    }
-                }
-                None => {
-                    for (_, _, f) in self.tail.drain(..) {
-                        sh.recycle(f);
-                    }
-                }
+            match (tail_frames(self.rev_cap(sh), mode, expect_reverse, rel, dur, hi), out.cheap_clone()) {
+                (keep @ 1.., Some(c)) => self.tail.push((rel, dur, c), keep),
+                _ => self.tail.clear(),
             }
             self.last_sent = rel;
             sh.shown.fetch_add(1, Ordering::Relaxed);
@@ -418,7 +419,7 @@ impl Decoder {
                 self.rev_end = self.last_sent;
                 // Play backwards from the frames just shown (minus the turning frame), no decoding; the group
                 // before them is decoded while they play.
-                let mut tail = std::mem::take(&mut self.tail);
+                let mut tail = self.tail.take();
                 if let Some((_, _, turning)) = tail.pop() {
                     sh.recycle(turning);
                 }
@@ -449,9 +450,10 @@ impl Decoder {
     }
 
     fn drop_reverse(&mut self, sh: &Shared) {
-        for (_, _, f) in self.rev_buf.drain(..).chain(self.rev_next.drain(..)).chain(self.tail.drain(..)) {
+        for (_, _, f) in self.rev_buf.drain(..).chain(self.rev_next.drain(..)) {
             sh.recycle(f);
         }
+        self.tail.clear();
         self.rev_job = None;
     }
 
@@ -732,8 +734,8 @@ impl Decoder {
     fn picture(&mut self, sh: &Shared) -> Result<VideoFrame, String> {
         if let Some(buf) = &self.hap {
             let (width, height) = (self.dec.width(), self.dec.height());
-            let alpha = (!self.hap_alpha.is_empty()).then(|| self.hap_alpha.clone());
-            return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: buf.clone(), alpha });
+            let alpha = (!self.hap_alpha.is_empty()).then(|| Arc::from(self.hap_alpha.as_slice()));
+            return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: Arc::from(buf.as_slice()), alpha });
         }
         #[cfg(target_os = "macos")]
         if zero_copy() {

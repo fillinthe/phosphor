@@ -3,7 +3,8 @@ use super::{VideoFrame, VideoPlayer};
 fn luma(f: &VideoFrame) -> Vec<u8> {
     match f {
         VideoFrame::Nv12 { luma, .. } => luma.clone(),
-        VideoFrame::Rgba { data, .. } | VideoFrame::Compressed { data, .. } => data.clone(),
+        VideoFrame::Rgba { data, .. } => data.clone(),
+        VideoFrame::Compressed { data, .. } => data.to_vec(),
         // Tests run with zero-copy off; a surface has no CPU pixels to compare.
         #[cfg(target_os = "macos")]
         VideoFrame::Surface(_) => Vec::new(),
@@ -358,8 +359,24 @@ fn a_jump_to_the_very_end_shows_the_end() {
 #[test]
 fn the_pool_keeps_only_frames_it_reuses() {
     let sh = super::Shared::new("test".into());
-    sh.recycle(VideoFrame::Compressed { width: 4, height: 4, format: phosphor_engine::CompressedFormat::Bc1, data: vec![0; 8], alpha: None });
+    sh.recycle(VideoFrame::Compressed { width: 4, height: 4, format: phosphor_engine::CompressedFormat::Bc1, data: vec![0; 8].into(), alpha: None });
     assert!(sh.pool.lock().unwrap().is_empty());
     sh.recycle(VideoFrame::Rgba { width: 4, height: 4, data: vec![0; 64] });
     assert!(sh.take(true, 4, 4).is_some());
 }
+
+/// Frames kept for a turn to reverse: only while one can come (ping-pong near its end, or the direction mapped).
+#[test]
+fn the_end_of_the_forward_pass_is_kept_only_for_a_turn() {
+    use super::{PlayDirection, PlayMode, decoder::tail_frames};
+    let forward = PlayMode::default();
+    let pingpong = PlayMode { direction: PlayDirection::PingPong, range: None };
+    let dur = 1.0 / 30.0;
+    assert_eq!(tail_frames(40, forward, false, 5.0, dur, 10.0), 0, "plain forward play keeps nothing");
+    assert_eq!(tail_frames(40, forward, true, 5.0, dur, 10.0), 32, "a mapped direction keeps about a second");
+    assert_eq!(tail_frames(12, forward, true, 5.0, dur, 10.0), 12, "never more than one reverse group");
+    assert_eq!(tail_frames(40, pingpong, false, 2.0, dur, 10.0), 0, "ping-pong far from its turn");
+    assert_eq!(tail_frames(40, pingpong, false, 9.5, dur, 10.0), 40, "ping-pong near its turn keeps a group");
+    assert_eq!(tail_frames(40, pingpong, false, 2.0, dur, f64::INFINITY), 32, "ping-pong with no known end");
+}
+
