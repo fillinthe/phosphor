@@ -126,7 +126,7 @@ mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod web_media;
 mod crash_report;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod crash_signals;
 #[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
@@ -275,7 +275,7 @@ fn main() -> eframe::Result {
     let _show_activity = keep_awake_for_show();
     if bench.is_none() {
         // Crashes below Rust (a library, the system) get a line in crash.log too.
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(log) = recovery::crash_log_path() {
             let _ = std::fs::create_dir_all(log.parent().unwrap_or(&log));
             crash_signals::install(&log);
