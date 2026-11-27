@@ -93,6 +93,18 @@ pub struct BenchConfig {
     pub watch: Option<String>,
     /// Render this many live effect previews every frame (to measure the explorer's cost).
     pub previews: usize,
+    /// `--ui-stall MS[@EVERY]`: the interface thread stops for MS milliseconds every EVERY seconds (default 1), from
+    /// a second in: a big panel, a menu or a slow call, to see what the outputs do meanwhile (OUTPUT_FRAMES line).
+    pub ui_stall: Option<(f64, f64)>,
+    /// `--open-outputs`: every output's window open (as windows, not full screen) from the start.
+    pub open_outputs: bool,
+}
+
+/// `--ui-stall` value: "200" or "200@1.5" → (milliseconds, every seconds).
+pub fn parse_stall(v: &str) -> Option<(f64, f64)> {
+    let (ms, every) = v.split_once('@').map_or((v, "1"), |(a, b)| (a, b));
+    let (ms, every): (f64, f64) = (ms.trim().parse().ok()?, every.trim().parse().ok()?);
+    (ms > 0.0 && every > 0.0).then_some((ms, every))
 }
 
 impl BenchConfig {
@@ -115,6 +127,7 @@ impl BenchConfig {
                 ("--fx", Some(v)) => cfg.effects.push(v),
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--rate", Some(v)) => cfg.rate = Some(v),
+                ("--ui-stall", Some(v)) => cfg.ui_stall = parse_stall(&v),
                 ("--stream", Some(v)) => cfg.stream = Some(v),
                 ("--stream2", Some(v)) => cfg.stream2 = Some(v),
                 ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),
@@ -189,6 +202,11 @@ impl BenchConfig {
                 }
                 ("--ndi", _) => {
                     cfg.ndi = true;
+                    i += 1;
+                    continue;
+                }
+                ("--open-outputs", _) => {
+                    cfg.open_outputs = true;
                     i += 1;
                     continue;
                 }
@@ -294,5 +312,21 @@ impl BenchConfig {
             }
         }
         comp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ui_stall_reads_milliseconds_and_how_often() {
+        assert_eq!(parse_stall("200"), Some((200.0, 1.0)));
+        assert_eq!(parse_stall("150@0.5"), Some((150.0, 0.5)));
+        assert_eq!(parse_stall("0"), None);
+        assert_eq!(parse_stall("x@1"), None);
+        let cfg = BenchConfig::from_args(["phosphor", "--bench", "5", "--ui-stall", "200@2", "--open-outputs"].into_iter().map(String::from)).unwrap();
+        assert_eq!(cfg.ui_stall, Some((200.0, 2.0)));
+        assert!(cfg.open_outputs);
     }
 }

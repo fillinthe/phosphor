@@ -430,7 +430,7 @@ impl PhosphorApp {
             bench_session: bench.is_some(),
             guarded: None,
             quit_confirmed: false,
-            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false, tabs_shown: 0 }),
+            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false, tabs_shown: 0, stalled_at: 0.0, timing_outputs: false, tile_outputs: false }),
             gather_windows: false,
             remote_published: 0.0,
             #[cfg(not(target_arch = "wasm32"))]

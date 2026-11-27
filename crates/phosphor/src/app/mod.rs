@@ -1216,6 +1216,11 @@ struct BenchRun {
     shot_requested: bool,
     /// `--tab all`: how many panels have been shown so far.
     tabs_shown: usize,
+    /// `--ui-stall`: when the interface thread last stopped (the frame clock), and output present times are being kept.
+    stalled_at: f64,
+    timing_outputs: bool,
+    /// `--open-outputs`: the windows are placed side by side once they exist.
+    tile_outputs: bool,
 }
 
 /// What a Listen in the Mappings editor is for.
