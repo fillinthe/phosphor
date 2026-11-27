@@ -44,10 +44,13 @@ impl PhosphorApp {
                 if st.stream.running() {
                     let t = st.stream.elapsed(now) as u32;
                     let what = if st.stream.settings.destination == crate::stream::Destination::File { "REC" } else { "LIVE" };
-                    ui.label(small(format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE));
+                    // (Filled badges: what's going out live must read at a glance.)
+                    if crate::ui::state_badge(ui, format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE).on_hover_text("Streaming or recording: click to open its panel").clicked() {
+                        open_tab = Some(crate::panels::Tab::Stream);
+                    }
                 }
                 if st.comp.blackout > 0.0
-                    && ui.add(egui::Label::new(small(format!("{} BLACKOUT", icon::MOON), LIVE)).sense(egui::Sense::click())).on_hover_text("Every output is fading or faded to black: click to bring the show back").clicked()
+                    && crate::ui::state_badge(ui, format!("{} BLACKOUT", icon::MOON), LIVE).on_hover_text("Every output is fading or faded to black: click to bring the show back").clicked()
                 {
                     lift_blackout = true;
                 }

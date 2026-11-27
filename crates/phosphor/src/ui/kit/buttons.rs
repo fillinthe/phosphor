@@ -242,6 +242,13 @@ pub(crate) fn callout(text: impl Into<String>, fill: Color32) -> egui::Button<'s
     egui::Button::new(RichText::new(text.into()).strong().color(Color32::from_gray(16))).fill(fill)
 }
 
+/// A state that must read at a glance across a dark room (BLACKOUT, LIVE, REC in the status line): bold words on a
+/// filled badge (`fill` = the meaning's color: `theme::RECORD` takes white ink), clickable.
+pub(crate) fn state_badge(ui: &mut egui::Ui, text: impl Into<String>, fill: Color32) -> egui::Response {
+    let ink = if fill == crate::theme::RECORD { Color32::WHITE } else { crate::theme::PICTURE_BG };
+    ui.add(egui::Button::new(RichText::new(text.into()).small().strong().color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(3.0))
+}
+
 /// A mode that changes what clicks do (MAP): plain when off, filled with the accent while on.
 pub(crate) fn mode_button(ui: &mut egui::Ui, on: bool, text: impl Into<String>) -> egui::Response {
     let t = RichText::new(text.into()).strong();
