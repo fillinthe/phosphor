@@ -671,7 +671,7 @@ impl State {
                 // autosave of what's saved already writes nothing (`unless`).
                 let request = crate::project_save::Request {
                     path: p.clone(),
-                    content: crate::project_save::Content::Project(self.shared_comp()),
+                    project: self.shared_comp(),
                     auto,
                     secs: crate::backups::now_secs(),
                     generation: self.history.generation(),

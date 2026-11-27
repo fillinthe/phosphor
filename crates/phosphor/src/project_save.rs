@@ -11,26 +11,12 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-/// What a save writes: the project (turned into text on the writer thread), or text made already.
-pub enum Content {
-    Project(Arc<phosphor_engine::Composition>),
-    Text(String),
-}
-
-impl Content {
-    /// The file's text (`Composition::to_json`, as Save has always written it).
-    fn into_text(self) -> String {
-        match self {
-            Content::Project(comp) => comp.to_json(),
-            Content::Text(text) => text,
-        }
-    }
-}
-
 /// One save asked for (`ProjectSaver::save`).
 pub struct Request {
     pub path: String,
-    pub content: Content,
+    /// The project as it was when asked (shared, never copied for this); its text is `Composition::to_json`, as Save
+    /// has always written it.
+    pub project: Arc<phosphor_engine::Composition>,
     /// Made by autosave (its backups are kept apart).
     pub auto: bool,
     /// Unix seconds when asked (names the backup).
@@ -194,7 +180,7 @@ impl ProjectSaver {
 /// Makes one request's text and writes it, unless it's an autosave of what that file already holds (`unless`, or
 /// what this writer last wrote there). `written` = the hash last written per file.
 fn write_one(id: u64, r: Request, written: &mut HashMap<String, u64>, write: fn(&Job) -> Outcome) -> Done {
-    let json = r.content.into_text();
+    let json = r.project.to_json();
     let hash = crate::app::hash_text(&json);
     let unchanged = r.unless == Some(hash) || (r.auto && written.get(&r.path) == Some(&hash));
     let outcome = if unchanged {
@@ -247,8 +233,17 @@ mod tests {
         }
     }
 
-    fn text(path: &str, text: &str, auto: bool, unless: Option<u64>) -> Request {
-        Request { path: path.into(), content: Content::Text(text.into()), auto, secs: 1_000, generation: 7, unless }
+    /// A project told apart by its notes.
+    fn show(notes: &str) -> Arc<phosphor_engine::Composition> {
+        Arc::new(phosphor_engine::Composition { notes: notes.into(), ..Default::default() })
+    }
+
+    fn hash(notes: &str) -> u64 {
+        crate::app::hash_text(&show(notes).to_json())
+    }
+
+    fn text(path: &str, notes: &str, auto: bool, unless: Option<u64>) -> Request {
+        Request { path: path.into(), project: show(notes), auto, secs: 1_000, generation: 7, unless }
     }
 
     #[test]
@@ -256,15 +251,15 @@ mod tests {
         let d = dir("order");
         let path = d.join("Show.phosphor").to_string_lossy().into_owned();
         let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
-        for (k, t) in ["{\"v\":1}", "{\"v\":2}", "{\"v\":3}"].iter().enumerate() {
+        for (k, t) in ["1", "2", "3"].iter().enumerate() {
             saver.save(Request { secs: 1_000 + k as u64, ..text(&path, t, false, None) });
             assert!(!saver.pending.is_empty());
         }
         assert!(saver.finish(Duration::from_secs(10)));
         let done = saver.take_done();
         assert!(!done.is_empty() && done.iter().all(|d| matches!(d.outcome, Outcome::Saved { backup: None })));
-        assert_eq!(done.last().unwrap().hash, crate::app::hash_text("{\"v\":3}"));
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":3}");
+        assert_eq!(done.last().unwrap().hash, hash("3"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), show("3").to_json());
         assert!(saver.pending.is_empty(), "nothing left on its way");
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -278,7 +273,7 @@ mod tests {
         let mut comp = phosphor_engine::Composition::opening();
         comp.notes = "doors at nine".into();
         let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
-        saver.save(Request { path: path.clone(), content: Content::Project(Arc::new(comp.clone())), auto: false, secs: 1, generation: 42, unless: None });
+        saver.save(Request { path: path.clone(), project: Arc::new(comp.clone()), auto: false, secs: 1, generation: 42, unless: None });
         assert!(saver.finish(Duration::from_secs(10)));
         let done = saver.take_done();
         assert_eq!(done.len(), 1);
@@ -293,26 +288,26 @@ mod tests {
     fn an_unchanged_autosave_writes_nothing() {
         let d = dir("unchanged");
         let path = d.join("Show.phosphor").to_string_lossy().into_owned();
-        let saved = crate::app::hash_text("{\"v\":1}");
+        let saved = hash("1");
         let mut saver = ProjectSaver { write: Some(write), ..Default::default() };
         // Unchanged since the last save: not written (the file isn't even made).
-        saver.save(text(&path, "{\"v\":1}", true, Some(saved)));
+        saver.save(text(&path, "1", true, Some(saved)));
         assert!(saver.finish(Duration::from_secs(10)));
         let done = saver.take_done();
         assert_eq!(done[0].outcome, Outcome::Unchanged);
         assert_eq!((done[0].hash, done[0].generation), (saved, 7));
         assert!(!Path::new(&path).exists());
         // Changed: written.
-        saver.save(text(&path, "{\"v\":2}", true, Some(saved)));
+        saver.save(text(&path, "2", true, Some(saved)));
         assert!(saver.finish(Duration::from_secs(10)));
         assert!(matches!(saver.take_done()[0].outcome, Outcome::Saved { .. }));
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":2}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), show("2").to_json());
         // A manual save of the same text is written anyway.
         std::fs::remove_file(&path).unwrap();
-        saver.save(text(&path, "{\"v\":2}", false, None));
+        saver.save(text(&path, "2", false, None));
         assert!(saver.finish(Duration::from_secs(10)));
         assert!(matches!(saver.take_done()[0].outcome, Outcome::Saved { .. }));
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"v\":2}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), show("2").to_json());
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -320,11 +315,11 @@ mod tests {
     #[test]
     fn an_autosave_of_what_was_just_written_is_left_alone() {
         let mut written = HashMap::new();
-        let first = write_one(0, text("/nowhere/Show.phosphor", "{\"v\":2}", false, None), &mut written, |_| Outcome::Saved { backup: None });
+        let first = write_one(0, text("/nowhere/Show.phosphor", "2", false, None), &mut written, |_| Outcome::Saved { backup: None });
         assert!(matches!(first.outcome, Outcome::Saved { .. }));
-        let again = write_one(1, text("/nowhere/Show.phosphor", "{\"v\":2}", true, Some(0)), &mut written, |_| panic!("not written"));
+        let again = write_one(1, text("/nowhere/Show.phosphor", "2", true, Some(0)), &mut written, |_| panic!("not written"));
         assert_eq!(again.outcome, Outcome::Unchanged);
-        let other = write_one(2, text("/nowhere/Show.phosphor", "{\"v\":3}", true, Some(0)), &mut written, |_| Outcome::Saved { backup: None });
+        let other = write_one(2, text("/nowhere/Show.phosphor", "3", true, Some(0)), &mut written, |_| Outcome::Saved { backup: None });
         assert!(matches!(other.outcome, Outcome::Saved { .. }));
     }
 }
