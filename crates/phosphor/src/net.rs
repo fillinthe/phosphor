@@ -338,6 +338,65 @@ fn audio_rate(text: &str) -> f32 {
 }
 
 #[cfg(test)]
+mod capture_tests {
+    use super::*;
+
+    #[test]
+    fn the_output_is_captured_only_while_someone_watches() {
+        let mut s = NetSession::new();
+        assert!(!s.frame_due(1.0), "not running");
+        s.running.store(true, Ordering::Relaxed);
+        assert!(!s.frame_due(2.0), "running, nobody watching: nothing read back");
+        s.viewers.store(1, Ordering::Relaxed);
+        assert!(s.frame_due(3.0), "an MJPEG viewer");
+        s.viewers.store(0, Ordering::Relaxed);
+        assert!(!s.frame_due(4.0));
+        s.webrtc.viewers.store(1, Ordering::Relaxed);
+        assert!(s.frame_due(5.0), "a WebRTC viewer");
+        s.webrtc.viewers.store(0, Ordering::Relaxed);
+        s.snapshot_asked.store(true, Ordering::Relaxed);
+        assert!(s.frame_due(6.0), "a snapshot waiting");
+        // The frame goes to the JPEG thread (none here: dropped) and the request stays until one is taken.
+        s.push_frame(2, 2, vec![0; 16]);
+        assert!(s.snapshot_asked.load(Ordering::Relaxed));
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        s.encoder = Some(tx);
+        s.push_frame(2, 2, vec![0; 16]);
+        assert!(!s.snapshot_asked.load(Ordering::Relaxed), "taken for the snapshot");
+        assert_eq!(rx.try_recv().map(|(w, h, px)| (w, h, px.len())), Ok((2, 2, 16)));
+        assert!(!s.frame_due(7.0));
+        // Nobody watching: a frame pushed anyway isn't encoded.
+        s.push_frame(2, 2, vec![0; 16]);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_snapshot_waits_for_a_fresh_picture_or_takes_the_last() {
+        let latest: Shared = Arc::new((Mutex::new(None), Condvar::new()));
+        let asked = Arc::new(AtomicBool::new(false));
+        assert!(fresh_snapshot(&latest, &asked, std::time::Duration::from_millis(20)).is_none(), "nothing yet");
+        assert!(asked.load(Ordering::Relaxed), "a picture was asked for");
+        let old: Frame = Arc::new(vec![1]);
+        *latest.0.lock().unwrap() = Some(old.clone());
+        let stale = fresh_snapshot(&latest, &asked, std::time::Duration::from_millis(20)).unwrap();
+        assert!(Arc::ptr_eq(&stale, &old), "none came: the last one");
+        let (l, a) = (latest.clone(), asked.clone());
+        let painter = std::thread::spawn(move || {
+            while !a.load(Ordering::Relaxed) {
+                std::thread::yield_now();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            *l.0.lock().unwrap() = Some(Arc::new(vec![2]));
+            l.1.notify_all();
+        });
+        asked.store(false, Ordering::Relaxed);
+        let fresh = fresh_snapshot(&latest, &asked, std::time::Duration::from_secs(5)).unwrap();
+        painter.join().unwrap();
+        assert_eq!(*fresh, vec![2], "the new picture, not the old one");
+    }
+}
+
+#[cfg(test)]
 mod audio_rate_tests {
     #[test]
     fn a_phone_cant_send_an_impossible_sample_rate() {
@@ -397,6 +456,30 @@ pub type Thumbs = Arc<Mutex<std::collections::HashMap<u64, (u64, Frame)>>>;
 /// Files the session hands out by path (the TouchOSC layout for a phone): path → (content type, file name, bytes).
 pub type Files = Arc<Mutex<std::collections::HashMap<String, (&'static str, String, Vec<u8>)>>>;
 
+/// The output's picture as a JPEG for `/snapshot.jpg`: nothing is captured while nobody watches, so one is asked
+/// for (`asked`, read by `NetSession::frame_due`) and waited for up to `wait`; the last one there was if none comes.
+#[cfg(not(target_arch = "wasm32"))]
+fn fresh_snapshot(latest: &Shared, asked: &AtomicBool, wait: std::time::Duration) -> Option<Frame> {
+    let (lock, cv) = &**latest;
+    let mut guard = lock.lock().unwrap();
+    let before = guard.clone();
+    asked.store(true, Ordering::Relaxed);
+    let deadline = std::time::Instant::now() + wait;
+    let same = |now: &Option<Frame>| match (now, &before) {
+        (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+        (None, None) => true,
+        _ => false,
+    };
+    while same(&guard) {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        guard = cv.wait_timeout(guard, left).unwrap().0;
+    }
+    guard.clone()
+}
+
 pub struct NetSession {
     pub port: u16,
     pub fps: u32,
@@ -416,6 +499,10 @@ pub struct NetSession {
     mdns: Option<mdns_sd::ServiceDaemon>,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     pacer: crate::pacing::FramePacer,
+    /// A `/snapshot.jpg` request is waiting for a fresh picture (one is captured for it, then this clears).
+    snapshot_asked: Arc<AtomicBool>,
+    /// Frames were being captured for the session last frame (someone watched): `frame_due`.
+    capturing: bool,
     /// Layer thumbnails shown on remotes, and the round-robin that refreshes them.
     thumbs: Thumbs,
     files: Files,
@@ -456,6 +543,8 @@ impl NetSession {
             mdns: None,
             encoder: None,
             pacer: Default::default(),
+            snapshot_asked: Arc::new(AtomicBool::new(false)),
+            capturing: false,
             thumbs: Default::default(),
             files: Default::default(),
             thumb_encoder: None,
@@ -591,7 +680,7 @@ impl NetSession {
         });
         self.running.store(true, Ordering::Relaxed);
         let running = self.running.clone();
-        let latest = self.latest.clone();
+        let latest = (self.latest.clone(), self.snapshot_asked.clone());
         let viewers = self.viewers.clone();
         let peers = self.audio_peers.clone();
         let ring = self.audio_ring.clone();
@@ -697,18 +786,59 @@ impl NetSession {
         self.status.clear();
     }
 
+    /// True when the output should be captured for the session now: only while someone watches (the MJPEG picture,
+    /// WebRTC) or a `/snapshot.jpg` waits, at the session's rate. A session with nobody watching used to read the
+    /// output back and JPEG-encode it 20 times a second for no one.
     pub fn frame_due(&mut self, now: f64) -> bool {
-        self.running() && self.pacer.due(now, self.fps)
+        if !self.running() {
+            return false;
+        }
+        if !self.jpeg_wanted() && !self.rtc_watched() {
+            if self.capturing {
+                self.capturing = false;
+                #[cfg(not(target_arch = "wasm32"))]
+                self.webrtc.stop_unwatched();
+            }
+            return false;
+        }
+        self.capturing = true;
+        self.pacer.due(now, self.fps)
     }
 
-    /// Hands a captured frame to the encoder; drops it if the encoder is still busy.
-    pub fn push_frame(&mut self, w: u32, h: u32, rgba: Vec<u8>) {
+    /// A JPEG of the output is wanted: an MJPEG viewer (the player page, a remote's preview, a following Phosphor)
+    /// or a snapshot request.
+    fn jpeg_wanted(&self) -> bool {
+        self.viewers.load(Ordering::Relaxed) > 0 || self.snapshot_asked.load(Ordering::Relaxed)
+    }
+
+    fn rtc_watched(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        self.webrtc.push(w, h, &rgba);
-        if let Some(tx) = &self.encoder
-            && let Err(TrySendError::Disconnected(_)) = tx.try_send((w, h, rgba))
-        {
-            self.encoder = None;
+        return self.webrtc.watched();
+        #[cfg(target_arch = "wasm32")]
+        return false;
+    }
+
+    /// Hands a captured frame (moved, not copied, when only one kind of viewer wants it) to the WebRTC encoder and
+    /// the JPEG encoder, to each only while it's wanted; dropped if an encoder is still busy.
+    pub fn push_frame(&mut self, w: u32, h: u32, rgba: Vec<u8>) {
+        let jpeg = self.jpeg_wanted();
+        #[cfg(not(target_arch = "wasm32"))]
+        let rgba = match (self.webrtc.watched(), jpeg) {
+            (true, false) => return self.webrtc.push(w, h, rgba),
+            (true, true) => {
+                self.webrtc.push(w, h, rgba.clone());
+                rgba
+            }
+            (false, _) => rgba,
+        };
+        if !jpeg {
+            return;
+        }
+        match self.encoder.as_ref().map(|tx| tx.try_send((w, h, rgba))) {
+            // A snapshot waiting gets this frame (the JPEG thread wakes it).
+            Some(Ok(())) => self.snapshot_asked.store(false, Ordering::Relaxed),
+            Some(Err(TrySendError::Disconnected(_))) => self.encoder = None,
+            Some(Err(TrySendError::Full(_))) | None => {}
         }
     }
 
@@ -823,7 +953,7 @@ mod native {
         stream: TcpStream,
         tls: Option<Arc<rustls::ServerConfig>>,
         running: Arc<AtomicBool>,
-        latest: Shared,
+        latest: (Shared, Arc<AtomicBool>),
         viewers: Arc<AtomicUsize>,
         peers: Arc<AtomicUsize>,
         ring: Arc<Mutex<VecDeque<f32>>>,
@@ -949,7 +1079,7 @@ mod native {
                 let mut last: Option<Frame> = None;
                 while running.load(Ordering::Relaxed) && !seat.kicked() {
                     let frame = {
-                        let (lock, cv) = &*latest;
+                        let (lock, cv) = &*latest.0;
                         let guard = lock.lock().unwrap();
                         let (guard, _) = cv.wait_timeout(guard, Duration::from_millis(200)).unwrap();
                         guard.clone()
@@ -967,7 +1097,7 @@ mod native {
                 viewers.fetch_sub(1, Ordering::Relaxed);
             }
             "/snapshot.jpg" => {
-                let frame = latest.0.lock().unwrap().clone();
+                let frame = super::fresh_snapshot(&latest.0, &latest.1, Duration::from_secs(2));
                 match frame {
                     Some(f) => {
                         respond_ok(&mut stream, "image/jpeg", &[], &f);
