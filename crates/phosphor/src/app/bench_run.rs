@@ -40,7 +40,16 @@ impl PhosphorApp {
         {
             if !run.timing_outputs && now - started >= 1.0 {
                 crate::present::start_log();
-                (run.timing_outputs, run.stalled_at) = (true, now);
+                (run.timing_outputs, run.stalled_at, run.flipped_at) = (true, now, now);
+            }
+            if let Some(every) = run.cfg.flip_render_thread
+                && run.timing_outputs
+                && now - run.flipped_at >= every
+                && now - started < run.cfg.seconds
+            {
+                run.flipped_at = now;
+                self.state.render_thread = !self.state.render_thread;
+                println!("RENDER_THREAD_FLIP on={} at={:.1}", self.state.render_thread, now - started);
             }
             if let Some((ms, every)) = run.cfg.ui_stall
                 && run.timing_outputs
@@ -1358,6 +1367,8 @@ fn print_output_frames(st: &State, thread: bool, stall: Option<(f64, f64)>) {
         None => println!("OUTPUT_FRAMES thread={thread} stall={stall} {what}: no frames"),
     };
     line("engine", log.get(&crate::present::ENGINE_FRAMES));
+    // Movie frames put on layers in the whole run: what kept playing while the interface stood still.
+    println!("OUTPUT_FRAMES thread={thread} stall={stall} movie frames shown: {}", st.core.lock().media.flow.movies);
     let mut open: Vec<(u64, String)> = st.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
     open.sort();
     for (id, name) in open {

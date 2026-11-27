@@ -98,6 +98,9 @@ pub struct BenchConfig {
     pub ui_stall: Option<(f64, f64)>,
     /// `--open-outputs`: every output's window open (as windows, not full screen) from the start.
     pub open_outputs: bool,
+    /// `--flip-render-thread SECS`: the Render thread setting turned over every SECS seconds (the outputs handed to the
+    /// thread and back, live).
+    pub flip_render_thread: Option<f64>,
 }
 
 /// `--ui-stall` value: "200" or "200@1.5" → (milliseconds, every seconds).
@@ -128,6 +131,7 @@ impl BenchConfig {
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--rate", Some(v)) => cfg.rate = Some(v),
                 ("--ui-stall", Some(v)) => cfg.ui_stall = parse_stall(&v),
+                ("--flip-render-thread", Some(v)) => cfg.flip_render_thread = v.parse().ok().filter(|s: &f64| *s > 0.0),
                 ("--stream", Some(v)) => cfg.stream = Some(v),
                 ("--stream2", Some(v)) => cfg.stream2 = Some(v),
                 ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),

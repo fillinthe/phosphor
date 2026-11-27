@@ -1221,6 +1221,8 @@ struct BenchRun {
     timing_outputs: bool,
     /// `--open-outputs`: the windows are placed side by side once they exist.
     tile_outputs: bool,
+    /// `--flip-render-thread`: when the setting was last turned over.
+    flipped_at: f64,
 }
 
 /// What a Listen in the Mappings editor is for.
