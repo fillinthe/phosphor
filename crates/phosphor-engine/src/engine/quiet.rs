@@ -92,7 +92,7 @@ impl Engine {
         if time - since > QUIET_FREE_AFTER || time < since {
             res.generator = None;
         }
-        opacity <= 0.001 && res.thumbnail.is_some() && (frame + id) % QUIET_EVERY != 0
+        opacity <= 0.001 && res.thumbnail.is_some() && !(frame + id).is_multiple_of(QUIET_EVERY)
     }
 
     /// Does any of group `g`'s picture show this frame (in the mix, on a slice, in a preview window)?

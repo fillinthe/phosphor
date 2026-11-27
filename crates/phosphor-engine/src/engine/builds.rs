@@ -116,6 +116,7 @@ impl Builds {
 
 /// Makes `entry`'s module from `full` (prelude included) and its pipelines for `formats`, on a worker thread.
 /// `vertex` / `instanced`: the vertex stage and blending it's drawn with (a changed file's, before it's applied).
+#[allow(clippy::too_many_arguments)]
 fn build(device: &wgpu::Device, layout: &wgpu::PipelineLayout, entry: &'static str, full: String, prelude_lines: u32, formats: &[wgpu::TextureFormat], vertex: Option<&'static str>, instanced: bool) -> Result<Built, CompileError> {
     crate::custom::validate(&full, prelude_lines)?;
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
