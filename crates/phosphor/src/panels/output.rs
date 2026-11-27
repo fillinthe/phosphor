@@ -59,6 +59,12 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
         crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::ui::field(ui, "Screens", |ui| {
+        crate::ui::toggle(ui, &mut st.screens_dont_wait, "Don't wait for each other").on_hover_text(
+            "Several outputs on screens that don't refresh together: only the first output open waits for its screen; the others show the newest picture at their own refresh (never torn). Try it when the show slows down with two or more outputs.",
+        );
+    });
     crate::ui::field(ui, "Color depth", |ui| {
         if st.comp.deep_color && !phosphor_engine::deep_colour() {
             crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");

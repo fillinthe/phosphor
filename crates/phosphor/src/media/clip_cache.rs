@@ -72,7 +72,7 @@ fn cache() -> Option<&'static Mutex<Cache>> {
     static CACHE: OnceLock<Option<Mutex<Cache>>> = OnceLock::new();
     CACHE
         .get_or_init(|| {
-            let dir = crate::show::storage_dir()?.join("cache").join("clips");
+            let dir = crate::cache_store::folder("clips")?;
             let index: HashMap<String, Entry> = std::fs::read(dir.join("index.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
             let (tx, rx) = channel::<String>();
             let worker_dir = dir.clone();

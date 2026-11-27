@@ -75,6 +75,7 @@ impl PhosphorApp {
         if let Some(t) = layout::to_text(&self.state.render_rate) {
             storage.set_string(KEY_RENDER_RATE, t);
         }
+        storage.set_string(KEY_SCREENS_DONT_WAIT, if self.state.screens_dont_wait { "1" } else { "0" }.into());
         storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
         if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
             storage.set_string(KEY_RECENT, json);

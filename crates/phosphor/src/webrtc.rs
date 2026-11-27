@@ -157,15 +157,20 @@ impl Drop for Place {
 /// that hands each picture to every viewer.
 fn start_encoder(inner: Arc<Mutex<Inner>>, size: (u32, u32), fps: u32) -> Option<Encoder> {
     let ffmpeg = crate::stream::ffmpeg_path()?;
-    let codec: &[&str] = if cfg!(target_os = "macos") {
-        &["-c:v", "h264_videotoolbox", "-realtime", "1", "-profile:v", "baseline", "-allow_sw", "1"]
-    } else {
-        &["-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "baseline"]
-    };
+    // This computer's H.264 encoder that makes Baseline (VideoToolbox, a graphics card's, or FFmpeg's own), set for
+    // the lowest delay it has.
+    let encoder = crate::video_encoders::pick(crate::video_encoders::Codec::H264, true);
+    let mut codec: Vec<&str> = vec!["-c:v", encoder.name];
+    codec.extend(match encoder.name {
+        "h264_videotoolbox" => &["-realtime", "1", "-allow_sw", "1"][..],
+        "libx264" => &["-preset", "ultrafast"][..],
+        _ => encoder.live,
+    });
+    codec.extend(encoder.baseline.unwrap_or_default());
     let mut child = crate::os::command(ffmpeg)
         .args(["-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{}x{}", size.0, size.1), "-r", &fps.to_string(), "-i", "-"])
-        .args(["-vf", "scale='min(1280,iw)':-2,format=yuv420p"])
-        .args(codec)
+        .args(["-vf", &format!("scale='min(1280,iw)':-2,format={}", encoder.pix_fmt)])
+        .args(&codec)
         .args(["-b:v", "3000k", "-g", &fps.to_string(), "-bf", "0", "-bsf:v", "h264_metadata=aud=insert", "-f", "h264", "-"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())

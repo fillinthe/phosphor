@@ -10,6 +10,11 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+  # Pull requests build and test too (no secrets are used, so a fork's pull request runs safely).
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 jobs:
   build:
@@ -22,10 +27,12 @@ jobs:
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
 
+      # A dated build, not "latest": the same FFmpeg every run until this line is changed on purpose (BtbN keeps the
+      # build of each month's last day).
       - name: FFmpeg (BtbN n9.0 shared)
         shell: pwsh
         run: |
-          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip"
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-gpl-shared-9.0.zip"
           Invoke-WebRequest $url -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip -DestinationPath $env:RUNNER_TEMP
           $dir = Get-ChildItem $env:RUNNER_TEMP -Directory | Where-Object Name -like "ffmpeg-n9.0*" | Select-Object -First 1

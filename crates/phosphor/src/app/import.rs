@@ -190,8 +190,10 @@ impl State {
         self.notice = Some(format!("Looking for {} missing files in {}…", missing.len(), folder.display()));
         std::thread::spawn(move || {
             let wanted: HashMap<String, Vec<String>> = missing.iter().fold(HashMap::new(), |mut m, p| {
-                if let Some(name) = std::path::Path::new(p).file_name() {
-                    m.entry(name.to_string_lossy().to_lowercase()).or_default().push(p.clone());
+                // (A path saved on another system: `Path::file_name` only splits at this system's separator.)
+                let name = crate::media::file_name(p);
+                if !name.is_empty() {
+                    m.entry(name.to_lowercase()).or_default().push(p.clone());
                 }
                 m
             });

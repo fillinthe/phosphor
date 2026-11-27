@@ -743,12 +743,7 @@ fn folder_media(dir: &std::path::Path, depth: usize, out: &mut Vec<(String, Opti
 /// Where in the window a drop landed (egui points). macOS sends no mouse moves during a Finder drag, so ask
 /// the system for the mouse instead of trusting egui's last pointer position.
 fn drop_point(ctx: &egui::Context) -> Option<egui::Pos2> {
-    if let Some((x, y)) = crate::screens::mouse_location() {
-        let inner = ctx.input(|i| i.viewport().inner_rect)?;
-        let zoom = ctx.zoom_factor();
-        return Some(egui::pos2(x / zoom, y / zoom) - inner.min.to_vec2());
-    }
-    ctx.input(|i| i.pointer.hover_pos())
+    crate::screens::mouse_in_window(ctx).or_else(|| ctx.input(|i| i.pointer.hover_pos()))
 }
 
 /// Where files being dragged over the window are (None when nothing is being dragged in).

@@ -366,6 +366,7 @@ type Compiled = (&'static str, Result<(wgpu::ShaderModule, wgpu::RenderPipeline)
 
 impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+        crate::gpu::set_max_texture_side(device.limits().max_texture_dimension_2d);
         let mut gpu = Gpu::new(device, queue);
         gpu.prewarm();
         // Built-in audio visualizers read the live audio pictures at texture slot 1.
@@ -920,8 +921,9 @@ impl Engine {
                 };
                 // Surface FX: the slice's part of the picture (flipped as set) on its own, through its effects.
                 let (src, input_xform) = if s.effects.iter().any(|e| e.enabled) {
-                    let iw = ((s.input[2].abs() * w as f32).round() as u32).clamp(16, 8192);
-                    let ih = ((s.input[3].abs() * h as f32).round() as u32).clamp(16, 8192);
+                    let most = crate::gpu::max_texture_side();
+                    let iw = ((s.input[2].abs() * w as f32).round() as u32).clamp(16, most);
+                    let ih = ((s.input[3].abs() * h as f32).round() as u32).clamp(16, most);
                     let res = self.layers.entry(s.id).or_default();
                     Target::ensure(&mut res.feed, &device, "slice input", iw, ih);
                     let cut = res.feed.as_ref().unwrap().view.clone();

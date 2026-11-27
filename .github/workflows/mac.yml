@@ -1,0 +1,63 @@
+# Apple Silicon Mac tests: the main build's own system (the release itself is built and signed on the owner's Mac by
+# scripts/bundle-mac.sh). The engine's and the app's tests with the default features (screen capture on), against the
+# FFmpeg Phosphor ships (scripts/build-ffmpeg-mac.sh, kept between runs until the script changes). GitHub's Mac runners
+# are virtual machines: tests that need a GPU, a screen or a camera skip themselves there.
+name: Mac tests (Apple Silicon)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+
+jobs:
+  test:
+    runs-on: macos-15
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Build tools
+        run: brew install nasm ninja pkg-config || true
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor/ffmpeg
+          key: mac-arm-ffmpeg-${{ hashFiles('scripts/build-ffmpeg-mac.sh', 'scripts/min-macos') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: mac-arm-cargo-${{ hashFiles('Cargo.lock') }}
+          # A release changes Cargo.lock (the version number): start from the last build's cache instead of from nothing.
+          restore-keys: mac-arm-cargo-
+
+      - name: FFmpeg
+        run: "[[ -x vendor/ffmpeg/bin/ffmpeg ]] || scripts/build-ffmpeg-mac.sh"
+
+      # The project's FFmpeg for building and for the tests (the recording smoke test runs its ffmpeg).
+      - name: FFmpeg for the build
+        run: |
+          echo "FFMPEG_DIR=$PWD/vendor/ffmpeg" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$PWD/vendor/ffmpeg/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$PWD/vendor/ffmpeg/lib" >> "$GITHUB_ENV"
+          echo "$PWD/vendor/ffmpeg/bin" >> "$GITHUB_PATH"
+
+      - name: Tests (engine and app, default features)
+        run: |
+          # The sound test's movie (media/test/av.mp4 isn't in git): 2.5 s test card, a 1 kHz beep at 1.0-1.1 s.
+          ffmpeg -v error -y -f lavfi -i "testsrc=size=320x180:rate=30:duration=2.5" -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=2.5" -af "volume=enable='not(between(t,1.0,1.1))':volume=0" -c:v mpeg4 -c:a aac -shortest media/test/av.mp4
+          cargo test -p phosphor-engine -p phosphor

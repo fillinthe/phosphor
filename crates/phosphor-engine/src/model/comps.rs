@@ -47,7 +47,8 @@ impl Default for Comp {
 impl Comp {
     /// Its size, given the master's.
     pub fn size(&self, master: (u32, u32)) -> (u32, u32) {
-        if self.width == 0 || self.height == 0 { master } else { (self.width.clamp(16, 8192), self.height.clamp(16, 8192)) }
+        let most = crate::gpu::max_texture_side();
+        if self.width == 0 || self.height == 0 { master } else { (self.width.clamp(16, most), self.height.clamp(16, most)) }
     }
 
     /// Mixes into the master exactly like having no comp at all (full size, full opacity, no effects).

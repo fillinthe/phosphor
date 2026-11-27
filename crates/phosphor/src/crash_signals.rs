@@ -4,15 +4,26 @@
 //! (2026-11-25). The signal that ends the process now writes one line there first, with the stack when it can be
 //! read, and then lets the signal do what it always did.
 //!
+//! Windows has no signals: its crashes (an access violation in a driver or library, an unhandled C++ exception) are
+//! written down by an unhandled-exception filter instead (`windows.rs`), in the same words and the same way.
+//!
 //! "Blessed is the man that endureth temptation: for when he is tried, he shall receive the crown of life."
 //! (James 1:12, KJV)
-#![cfg(unix)]
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use windows::install;
 
 /// crash.log, opened for appending when the handlers go in (nothing can be opened safely inside one).
+#[cfg(unix)]
 static LOG: AtomicI32 = AtomicI32::new(-1);
 /// One crash is written down; a second signal while that happens just ends the process.
+#[cfg(unix)]
 static HANDLING: AtomicBool = AtomicBool::new(false);
 
 /// When the last frame was drawn (unix seconds, 0 = none yet): an end from outside says how long before it that was.
@@ -20,10 +31,10 @@ static LAST_FRAME: AtomicU64 = AtomicU64::new(0);
 
 /// A frame was drawn (called with the heartbeat, about once a second).
 pub fn frame() {
-    // SAFETY: time(NULL) only reads the clock.
-    LAST_FRAME.store(unsafe { libc::time(std::ptr::null_mut()) } as u64, Ordering::Relaxed);
+    LAST_FRAME.store(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()), Ordering::Relaxed);
 }
 
+#[cfg(unix)]
 /// The signals that end a process, what crash.log says for each, and whether it's a crash. The stack is read for
 /// all of them: for a crash it's where it crashed, and for an end from outside it's what Phosphor was doing when
 /// someone gave up on it (two 0.5.23 reports, 2026-11-25: "ended by SIGTERM" after a window stopped answering, one
@@ -40,10 +51,12 @@ const SIGNALS: [(i32, &str, bool); 7] = [
 
 /// How many of the stack's steps go into the log.
 const STEPS: usize = 14;
+#[cfg(unix)]
 /// Seconds the stack may take to read before the process is ended anyway (reading it isn't safe after every kind of
 /// crash: it can wait forever on a lock the crashed code held, and a show must come back quickly).
 const STACK_SECS: u32 = 3;
 
+#[cfg(unix)]
 /// Writes crashes into `log` from now on.
 pub fn install(log: &std::path::Path) {
     use std::os::fd::IntoRawFd;
@@ -62,6 +75,7 @@ pub fn install(log: &std::path::Path) {
     }
 }
 
+#[cfg(unix)]
 /// One line with no memory asked for (the crash may have been inside the allocator), then the stack as a second try,
 /// then the signal again with its usual ending.
 extern "C" fn on_signal(signal: libc::c_int) {
@@ -96,11 +110,13 @@ extern "C" fn on_signal(signal: libc::c_int) {
     }
 }
 
+#[cfg(unix)]
 fn write(fd: i32, bytes: &[u8]) {
     // SAFETY: a valid buffer written to the log's descriptor; write() is safe in a handler.
     unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
 }
 
+#[cfg(unix)]
 /// Is this the main thread (the one that draws)? None where that can't be asked.
 fn on_main_thread() -> Option<bool> {
     // SAFETY: both only read which thread this is.
@@ -130,6 +146,7 @@ fn first_line(out: &mut [u8], now: u64, what: &str) -> usize {
 
 /// "  last frame: 21 s before the end\n" into `out` (the watchdog's words for the same thing), without asking for
 /// memory. Returns its length.
+#[cfg(any(unix, test))]
 fn frame_line(out: &mut [u8], ago: u64) -> usize {
     let mut digits = [0u8; 20];
     let d = number(&mut digits, ago);
@@ -212,6 +229,7 @@ mod tests {
     }
 
     /// The other half of the test below: when asked to, crashes for real with the handlers in.
+    #[cfg(unix)]
     #[test]
     fn crash_child() {
         let Some(log) = std::env::var_os("PHOSPHOR_TEST_CRASH_LOG") else { return };
@@ -225,6 +243,7 @@ mod tests {
     }
 
     /// A real process ended by a real signal: the line is in the log, and the process still ended by that signal.
+    #[cfg(unix)]
     #[test]
     fn a_crash_is_written_down_and_still_ends_the_process() {
         use std::os::unix::process::ExitStatusExt;

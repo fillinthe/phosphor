@@ -18,7 +18,7 @@ const TICK: Duration = Duration::from_millis(10);
 
 /// The FFmpeg input arguments for a feed on `port`.
 pub fn input_args(port: u16) -> Vec<String> {
-    ["-thread_queue_size", "1024", "-f", "f32le", "-ar", &RATE.to_string(), "-ac", "2", "-i", &format!("tcp://127.0.0.1:{port}")].map(String::from).to_vec()
+    ["-f", "f32le", "-ar", &RATE.to_string(), "-ac", "2", "-i", &format!("tcp://127.0.0.1:{port}")].map(String::from).to_vec()
 }
 
 /// The feed for one stream: dropping it stops the sound (FFmpeg then sees the end of its audio input).

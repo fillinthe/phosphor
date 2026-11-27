@@ -11,8 +11,9 @@ codegen-units = 1
 [profile.dev.package."*"]
 opt-level = 2
 
-# eframe with one patch (vendor/eframe/src/native/run.rs, "PHOSPHOR PATCH"): a hidden control
-# window keeps rendering the outputs at full rate on macOS. Re-apply when upgrading eframe.
+# eframe with patches ("PHOSPHOR PATCH"): a hidden control window keeps rendering the outputs at full rate on macOS
+# (src/native/run.rs), and `eframe::monitors()` lists winit's screens for the app (lib.rs, native/mod.rs: Linux has no
+# other way to list them). Re-apply when upgrading eframe.
 [patch.crates-io]
 eframe = { path = "vendor/eframe" }
 # egui + epaint with one patch each ("PHOSPHOR PATCH"): interface translation (epaint text/fonts.rs `translation`,
@@ -25,6 +26,7 @@ egui_dock = { path = "vendor/egui_dock" }
 # winit with one patch ("PHOSPHOR PATCH", platform_impl/windows/monitor.rs): a monitor that was just unplugged or
 # went to sleep gives no name / a 0×0 size instead of panicking (egui-winit asks every frame). Re-apply on upgrade.
 winit = { path = "vendor/winit" }
-# egui-wgpu with one patch ("PHOSPHOR PATCH", src/winit.rs): a window surface the driver refuses to set up (OpenGL on
-# old Intel graphics, Windows) skips its frames and is tried again every 2 s instead of ending the app. Re-apply on upgrade.
+# egui-wgpu with patches ("PHOSPHOR PATCH", src/winit.rs): a window surface the driver refuses to set up (OpenGL on
+# old Intel graphics, Windows) skips its frames and is tried again every 2 s instead of ending the app; and each
+# window's present mode can be its own (`winit::PRESENT_MODE_FOR`, asked by Phosphor's present.rs). Re-apply on upgrade.
 egui-wgpu = { path = "vendor/egui-wgpu" }

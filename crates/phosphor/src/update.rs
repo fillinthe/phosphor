@@ -14,18 +14,23 @@ pub const RELEASES_API: &str = "https://api.github.com/repos/fillinthe/phosphor/
 pub const RELEASES_PAGE: &str = "https://github.com/fillinthe/phosphor/releases";
 /// Redirects to the newest release's page; no API rate limit (the fallback check reads the tag from where it lands).
 pub const LATEST_PAGE: &str = "https://github.com/fillinthe/phosphor/releases/latest";
-/// This build's download name (what `scripts/release-github.sh` uploads): Intel Macs have their own build.
-pub const ZIP_NAME: &str = if cfg!(windows) {
+/// This build's download name (what `scripts/release-github.sh` uploads): Intel Macs have their own build; Linux has
+/// the ARM package (Raspberry Pi). A system with no download of its own ("") is pointed to the release page.
+pub const ASSET_NAME: &str = if cfg!(windows) {
     "Phosphor-windows.zip"
 } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
     "Phosphor-mac-intel.zip"
-} else {
+} else if cfg!(target_os = "macos") {
     "Phosphor-mac.zip"
+} else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+    "Phosphor-linux-arm64.tar.gz"
+} else {
+    ""
 };
 
 /// This build's download of a given version.
 pub fn zip_url(version: &str) -> String {
-    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/{ZIP_NAME}")
+    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/{ASSET_NAME}")
 }
 
 /// "…/releases/tag/v0.2.42" → "0.2.42".
@@ -41,7 +46,7 @@ pub struct Release {
     pub version: String,
     pub notes: String,
     pub page: String,
-    /// The Mac app zip, if the release has one.
+    /// This build's download (`ASSET_NAME`), if the release has one.
     pub zip: Option<String>,
 }
 
@@ -135,7 +140,7 @@ fn parse_release(text: &str) -> Result<Option<Release>, String> {
         .and_then(|a| a.as_array())
         .and_then(|a| {
             // Exactly this build's download (an Intel Mac never gets the Apple Silicon zip, or the other way round).
-            a.iter().find(|x| x.get("name").and_then(|n| n.as_str()) == Some(ZIP_NAME))
+            a.iter().find(|x| !ASSET_NAME.is_empty() && x.get("name").and_then(|n| n.as_str()) == Some(ASSET_NAME))
         })
         .and_then(|x| x.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string));
     Ok(Some(Release {
@@ -308,7 +313,7 @@ impl Updater {
     pub fn install(&mut self) {
         let Status::Available(r) = self.status.clone() else { return };
         let Some(zip) = r.zip.clone() else {
-            self.status = Status::Failed("This release has no Mac download; get it from the releases page.".into());
+            self.status = Status::Failed("This release has no download for this computer; get it from the releases page.".into());
             return;
         };
         // (Only while "Share problem reports and anonymous counts" is on.)
@@ -411,7 +416,7 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>, show: &std
     let work = std::env::temp_dir().join(format!("phosphor-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-    let zip = work.join("Phosphor.zip");
+    let zip = work.join(if ASSET_NAME.is_empty() { "Phosphor.zip" } else { ASSET_NAME });
     // curl ships with macOS and with Windows 10 and later.
     // Secure addresses only, redirects included (a test server set by PHOSPHOR_UPDATE_URL may be plain http); `--`:
     // the address is never read as an option.
@@ -423,11 +428,13 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>, show: &std
     *progress.lock().unwrap() = "Unpacking…".into();
     let unpacked = work.join("unpacked");
     std::fs::create_dir_all(&unpacked).map_err(|e| e.to_string())?;
-    // ditto on the Mac (keeps the bundle's attributes); Windows' tar reads zips.
+    // ditto on the Mac (keeps the bundle's attributes); Windows' tar reads zips; Linux's package is a .tar.gz.
     let out = if cfg!(target_os = "macos") {
         crate::os::command("ditto").args(["-x", "-k"]).arg(&zip).arg(&unpacked).output()
-    } else {
+    } else if cfg!(windows) {
         crate::os::command("tar").arg("-xf").arg(&zip).arg("-C").arg(&unpacked).output()
+    } else {
+        crate::os::command("tar").arg("-xzf").arg(&zip).arg("-C").arg(&unpacked).output()
     }
     .map_err(|e| format!("unpack: {e}"))?;
     if !out.status.success() {
@@ -500,9 +507,10 @@ fn team_in(codesign_words: &str) -> Option<String> {
     (!team.is_empty() && team != "not set").then(|| team.to_string())
 }
 
-/// Windows (and other folder installs): copy the new files over the folder Phosphor.exe runs from. Files in use
-/// (the exe, FFmpeg's DLLs) can't be overwritten but can be renamed, so each goes to "<name>.old" first; the next
-/// update clears those.
+/// Windows and Linux (folder installs): copy the new files over the folder Phosphor.exe / phosphor runs from. Files
+/// in use (the exe, FFmpeg's DLLs) can't be overwritten but can be renamed, so each goes to "<name>.old" first; the
+/// next update clears those. (Linux: a running program and its libraries keep the files they opened, so swapping
+/// them under it is safe; the new ones are used from the relaunch.)
 fn install_folder(unpacked: &std::path::Path, exe: &std::path::Path) -> Result<(PathBuf, bool), String> {
     let exe_name = if cfg!(windows) { "Phosphor.exe" } else { "phosphor" };
     let src = find_file(unpacked, exe_name).and_then(|p| p.parent().map(|d| d.to_path_buf())).ok_or("The download has no Phosphor.exe in it")?;
@@ -548,12 +556,25 @@ fn install_folder(unpacked: &std::path::Path, exe: &std::path::Path) -> Result<(
     Ok((exe, true))
 }
 
-/// Copies a folder over another, file by file (new files added, changed ones replaced, nothing removed).
+/// Copies a folder over another, file by file (new files added, changed ones replaced, nothing removed). Links stay
+/// links (Linux's lib folder: libavcodec.so.62 → libavcodec.so.62.1.100), not a second copy of the library.
 fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(from) else { return };
     let _ = std::fs::create_dir_all(to);
     for entry in entries.flatten() {
         let (src, target) = (entry.path(), to.join(entry.file_name()));
+        #[cfg(unix)]
+        if entry.file_type().is_ok_and(|t| t.is_symlink())
+            && let Ok(points_to) = std::fs::read_link(&src)
+        {
+            let part = PathBuf::from(format!("{}.part", target.display()));
+            let _ = std::fs::remove_file(&part);
+            if let Err(e) = std::os::unix::fs::symlink(&points_to, &part).and_then(|_| std::fs::rename(&part, &target)) {
+                let _ = std::fs::remove_file(&part);
+                log::warn!("update: couldn't replace {}: {e}", target.display());
+            }
+            continue;
+        }
         if src.is_dir() {
             copy_tree(&src, &target);
             continue;
@@ -603,11 +624,35 @@ pub fn relaunch(ctx: &egui::Context, app: &std::path::Path) {
     if cfg!(windows) {
         // ping is cmd's portable "wait a moment".
         let _ = crate::os::command("cmd").args(["/C", &format!("ping -n 3 127.0.0.1 >nul & start \"\" \"{path}\"")]).spawn();
-    } else {
+    } else if cfg!(target_os = "macos") {
         let _ = crate::os::command("sh").arg("-c").arg(format!("sleep 1.5; open \"{path}\"")).spawn();
+    } else {
+        // Linux: through the folder's Phosphor.sh (it points the program at its own FFmpeg libraries). The path goes
+        // in as an argument, never into the command's words.
+        let start = linux_launcher(app);
+        let _ = crate::os::command("sh").args(["-c", "sleep 1.5; exec \"$0\" >/dev/null 2>&1"]).arg(&start).spawn();
     }
     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
 }
+
+/// Linux: what starts the installed Phosphor: the Phosphor.sh beside the program when the package has one.
+#[cfg(not(target_arch = "wasm32"))]
+fn linux_launcher(exe: &std::path::Path) -> PathBuf {
+    exe.parent().map(|d| d.join("Phosphor.sh")).filter(|s| s.is_file()).unwrap_or_else(|| exe.to_path_buf())
+}
+
+/// Installing by hand, on this system (when installing by itself failed).
+const MANUAL_STEPS: &[&str] = if cfg!(windows) {
+    &["1. Download Phosphor (button below).", "2. Quit this Phosphor, then run the installer (or unzip it over the old Phosphor folder).", "3. Open Phosphor."]
+} else if cfg!(target_os = "macos") {
+    &[
+        "1. Download Phosphor (button below) and open the zip in Downloads.",
+        "2. Quit this Phosphor, drag the new Phosphor into Applications and choose Replace.",
+        "3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.",
+    ]
+} else {
+    &["1. Download Phosphor (button below).", "2. Quit this Phosphor and unpack the download over the old Phosphor folder (tar -xzf).", "3. Open it with Phosphor.sh."]
+};
 
 /// The Update window (Help › Check for Updates, or the top bar button).
 pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
@@ -646,7 +691,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 }
                 crate::ui::toolbar(ui, |ui| {
                     #[cfg(not(target_arch = "wasm32"))]
-                    if crate::ui::command(ui, format!("{} Download and install", icon::DOWNLOAD_SIMPLE)).clicked() {
+                    if r.zip.is_some() && crate::ui::command(ui, format!("{} Download and install", icon::DOWNLOAD_SIMPLE)).clicked() {
                         up.install();
                     }
                     if crate::ui::command(ui, "Release page").clicked() {
@@ -657,6 +702,9 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                         up.window = false;
                     }
                 });
+                if r.zip.is_none() {
+                    crate::ui::hint(ui, "This release has no download for this computer: see its page.");
+                }
                 crate::ui::help(ui, "Your projects, layouts and settings stay as they are.");
             }
             Status::Downloading(r) => {
@@ -689,9 +737,9 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 crate::ui::hint(ui, e);
                 ui.add_space(4.0);
                 ui.label("Download it and install it by hand, it takes a minute:");
-                ui.label("1. Download Phosphor (button below) and open the zip in Downloads.");
-                ui.label("2. Quit this Phosphor, drag the new Phosphor into Applications and choose Replace.");
-                ui.label("3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.");
+                for step in MANUAL_STEPS {
+                    ui.label(*step);
+                }
                 crate::ui::toolbar(ui, |ui| {
                     let url = r.zip.clone().unwrap_or_else(|| r.page.clone());
                     if crate::ui::command(ui, egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::accent())).clicked() {
@@ -825,6 +873,21 @@ mod tests {
         assert!(!dest.join("isf/sub/fixed.fs.part").exists());
         // A second update replaces the leftovers of the first.
         assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok());
+        // Linux's libraries are links to one file each: they stay links (no second copy of FFmpeg).
+        #[cfg(unix)]
+        {
+            std::fs::create_dir_all(unpacked.join("lib")).unwrap();
+            std::fs::write(unpacked.join("lib/libavcodec.so.62.1"), "lib").unwrap();
+            std::os::unix::fs::symlink("libavcodec.so.62.1", unpacked.join("lib/libavcodec.so.62")).unwrap();
+            assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok());
+            assert_eq!(std::fs::read_link(dest.join("lib/libavcodec.so.62")).unwrap(), std::path::Path::new("libavcodec.so.62.1"));
+            assert_eq!(std::fs::read_to_string(dest.join("lib/libavcodec.so.62")).unwrap(), "lib");
+            assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok(), "a link over a link");
+            // Relaunching goes through the package's Phosphor.sh when there is one.
+            assert_eq!(super::linux_launcher(&exe), exe);
+            std::fs::write(dest.join("Phosphor.sh"), "#!/bin/sh").unwrap();
+            assert_eq!(super::linux_launcher(&exe), dest.join("Phosphor.sh"));
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -832,24 +895,26 @@ mod tests {
     fn version_from_the_latest_redirect() {
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases/tag/v0.2.42").as_deref(), Some("0.2.42"));
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases"), None);
-        assert_eq!(zip_url("0.2.42"), format!("https://github.com/fillinthe/phosphor/releases/download/v0.2.42/{ZIP_NAME}"));
+        assert_eq!(zip_url("0.2.42"), format!("https://github.com/fillinthe/phosphor/releases/download/v0.2.42/{ASSET_NAME}"));
     }
 
     #[test]
     fn release_json() {
         let json = format!(
-            r#"{{"tag_name":"v0.3.0","body":"notes","html_url":"https://x/y","assets":[{{"name":"Phosphor-mac-intel.zip","browser_download_url":"https://x/intel.zip"}},{{"name":"Phosphor-mac.zip","browser_download_url":"https://x/arm.zip"}},{{"name":"Phosphor-windows.zip","browser_download_url":"https://x/win.zip"}}]}}"#
+            r#"{{"tag_name":"v0.3.0","body":"notes","html_url":"https://x/y","assets":[{{"name":"Phosphor-mac-intel.zip","browser_download_url":"https://x/intel.zip"}},{{"name":"Phosphor-mac.zip","browser_download_url":"https://x/arm.zip"}},{{"name":"Phosphor-windows.zip","browser_download_url":"https://x/win.zip"}},{{"name":"Phosphor-linux-arm64.tar.gz","browser_download_url":"https://x/pi.tar.gz"}}]}}"#
         );
         let r = parse_release(&json).unwrap().unwrap();
         assert_eq!(r.version, "0.3.0");
-        let want = match ZIP_NAME {
-            "Phosphor-mac-intel.zip" => "https://x/intel.zip",
-            "Phosphor-mac.zip" => "https://x/arm.zip",
-            _ => "https://x/win.zip",
+        let want = match ASSET_NAME {
+            "Phosphor-mac-intel.zip" => Some("https://x/intel.zip"),
+            "Phosphor-mac.zip" => Some("https://x/arm.zip"),
+            "Phosphor-windows.zip" => Some("https://x/win.zip"),
+            "Phosphor-linux-arm64.tar.gz" => Some("https://x/pi.tar.gz"),
+            _ => None,
         };
-        assert_eq!(r.zip.as_deref(), Some(want), "this build's own download");
+        assert_eq!(r.zip.as_deref(), want, "this build's own download (none for a system without one)");
         let only_arm = r#"{"tag_name":"v0.3.1","assets":[{"name":"Phosphor-mac.zip","browser_download_url":"https://x/arm.zip"}]}"#;
-        assert_eq!(parse_release(only_arm).unwrap().unwrap().zip.is_some(), ZIP_NAME == "Phosphor-mac.zip", "never another build's zip");
+        assert_eq!(parse_release(only_arm).unwrap().unwrap().zip.is_some(), ASSET_NAME == "Phosphor-mac.zip", "never another build's zip");
         assert!(parse_release(r#"{"message":"Not Found"}"#).unwrap().is_none());
     }
 }

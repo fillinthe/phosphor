@@ -128,8 +128,9 @@ pub fn band_level(bins: &[f32], lo: f32, hi: f32) -> f32 {
     bins[a..b].iter().sum::<f32>() / (b - a) as f32
 }
 
-/// The input that listens to this Mac's own sound (every app but Phosphor, no loopback driver).
-pub const SYSTEM_SOUND: &str = "This Mac's sound (all apps)";
+/// The input that listens to this computer's own sound (every app; no loopback driver): the Mac's through
+/// ScreenCaptureKit, Windows' through WASAPI loopback on the default output.
+pub const SYSTEM_SOUND: &str = if cfg!(windows) { "This PC's sound (all apps)" } else { "This Mac's sound (all apps)" };
 /// Sound inputs named this way are an NDI source's sound ("NDI · STUDIO (OBS)").
 pub const NDI_PREFIX: &str = "NDI · ";
 
@@ -180,6 +181,30 @@ mod native {
     /// it would abort the app from inside the system's sound callback).
     fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
         m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn log_input_error(e: cpal::Error) {
+        log::warn!("audio input: {e}");
+    }
+
+    /// An input stream of `T` samples handed on as floats (-1..1), in a buffer kept between calls (sized once, for
+    /// the biggest block seen: no allocation on the sound thread after that).
+    fn input_as<T>(device: &cpal::Device, config: cpal::StreamConfig, mut push: impl FnMut(&[f32]) + Send + 'static) -> Result<cpal::Stream, cpal::Error>
+    where
+        T: cpal::SizedSample,
+        f32: cpal::FromSample<T>,
+    {
+        let mut floats: Vec<f32> = Vec::with_capacity(8192);
+        device.build_input_stream(
+            config,
+            move |d: &[T], _| {
+                floats.clear();
+                floats.extend(d.iter().map(|s| <f32 as cpal::FromSample<T>>::from_sample_(*s)));
+                push(&floats);
+            },
+            log_input_error,
+            None,
+        )
     }
 
     fn device_name(d: &cpal::Device) -> Option<String> {
@@ -391,7 +416,7 @@ mod native {
         pub fn refresh_devices(&mut self) {
             let host = cpal::default_host();
             self.devices = host.input_devices().map(|it| it.filter_map(|d| device_name(&d)).collect()).unwrap_or_default();
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", windows))]
             self.devices.push(super::SYSTEM_SOUND.into());
         }
 
@@ -427,7 +452,11 @@ mod native {
                 return Ok(());
             }
             let host = cpal::default_host();
+            // Windows: the default output, listened to (WASAPI records what an output plays when it's opened as an
+            // input: cpal turns on loopback for it).
+            let loopback = cfg!(windows) && name == Some(super::SYSTEM_SOUND);
             let device = match name {
+                _ if loopback => host.default_output_device().ok_or("No sound output to listen to")?,
                 Some(n) => host
                     .input_devices()
                     .map_err(|e| e.to_string())?
@@ -435,7 +464,7 @@ mod native {
                     .ok_or_else(|| format!("Audio device '{n}' not found"))?,
                 None => host.default_input_device().ok_or("No audio input device available")?,
             };
-            let supported = device.default_input_config().map_err(|e| e.to_string())?;
+            let supported = if loopback { device.default_output_config() } else { device.default_input_config() }.map_err(|e| e.to_string())?;
             let channels = supported.channels().max(1) as usize;
             self.sample_rate = supported.sample_rate();
             let config: cpal::StreamConfig = supported.config();
@@ -464,31 +493,22 @@ mod native {
                 }
                 push_newest(&mut lock(&ring), frames);
             };
-            let err_fn = |e: cpal::Error| log::warn!("audio input: {e}");
-            // Whole numbers become floats in a buffer kept between calls (sized once, for the biggest block seen).
-            let mut floats: Vec<f32> = Vec::with_capacity(8192);
+            // Every sample format cpal has for an interface (24- and 32-bit ones are common on pro interfaces): as
+            // floats, the way the analysis takes them.
+            use cpal::SampleFormat as F;
             let stream = match supported.sample_format() {
-                cpal::SampleFormat::F32 => device.build_input_stream(config, move |d: &[f32], _| push(d), err_fn, None),
-                cpal::SampleFormat::I16 => device.build_input_stream(
-                    config,
-                    move |d: &[i16], _| {
-                        floats.clear();
-                        floats.extend(d.iter().map(|s| *s as f32 / 32768.0));
-                        push(&floats);
-                    },
-                    err_fn,
-                    None,
-                ),
-                cpal::SampleFormat::U16 => device.build_input_stream(
-                    config,
-                    move |d: &[u16], _| {
-                        floats.clear();
-                        floats.extend(d.iter().map(|s| (*s as f32 - 32768.0) / 32768.0));
-                        push(&floats);
-                    },
-                    err_fn,
-                    None,
-                ),
+                F::F32 => device.build_input_stream(config, move |d: &[f32], _| push(d), log_input_error, None),
+                F::F64 => input_as::<f64>(&device, config, push),
+                F::I8 => input_as::<i8>(&device, config, push),
+                F::I16 => input_as::<i16>(&device, config, push),
+                F::I24 => input_as::<cpal::I24>(&device, config, push),
+                F::I32 => input_as::<i32>(&device, config, push),
+                F::I64 => input_as::<i64>(&device, config, push),
+                F::U8 => input_as::<u8>(&device, config, push),
+                F::U16 => input_as::<u16>(&device, config, push),
+                F::U24 => input_as::<cpal::U24>(&device, config, push),
+                F::U32 => input_as::<u32>(&device, config, push),
+                F::U64 => input_as::<u64>(&device, config, push),
                 other => return Err(format!("Unsupported audio sample format {other:?}")),
             }
             .map_err(|e| e.to_string())?;

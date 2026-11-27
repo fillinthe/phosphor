@@ -293,7 +293,8 @@ impl Engine {
                 _ => plan.vars.iter().find(|(v, _)| v == name).and_then(|(_, i)| params.get(*i)).map(|v| *v as f64),
             }
         };
-        let size = |e: &Option<String>, full: u32| e.as_deref().and_then(|e| crate::expr::eval(e, &var)).map_or(full, |v| (v.max(1.0) as u32).min(8192));
+        let most = crate::gpu::max_texture_side();
+        let size = |e: &Option<String>, full: u32| e.as_deref().and_then(|e| crate::expr::eval(e, &var)).map_or(full, |v| (v.max(1.0) as u32).min(most));
         let mut result = out.clone();
         for (k, pp) in plan.passes.iter().enumerate() {
             let views: Vec<wgpu::TextureView> = (0..n)

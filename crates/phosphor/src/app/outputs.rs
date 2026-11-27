@@ -35,7 +35,7 @@ impl PhosphorApp {
         if !map.values().any(|o| o.open && o.fullscreen || o.over_controls) {
             return;
         }
-        let own = ctx.input(|i| i.viewport().outer_rect).and_then(|r| crate::screens::display_of(&self.state.displays, r.center().x, r.center().y));
+        let own = crate::screens::display_of_window(&self.state.displays, ctx);
         let (now, escape) = ctx.input(|i| (i.time, i.key_pressed(egui::Key::Escape)));
         for (id, out) in map.iter_mut() {
             let over = out.open && out.fullscreen && out.place.is_none() && own.is_some() && out.display == own;
@@ -168,6 +168,12 @@ impl PhosphorApp {
         crate::screens::keep_display_awake(any_open);
         let open: Vec<(u64, String)> =
             self.state.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
+        // The first output open (in the project's order) paces the show; Phosphor's own window when none is.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let first = self.state.comp.outputs.iter().find(|o| open.iter().any(|(id, _)| *id == o.id));
+            crate::present::set(self.state.screens_dont_wait, first.map(|o| egui::ViewportId::from_hash_of(("phosphor_output", o.id))));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         for (oid, name) in open {
             self.output_window(ctx, oid, &name);
@@ -263,7 +269,7 @@ impl PhosphorApp {
                             *wait = 0;
                         }
                         3 if *wait > 2 => {
-                            if !crate::screens::cover_window(&title, Some(d)) {
+                            if !crate::screens::cover_window(&ctx, &title, Some(d)) {
                                 log::warn!("output window '{title}' not found to cover the display");
                             }
                             out.display = Some(d.id);
@@ -288,7 +294,7 @@ impl PhosphorApp {
                             out.cover_logged = now;
                             log::info!(target: "phosphor::action", "output \"{}\" had moved off its screen's edges (macOS): put back", out.name);
                         }
-                        crate::screens::cover_window(&title, Some(&d));
+                        crate::screens::cover_window(&ctx, &title, Some(&d));
                     }
                 }
                 if ctx.input(|i| i.viewport().close_requested()) {
@@ -298,19 +304,19 @@ impl PhosphorApp {
                 let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
                 // Back to a normal window on the same display.
                 let uncover = |out: &mut OutputShared| {
-                    crate::screens::cover_window(&title, None);
+                    crate::screens::cover_window(&ctx, &title, None);
                     out.fullscreen = false;
                     if let Some(d) = out.display.and_then(|id| crate::screens::displays().into_iter().find(|d| d.id == id)) {
                         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(960.0, 540.0)));
                         ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(d.x + 60.0, d.y + 60.0)));
                     }
                 };
-                // Fill the display the window is on.
+                // Fill the display the window is on (the first one when that can't be told: Wayland says no positions).
                 let cover_here = |out: &mut OutputShared| {
-                    let r = ctx.input(|i| i.viewport().outer_rect);
-                    let c = r.map_or(egui::pos2(0.0, 0.0), |r| r.center());
-                    if let Some(d) = crate::screens::display_at(c.x, c.y) {
-                        out.place = Some((d, 2, 0));
+                    let all = crate::screens::displays();
+                    let on = crate::screens::display_of_window(&all, &ctx);
+                    if let Some(d) = all.iter().find(|d| Some(d.id) == on).or(all.first()) {
+                        out.place = Some((d.clone(), 2, 0));
                     }
                 };
                 if toggle {

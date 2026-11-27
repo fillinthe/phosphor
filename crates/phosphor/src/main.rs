@@ -90,6 +90,10 @@ mod stream;
 #[cfg(not(target_arch = "wasm32"))]
 mod stream_audio;
 #[cfg(not(target_arch = "wasm32"))]
+mod video_encoders;
+#[cfg(not(target_arch = "wasm32"))]
+mod present;
+#[cfg(not(target_arch = "wasm32"))]
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
 mod pad_kit;
@@ -124,7 +128,7 @@ mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod web_media;
 mod crash_report;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod crash_signals;
 #[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
@@ -181,6 +185,7 @@ fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     let base = setup.device_descriptor.clone();
     setup.device_descriptor = std::sync::Arc::new(move |adapter| {
         let mut d = base(adapter);
+        d.required_limits = within_limits(&d.required_limits, &adapter.limits());
         d.required_features |= adapter.features() & (eframe::wgpu::Features::TEXTURE_COMPRESSION_BC | eframe::wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | eframe::wgpu::Features::TIMESTAMP_QUERY);
         // Deep color (16 bits a channel in the mix) where the card can draw into 16-bit textures.
         let deep = phosphor_engine::deep_colour_usable(adapter);
@@ -191,6 +196,29 @@ fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
         d
     });
     WgpuConfiguration { wgpu_setup: WgpuSetup::CreateNew(setup), ..Default::default() }
+}
+
+/// Never ask for more than the card has (eframe asks for 8192-pixel textures, more than some older cards and OpenGL
+/// drivers allow): asking too much is a device that's never made, and no Phosphor at all. Each limit lowered is
+/// logged; pictures stay within what the device allows (`phosphor_engine::max_texture_side`).
+#[cfg(not(target_arch = "wasm32"))]
+fn within_limits(wanted: &eframe::wgpu::Limits, allowed: &eframe::wgpu::Limits) -> eframe::wgpu::Limits {
+    wanted.check_limits_with_fail_fn(allowed, false, |name, asked, has| {
+        log::warn!("graphics: the card allows {name} = {has} (asked for {asked}): using {has}");
+    });
+    wanted.clone().or_worse_values_from(allowed)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[test]
+fn a_card_that_allows_less_still_gets_a_device() {
+    use eframe::wgpu::Limits;
+    let wanted = Limits { max_texture_dimension_2d: 8192, ..Limits::default() };
+    let old_card = Limits { max_texture_dimension_2d: 4096, ..Limits::downlevel_defaults() };
+    let fitted = within_limits(&wanted, &old_card);
+    assert_eq!(fitted.max_texture_dimension_2d, 4096);
+    assert!(fitted.check_limits(&old_card), "everything asked for is allowed");
+    assert_eq!(within_limits(&wanted, &Limits { max_texture_dimension_2d: 16384, ..Limits::default() }).max_texture_dimension_2d, 8192, "never more than asked");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -273,7 +301,7 @@ fn main() -> eframe::Result {
     let _show_activity = keep_awake_for_show();
     if bench.is_none() {
         // Crashes below Rust (a library, the system) get a line in crash.log too.
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(log) = recovery::crash_log_path() {
             let _ = std::fs::create_dir_all(log.parent().unwrap_or(&log));
             crash_signals::install(&log);
@@ -296,7 +324,42 @@ fn main() -> eframe::Result {
     };
     // Files double-clicked in Finder / dropped on the Dock icon reach the app (open_files.rs).
     let _ = eframe::AFTER_EVENT_LOOP.set(open_files::install);
-    eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))))
+    // Each window's present mode is asked of present.rs (one window paces; the others needn't wait).
+    present::install();
+    let quiet = bench.is_some();
+    let ran = eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))));
+    if let Err(e) = &ran {
+        startup_failed(&e.to_string(), quiet);
+    }
+    ran
+}
+
+/// Phosphor couldn't open its window (usually: no graphics device it can use). The Windows app has no console and
+/// the watchdog isn't watching yet, so this run ended with nothing said anywhere: now the session log and crash.log
+/// get the reason, and a message box says it (not for a benchmark: that prints it).
+#[cfg(not(target_arch = "wasm32"))]
+fn startup_failed(error: &str, quiet: bool) {
+    let what = if cfg!(windows) {
+        "Install or update your graphics card's driver (from NVIDIA, AMD or Intel), then open Phosphor again."
+    } else if cfg!(target_os = "macos") {
+        "Restart the Mac and open Phosphor again. If it happens again, please report it with Help > Report a Bug."
+    } else {
+        "Phosphor draws with Vulkan: install your graphics' Vulkan driver (Raspberry Pi OS: sudo apt install mesa-vulkan-drivers), then open Phosphor again."
+    };
+    let text = format!("Phosphor couldn't start: {error}\n\n{what}");
+    log::error!("couldn't start: {error}");
+    if let Some(path) = recovery::crash_log_path() {
+        use std::io::Write;
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(&path));
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let when = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            let _ = writeln!(f, "[{when}] couldn't start: {error}");
+        }
+    }
+    eprintln!("{text}");
+    if !quiet {
+        rfd::MessageDialog::new().set_level(rfd::MessageLevel::Error).set_title("Phosphor couldn't start").set_description(text).set_buttons(rfd::MessageButtons::Ok).show();
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
