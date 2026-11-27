@@ -33,9 +33,34 @@ pub struct DmxOut {
     pub sent: BTreeMap<u16, [u8; 512]>,
     /// A USB interface (`DmxProtocol::UsbPro` / `OpenDmx`), opened on its port.
     usb: Option<crate::usb_dmx::UsbOut>,
+    /// The fixtures the sample points were made for, and those points (`sample_points`).
+    points_for: Option<Vec<phosphor_engine::Fixture>>,
+    points: Vec<[f32; 2]>,
 }
 
 impl DmxOut {
+    /// The fixtures' sample points when they've changed since the last call (else None: the engine has them). They
+    /// were built (9 a pixel when averaging) and hashed every frame; now only when a fixture changes.
+    pub fn sample_points(&mut self, s: &DmxSettings) -> Option<&[[f32; 2]]> {
+        if self.points_for.as_ref() == Some(&s.fixtures) {
+            return None;
+        }
+        self.points_for = Some(s.fixtures.clone());
+        self.points = s.sample_points();
+        Some(&self.points)
+    }
+
+    /// The engine was told to sample nothing (lights off, or a recording / the scanner going out): the points are
+    /// handed over again next time.
+    pub fn forget_points(&mut self) {
+        self.points_for = None;
+        self.points = Vec::new();
+    }
+
+    /// Sample points are with the engine (`sample_points` handed some over since `forget_points`).
+    pub fn has_points(&self) -> bool {
+        self.points_for.is_some()
+    }
     /// True when a frame should be sampled for the lights now.
     pub fn frame_due(&mut self, now: f64, s: &DmxSettings) -> bool {
         if !s.enabled || s.fixtures.iter().all(|f| !f.enabled) {
@@ -368,6 +393,25 @@ pub fn sacn_packet(cid: &[u8; 16], universe: u16, seq: u8, data: &[u8; 512]) -> 
     p.push(0); // start code
     p.extend_from_slice(data);
     p
+}
+
+#[cfg(test)]
+mod points_tests {
+    #[test]
+    fn sample_points_are_made_again_only_when_a_fixture_changes() {
+        let mut out = super::DmxOut::default();
+        let mut s = phosphor_engine::DmxSettings { enabled: true, ..Default::default() };
+        s.fixtures.push(phosphor_engine::Fixture::default());
+        let first = out.sample_points(&s).map(<[_]>::to_vec);
+        assert_eq!(first, Some(s.sample_points()));
+        assert!(out.sample_points(&s).is_none(), "unchanged: nothing new");
+        s.fixtures[0].cols += 3;
+        assert_eq!(out.sample_points(&s).map(<[_]>::to_vec), Some(s.sample_points()), "a fixture changed");
+        out.forget_points();
+        assert!(!out.has_points());
+        assert!(out.sample_points(&s).is_some(), "handed over again after the engine was cleared");
+        assert!(out.has_points());
+    }
 }
 
 #[cfg(test)]

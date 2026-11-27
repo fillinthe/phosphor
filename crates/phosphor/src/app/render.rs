@@ -331,12 +331,22 @@ impl PhosphorApp {
             let playback = led_scan.universes(&comp.dmx).or(playback);
             // Finding a string (Flash / Chase) wins over everything: it's what someone across the venue is looking for.
             let playback = led_identify.universes(&comp.dmx, now).or(playback);
-            let points = if comp.dmx.enabled && playback.is_none() { comp.dmx.sample_points() } else { Vec::new() };
-            engine.set_sample_points(&points);
+            // The points to sample go to the engine only when a fixture changed (`DmxOut::sample_points`), and only
+            // when a frame of lights is due; with nothing to sample the engine's sampler is emptied once.
+            let sampling = comp.dmx.enabled && playback.is_none();
+            if !sampling && dmx.has_points() {
+                dmx.forget_points();
+                engine.set_sample_points(&[]);
+            }
             if dmx.frame_due(now, &comp.dmx) {
                 match &playback {
                     Some(unis) => dmx.send(&comp.dmx, unis),
-                    None => engine.request_samples(),
+                    None => {
+                        if let Some(points) = dmx.sample_points(&comp.dmx) {
+                            engine.set_sample_points(points);
+                        }
+                        engine.request_samples();
+                    }
                 }
             }
         }
