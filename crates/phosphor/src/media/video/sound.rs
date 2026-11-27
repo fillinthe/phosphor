@@ -501,7 +501,7 @@ impl Drop for ClipAudio {
     fn drop(&mut self) {
         self.clip.quit.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
-            super::join_briefly(t);
+            super::reaper::join_later(t);
         }
     }
 }

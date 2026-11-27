@@ -380,3 +380,28 @@ fn the_end_of_the_forward_pass_is_kept_only_for_a_turn() {
     assert_eq!(tail_frames(40, pingpong, false, 2.0, dur, f64::INFINITY), 32, "ping-pong with no known end");
 }
 
+/// Dropping a player doesn't wait for its decoder thread (`reaper::join_later`). PHOSPHOR_TEST_MOVIE = a movie to
+/// use instead of media/test/h264.mp4; prints how long the old drop would have waited (DROP line).
+#[test]
+fn dropping_a_player_never_waits_for_its_thread() {
+    let Some(path) = std::env::var("PHOSPHOR_TEST_MOVIE").ok().or_else(|| clip().map(str::to_string)) else { return };
+    let mut waited = Vec::new();
+    let mut dropped = Vec::new();
+    for _ in 0..5 {
+        let mut p = VideoPlayer::open(&path).unwrap();
+        play(&mut p, 0.0, 0.3);
+        let started = std::time::Instant::now();
+        drop(p);
+        dropped.push(started.elapsed());
+        // What the drop used to do on the UI thread, measured on a second player's decoder.
+        let mut q = VideoPlayer::open(&path).unwrap();
+        play(&mut q, 0.0, 0.3);
+        let thread = q.thread.take().unwrap();
+        drop(q);
+        let started = std::time::Instant::now();
+        super::join_briefly(thread);
+        waited.push(started.elapsed());
+    }
+    println!("DROP now {dropped:?}, joining as before {waited:?}");
+    assert!(dropped.iter().all(|d| *d < std::time::Duration::from_millis(20)), "{dropped:?}");
+}

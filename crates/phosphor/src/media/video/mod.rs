@@ -881,17 +881,17 @@ impl Drop for VideoPlayer {
             ctl.quit = true;
         }
         self.shared.cv.notify_all();
-        // Dropping the receiver unblocks a decoder waiting on a full queue.
+        // Dropping the receiver unblocks a decoder waiting on a full queue. Its thread ends on its own time.
         self.rx = None;
         if let Some(t) = self.thread.take() {
-            join_briefly(t);
+            reaper::join_later(t);
         }
     }
 }
 
 /// Waits for a clip's worker thread to finish, but only for a moment: one stuck reading a pulled drive or a stalled
 /// network share is left to end by itself (it has been told to quit), where waiting for it froze the whole app
-/// the next time a layer changed.
+/// the next time a layer changed. Owners hand their threads to `reaper::join_later` instead (this is its fallback).
 pub(crate) fn join_briefly(thread: std::thread::JoinHandle<()>) {
     let until = std::time::Instant::now() + std::time::Duration::from_millis(60);
     while !thread.is_finished() && std::time::Instant::now() < until {
@@ -931,6 +931,7 @@ fn err(e: ff::Error) -> String {
 
 mod convert;
 mod decoder;
+pub(crate) mod reaper;
 mod tail;
 mod bc7;
 mod hap;

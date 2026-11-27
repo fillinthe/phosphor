@@ -514,8 +514,9 @@ impl NdiReceiver {
 impl Drop for NdiReceiver {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        // (A layer's source changing drops it on the UI thread: its thread ends on its own time.)
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            crate::media::video::reaper::join_later(t);
         }
     }
 }
