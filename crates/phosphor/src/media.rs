@@ -84,8 +84,10 @@ fn extension(name: &str) -> String {
     name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default()
 }
 
-fn file_name(path: &str) -> String {
-    path.rsplit(['/', '\\']).next().unwrap_or(path).to_string()
+/// The file's name in a path written on any system ("C:\\Clips\\a.mov" on a Mac too: `Path::file_name` only splits at
+/// this system's separator, and projects move between Macs and PCs).
+pub fn file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 pub fn is_movie(name: &str) -> bool {
@@ -133,7 +135,7 @@ pub fn decode_still(path: &str) -> Result<image::DynamicImage, String> {
 
 pub fn is_supported(name: &str) -> bool {
     // "._clip.mov": the metadata macOS writes next to every file on drives formatted for Windows, not a movie.
-    let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let file = file_name(name);
     // (".credit.json": who made a downloaded file, saved beside it.)
     if file.starts_with("._") || file.ends_with(".credit.json") {
         return false;
@@ -151,7 +153,7 @@ pub fn clip_name(file: &str) -> String {
 }
 
 pub fn spec_for_path(path: &str) -> SourceSpec {
-    spec_for(&file_name(path), Some(path.to_string()))
+    spec_for(file_name(path), Some(path.to_string()))
 }
 
 pub fn spec_for(name: &str, path: Option<String>) -> SourceSpec {
@@ -961,6 +963,14 @@ mod dropped_tests {
         let mut out = std::io::Cursor::new(Vec::new());
         image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 10, 255])).write_to(&mut out, image::ImageFormat::Png).unwrap();
         out.into_inner()
+    }
+
+    #[test]
+    fn file_names_come_out_of_paths_from_any_system() {
+        assert_eq!(file_name("C:\\Clips\\Intro.mov"), "Intro.mov");
+        assert_eq!(file_name("/Volumes/Show/Intro.mov"), "Intro.mov");
+        assert_eq!(file_name("D:/mixed\\slashes/b.png"), "b.png");
+        assert_eq!(file_name("plain.jpg"), "plain.jpg");
     }
 
     #[test]

@@ -9,13 +9,13 @@ pub const RATE: &str = "30";
 
 /// Is this path (or file name) an image-sequence pattern?
 pub fn is_sequence(path: &str) -> bool {
-    let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let file = super::file_name(path);
     file.find("%0").is_some_and(|i| file[i + 2..].trim_start_matches(|c: char| c.is_ascii_digit()).starts_with('d'))
 }
 
 /// A sequence's label: its name without the number pattern ("frame_%04d.png" → "frame").
 pub fn label(path: &str) -> String {
-    let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let file = super::file_name(path);
     let stem = file.split("%0").next().unwrap_or(file).trim_end_matches(['_', '-', '.', ' ']);
     if stem.is_empty() { "Sequence".into() } else { stem.to_string() }
 }

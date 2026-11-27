@@ -12,7 +12,7 @@ pub struct Drawing {
 /// The movie `path` plays as (kept under `folder` in Phosphor's storage), made by `draw` from the file's bytes the
 /// first time. Call off the UI thread.
 pub fn cached_movie(path: &str, folder: &str, draw: impl FnOnce(&[u8]) -> Result<Drawing, String>) -> Result<String, String> {
-    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let name = super::file_name(path);
     let meta = std::fs::metadata(path).map_err(|e| format!("{name}: {e}"))?;
     let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
     let h = phosphor_engine::stable_hash(&[path.as_bytes(), &meta.len().to_le_bytes(), &modified.to_le_bytes()]);

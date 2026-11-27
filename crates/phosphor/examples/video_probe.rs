@@ -39,6 +39,10 @@ mod media {
         }
     }
 
+    pub fn file_name(path: &str) -> &str {
+        path.rsplit(['/', '\\']).next().unwrap_or(path)
+    }
+
     pub fn is_picture(name: &str) -> bool {
         name.rsplit_once('.').is_some_and(|(_, e)| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp"))
     }
