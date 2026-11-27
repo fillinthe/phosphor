@@ -92,11 +92,14 @@ fn list_dshow() -> Vec<Camera> {
 }
 
 /// The video devices in FFmpeg's `-list_devices` answer for DirectShow: lines like `[in#0 @ 0x…] "Cam Link 4K"
-/// (video)` (older FFmpeg: a "DirectShow video devices" heading, then the names).
+/// (video)` (older FFmpeg: a "DirectShow video devices" heading, then the names). Two of the same card (each with
+/// its own "Alternative name") are both listed, the second as "Cam Link 4K #2" (`repeat_of` opens it).
 #[cfg(any(windows, test))]
 fn dshow_devices(text: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+    // (name, alternative name) of each video device, a device listed twice (same alternative name) once.
+    let mut found: Vec<(String, Option<String>)> = Vec::new();
     let mut in_video = false;
+    let mut last_was_video = false;
     for line in text.lines() {
         if line.contains("DirectShow video devices") {
             in_video = true;
@@ -106,21 +109,50 @@ fn dshow_devices(text: &str) -> Vec<String> {
             in_video = false;
             continue;
         }
-        if line.contains("Alternative name") {
-            continue;
-        }
         let Some(start) = line.find('"') else { continue };
         let Some(len) = line[start + 1..].find('"') else { continue };
         let name = &line[start + 1..start + 1 + len];
+        if line.contains("Alternative name") {
+            if last_was_video && let Some(last) = found.last_mut() {
+                last.1 = Some(name.to_string());
+                if found[..found.len() - 1].iter().any(|(n, a)| *n == found[found.len() - 1].0 && a == &found[found.len() - 1].1) {
+                    found.pop();
+                }
+            }
+            continue;
+        }
         let tail = &line[start + 2 + len..];
         // "(none)": FFmpeg couldn't tell its kind without opening it (OBS Virtual Camera, some capture cards): audio
         // devices always say "(audio)", so it's taken as video.
         let video = if tail.contains('(') { tail.contains("video") || tail.contains("(none)") } else { in_video };
-        if video && !name.is_empty() && !out.iter().any(|n| n == name) {
-            out.push(name.to_string());
+        last_was_video = video && !name.is_empty();
+        if last_was_video {
+            found.push((name.to_string(), None));
         }
     }
+    let mut out: Vec<String> = Vec::new();
+    for (i, (name, alt)) in found.iter().enumerate() {
+        // A device with no alternative name listed twice is one device.
+        if alt.is_none() && found[..i].iter().any(|(n, a)| n == name && a.is_none()) {
+            continue;
+        }
+        let same = out.iter().filter(|n| repeat_of(n).0 == name).count();
+        out.push(if same == 0 { name.clone() } else { format!("{name} #{}", same + 1) });
+    }
     out
+}
+
+/// "Cam Link 4K #2" → ("Cam Link 4K", 1): the device name and which of the same-named ones it is (DirectShow's
+/// `video_device_number`, from 0). A plain name → (name, 0).
+#[cfg(any(windows, test))]
+fn repeat_of(listed: &str) -> (&str, u32) {
+    match listed.rsplit_once(" #") {
+        Some((name, n)) if !name.is_empty() => match n.parse::<u32>() {
+            Ok(n) if n >= 2 => (name, n - 1),
+            _ => (listed, 0),
+        },
+        _ => (listed, 0),
+    }
 }
 
 /// A camera that answered "busy" when asked to start ("Input/output error", "I/O error").
@@ -312,8 +344,13 @@ pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> 
         }
         OPENING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let _opening = Opening;
-        let device = format!("video={url}");
-        let tries: &[&[(&str, &str)]] = &[&[("rtbufsize", "256M")], &[("rtbufsize", "256M"), ("framerate", "30")]];
+        // The second of two same-named cards: by its number among them.
+        let (device_name, number) = repeat_of(url);
+        let device = format!("video={device_name}");
+        let number = number.to_string();
+        let first = [("rtbufsize", "256M"), ("video_device_number", number.as_str())];
+        let second = [("rtbufsize", "256M"), ("framerate", "30"), ("video_device_number", number.as_str())];
+        let tries: &[&[(&str, &str)]] = &[&first, &second];
         let mut result = VideoPlayer::open_live(name, "dshow", &device, tries);
         // Busy for a moment (another program, or the list being read when it started): twice more, a second apart.
         for _ in 0..2 {
@@ -368,6 +405,15 @@ mod tests {
         // A laptop's own webcam on Windows 11 also says "(none)".
         assert_eq!(super::dshow_devices("[in#0 @ 01] \"Integrated Webcam\" (none)\n[in#0 @ 01] \"Microphone (Realtek(R) Audio)\" (audio)\n"), ["Integrated Webcam"]);
         assert!(super::busy("Live: can't open (Input/output error)") && !super::busy("can't open (No such file or directory)"));
+        // Two of the same capture card (each its own alternative name): both listed, the second numbered.
+        let twins = "[in#0 @ 01] \"USB3 Capture\" (video)\n[in#0 @ 01]   Alternative name \"@device_pnp_a\"\n[in#0 @ 01] \"USB3 Capture\" (video)\n[in#0 @ 01]   Alternative name \"@device_pnp_b\"\n[in#0 @ 01] \"USB3 Capture\" (audio)\n[in#0 @ 01]   Alternative name \"@device_cm_c\"\n";
+        assert_eq!(super::dshow_devices(twins), ["USB3 Capture", "USB3 Capture #2"]);
+        // The same device listed twice (same alternative name) is one device.
+        let again = "[in#0 @ 01] \"Cam\" (video)\n[in#0 @ 01]   Alternative name \"@device_pnp_a\"\n[in#0 @ 01] \"Cam\" (video)\n[in#0 @ 01]   Alternative name \"@device_pnp_a\"\n";
+        assert_eq!(super::dshow_devices(again), ["Cam"]);
+        assert_eq!(super::repeat_of("USB3 Capture #2"), ("USB3 Capture", 1));
+        assert_eq!(super::repeat_of("USB3 Capture"), ("USB3 Capture", 0));
+        assert_eq!(super::repeat_of("Studio #1"), ("Studio #1", 0), "#1 is never made: a name of its own");
     }
 
     /// Lists cameras (no permission needed) so the test log shows what this Mac has.
