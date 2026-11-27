@@ -227,7 +227,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
                     ui.monospace(RichText::new(format!("{value:.3}")).small());
                     let mapped: Vec<String> = comp.control_maps.iter().filter(|m| m.source == *source).map(|m| crate::control::target_label(comp, &m.target)).collect();
                     if mapped.is_empty() {
-                        ui.label(RichText::new("not mapped").small().color(Color32::GRAY));
+                        ui.label(RichText::new("not mapped").small().color(crate::theme::weak()));
                     } else {
                         ui.label(RichText::new(format!("{} {}", icon::ARROW_RIGHT, mapped.join(", "))).small().color(accent()));
                     }

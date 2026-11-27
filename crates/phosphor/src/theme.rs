@@ -33,6 +33,14 @@ pub const PICTURE_BG: Color32 = Color32::from_rgb(5, 7, 8);
 pub const PICTURE_GRID: Color32 = Color32::from_rgb(40, 42, 44);
 /// Words drawn on a picture or a colored fill (a fader's value, a tab with no kind).
 pub const ON_PICTURE: Color32 = Color32::from_gray(220);
+/// Quiet words on a picture or `PICTURE_BG` (a placeholder "…", "no source", "Off" on a dark frame): a step below
+/// `ON_PICTURE`, the same at any brightness (5.9:1 on `PICTURE_BG`).
+pub const ON_PICTURE_WEAK: Color32 = Color32::from_gray(150);
+/// See-through white over the show's picture (a hint drawn on an output, guide lines on a stage photo, a dimmed
+/// picture's tint): `alpha` 0..255.
+pub fn over_picture(alpha: u8) -> Color32 {
+    Color32::from_white_alpha(alpha)
+}
 /// Banners and notices that float over everything (dark at any brightness, light words): a problem, good news,
 /// Map mode, Learn.
 pub const PROBLEM_FILL: Color32 = Color32::from_rgb(52, 26, 20);

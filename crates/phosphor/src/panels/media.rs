@@ -267,7 +267,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
 fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     // Row 1: search, the full width (it never shares a row, so nothing can cover it).
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(crate::theme::weak()));
         crate::ui::text_field(ui, &mut st.media_view.search, "Search media", None);
     });
     // Row 2: import, watch, group, sort, size; wraps when the column is narrow.
@@ -756,7 +756,7 @@ pub(crate) fn media_tile(
         None => {
             let glyph = if crate::media::is_movie(&item.name) { icon::FILM_STRIP } else { icon::IMAGE };
             let text = if thumbs.is_pending(&item.path) { "…" } else { glyph };
-            p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
+            p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     if crate::ui::file_away(&item.path) {
@@ -778,7 +778,7 @@ pub(crate) fn media_tile(
     if item.skip {
         // Skipped: dimmed, with the sign in the middle (it stays here but isn't played).
         p.rect_filled(thumb_rect, 4.0, Color32::from_black_alpha(150));
-        p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, icon::PROHIBIT, egui::FontId::proportional(20.0), Color32::from_white_alpha(170));
+        p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, icon::PROHIBIT, egui::FontId::proportional(20.0), crate::theme::over_picture(170));
     }
     if let Some(layers) = on {
         // On screen now: which layers, at a glance (was a play badge; the names only on hover). Cut to the tile.
@@ -802,9 +802,9 @@ pub(crate) fn media_tile(
     if name.chars().count() > max_chars {
         name = format!("{}…", name.chars().take(max_chars - 1).collect::<String>());
     }
-    p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
+    p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), ui.visuals().text_color());
     if !item.collections.is_empty() {
-        p.text(thumb_rect.left_top() + egui::vec2(4.0, 3.0), egui::Align2::LEFT_TOP, icon::BOOKMARKS_SIMPLE, egui::FontId::proportional(11.0), Color32::from_white_alpha(180));
+        p.text(thumb_rect.left_top() + egui::vec2(4.0, 3.0), egui::Align2::LEFT_TOP, icon::BOOKMARKS_SIMPLE, egui::FontId::proportional(11.0), crate::theme::over_picture(180));
     }
     // What comes with it when it plays: its own effects, changed speed / direction, a trim.
     let comes_with = super::layers::badge_chip(p, thumb_rect, &media_extras(item));
@@ -816,7 +816,7 @@ pub(crate) fn media_tile(
     let hover = resp.hovered() || star.hovered();
     if item.favorite || hover {
         let font = if item.favorite { crate::theme::filled_icons(15.0) } else { egui::FontId::proportional(15.0) };
-        let color = if item.favorite { crate::theme::FAVOURITE } else if star.hovered() { Color32::WHITE } else { Color32::from_white_alpha(150) };
+        let color = if item.favorite { crate::theme::FAVOURITE } else if star.hovered() { Color32::WHITE } else { crate::theme::over_picture(150) };
         let p = ui.painter();
         p.text(star_rect.center() + egui::vec2(0.5, 1.0), egui::Align2::CENTER_CENTER, icon::STAR, font.clone(), Color32::from_black_alpha(160));
         p.text(star_rect.center(), egui::Align2::CENTER_CENTER, icon::STAR, font, color);

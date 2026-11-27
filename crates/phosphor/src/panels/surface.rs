@@ -129,11 +129,11 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 .response
                 .on_hover_text("Line up, spread out or match the size of the selected widgets");
             }
-            ui.label(RichText::new("OSC out").small().color(Color32::GRAY));
+            ui.label(RichText::new("OSC out").small().color(crate::theme::weak()));
             crate::ui::text_field(ui, &mut st.comp.surface.osc_host, "IP, e.g. 192.168.1.20", Some(110.0))
                 .on_hover_text("Widgets with a Send OSC address send their values here (another app on this Mac: 127.0.0.1). Empty = off.");
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
-            ui.label(RichText::new("Columns").small().color(Color32::GRAY));
+            ui.label(RichText::new("Columns").small().color(crate::theme::weak()));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
             help(ui, "Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, Cmd+A / D / C / V / L (lock)");
         } else if st.comp.surface.on_page().next().is_none() {
@@ -196,7 +196,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 }
                 bg.right_menu(|ui| {
                     let (x, y) = ui.ctx().data(|d| d.get_temp::<(f32, f32)>(spot_id)).unwrap_or((0.0, 0.0));
-                    ui.label(RichText::new("Add here").small().color(Color32::GRAY));
+                    ui.label(RichText::new("Add here").small().color(crate::theme::weak()));
                     for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {
                         if crate::ui::command(ui, phosphor_engine::Choice::label(kind)).clicked() {
                             act = Some(Act::Add(kind, x, y));
@@ -274,7 +274,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                                 ui.close();
                             }
                         } else {
-                            ui.label(RichText::new(format!("{} selected", ids.len())).small().color(Color32::GRAY));
+                            ui.label(RichText::new(format!("{} selected", ids.len())).small().color(crate::theme::weak()));
                             ui.menu_button(label(icon::ALIGN_LEFT, "Arrange"), |ui| {
                                 act = act.take().or(arrange_items(ui, &ids, true));
                             });
@@ -420,12 +420,12 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 let wid = w.id;
                 resp.on_hover_text(binding_summary(w, &targets)).right_menu(|ui| {
                     if is_xy {
-                        ui.label(RichText::new("Horizontal (X)").small().color(Color32::GRAY));
+                        ui.label(RichText::new("Horizontal (X)").small().color(crate::theme::weak()));
                     }
                     learn_items(ui, &target);
                     if is_xy {
                         ui.separator();
-                        ui.label(RichText::new("Vertical (Y)").small().color(Color32::GRAY));
+                        ui.label(RichText::new("Vertical (Y)").small().color(crate::theme::weak()));
                         learn_items(ui, &ControlTarget::SurfaceY(wid));
                     }
                     ui.separator();
@@ -929,7 +929,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     crate::ui::toolbar(ui, |ui| {
         let mut typed = false;
         for (name, v, hover) in [("X", &mut w.x, "Cells from the left"), ("Y", &mut w.y, "Cells from the top"), ("W", &mut w.w, "Cells wide"), ("H", &mut w.h, "Cells high")] {
-            ui.label(RichText::new(name).small().color(Color32::GRAY));
+            ui.label(RichText::new(name).small().color(crate::theme::weak()));
             typed |= guarded!(ui, *v, egui::DragValue::new(v).speed(0.25).max_decimals(2)).on_hover_text(hover).changed();
         }
         if typed {
@@ -986,7 +986,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             }
             if w.inputs.len() < 8 {
                 crate::ui::toolbar(ui, |ui| {
-                    ui.label(RichText::new(((b'a' + w.inputs.len() as u8) as char).to_string()).monospace().color(Color32::GRAY));
+                    ui.label(RichText::new(((b'a' + w.inputs.len() as u8) as char).to_string()).monospace().color(crate::theme::weak()));
                     if let Some(picked) = target_picker(ui, ("computed_new", id), targets, None, 220.0) {
                         w.inputs.push(picked);
                     }

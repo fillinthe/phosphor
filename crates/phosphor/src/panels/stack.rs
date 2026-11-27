@@ -335,7 +335,7 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                         }
                         let name: String = layer.name.chars().take(18).collect();
                         let name = RichText::new(name).strong();
-                        let name = if s.dimmed { name.color(Color32::GRAY) } else if s.is_selected { name.color(accent()) } else { name };
+                        let name = if s.dimmed { name.color(crate::theme::weak()) } else if s.is_selected { name.color(accent()) } else { name };
                         let (mut fill, mut beat_all, mut row_midi) = (false, false, None);
                         let r = ui.menu_button(name, |ui| {
                             super::clips::row_menu(ui, layer, &mut fill, &mut beat_all, &mut row_midi);

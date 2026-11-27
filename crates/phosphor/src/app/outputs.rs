@@ -444,7 +444,7 @@ impl PhosphorApp {
                             egui::Align2::LEFT_BOTTOM,
                             "Drag to move · double-click or F twice = fullscreen · E twice = mapping handles · Esc twice = close",
                             egui::FontId::proportional(12.0),
-                            Color32::from_white_alpha(110),
+                            crate::theme::over_picture(110),
                         );
                     }
                 }
@@ -468,7 +468,7 @@ impl PhosphorApp {
                         if crate::ui::command_if(ui, out.can_redo, crate::ui::label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text("Redo (Shift+Cmd/Ctrl+Z)").clicked() {
                             out.undo_steps.push(1);
                         }
-                        ui.label(egui::RichText::new("Mapping edit: drag corners · Cmd/Ctrl+Z undo · E hides handles · F fullscreen").size(13.0).color(Color32::from_white_alpha(160)));
+                        ui.label(egui::RichText::new("Mapping edit: drag corners · Cmd/Ctrl+Z undo · E hides handles · F fullscreen").size(13.0).color(crate::theme::over_picture(160)));
                     });
                 }
             },

@@ -322,7 +322,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
     // (A slim bar has no room for the times: they're in its tooltip.)
     if height >= 16.0 {
         p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, fmt(pos), egui::FontId::monospace(10.0), Color32::WHITE);
-        p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), Color32::GRAY);
+        p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE_WEAK);
     }
     let resp = if height < 16.0 { resp.on_hover_text(format!("{} / {}", fmt(pos), fmt(dur))) } else { resp };
     // Right-click (the bar or a mark): set the loop's ends at the playhead, or play the whole movie again.

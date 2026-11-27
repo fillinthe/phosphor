@@ -36,7 +36,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     };
     crate::ui::toolbar(ui, |ui| {
         ui.label(&user.email);
-        let plan = if a.pro() { RichText::new("Pro").color(accent()).strong() } else { RichText::new("Free").color(Color32::GRAY) };
+        let plan = if a.pro() { RichText::new("Pro").color(accent()).strong() } else { RichText::new("Free").color(crate::theme::weak()) };
         ui.label(plan);
         if crate::ui::small_command(ui, "Account page").clicked() {
             a.open_web(&ctx, "/account/");

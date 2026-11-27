@@ -78,8 +78,8 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     let mut t = 0.0;
     while t <= length {
         let x = x_of(t);
-        p.line_segment([egui::pos2(x, ruler.bottom() - 6.0), egui::pos2(x, ruler.bottom())], Stroke::new(1.0, Color32::GRAY));
-        p.text(egui::pos2(x + 2.0, ruler.top() + 2.0), egui::Align2::LEFT_TOP, clock(t), egui::FontId::proportional(9.0), Color32::GRAY);
+        p.line_segment([egui::pos2(x, ruler.bottom() - 6.0), egui::pos2(x, ruler.bottom())], Stroke::new(1.0, crate::theme::faint()));
+        p.text(egui::pos2(x + 2.0, ruler.top() + 2.0), egui::Align2::LEFT_TOP, clock(t), egui::FontId::proportional(9.0), crate::theme::weak());
         t += step;
     }
     if (resp.dragged() || resp.clicked())
@@ -137,7 +137,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             let lane = egui::Rect::from_min_max(egui::pos2(lane_x, row.top() + 2.0), egui::pos2(row.right(), row.bottom() - 2.0));
             p.rect_filled(lane, 2.0, ui.visuals().faint_bg_color);
             let name = names.get(&tr.target).cloned().unwrap_or_else(|| "(gone)".into());
-            let color = if tr.enabled { ui.visuals().text_color() } else { Color32::GRAY };
+            let color = if tr.enabled { ui.visuals().text_color() } else { crate::theme::weak() };
             p.text(egui::pos2(row.left() + 4.0, row.center().y), egui::Align2::LEFT_CENTER, &name, egui::FontId::proportional(11.0), color);
             let y_of = |v: f32| lane.bottom() - v.clamp(0.0, 1.0) * lane.height();
             // The curve, sampled across the lane.
@@ -266,7 +266,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
         let at = egui::pos2(x, lane.center().y);
         let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(12.0, 16.0)), ui.id().with(("event", k)), Sense::click_and_drag());
         let wired = e.target.is_some() || e.send.is_some();
-        let c = if r.hovered() || r.dragged() { Color32::WHITE } else if wired { accent() } else { Color32::GRAY };
+        let c = if r.hovered() || r.dragged() { Color32::WHITE } else if wired { accent() } else { crate::theme::faint() };
         p.add(egui::Shape::convex_polygon(vec![at + egui::vec2(0.0, -7.0), at + egui::vec2(5.0, 0.0), at + egui::vec2(0.0, 7.0), at + egui::vec2(-5.0, 0.0)], c, Stroke::NONE));
         p.text(at + egui::vec2(7.0, 0.0), egui::Align2::LEFT_CENTER, &e.name, egui::FontId::proportional(9.5), c);
         if r.dragged() {
@@ -337,10 +337,10 @@ fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full:
             }
         }
         Some(_) => {
-            p.text(lane.center(), egui::Align2::CENTER_CENTER, "no sound in this file", egui::FontId::proportional(10.0), Color32::GRAY);
+            p.text(lane.center(), egui::Align2::CENTER_CENTER, "no sound in this file", egui::FontId::proportional(10.0), crate::theme::ON_PICTURE_WEAK);
         }
         None => {
-            p.text(lane.center(), egui::Align2::CENTER_CENTER, "reading the sound…", egui::FontId::proportional(10.0), Color32::GRAY);
+            p.text(lane.center(), egui::Align2::CENTER_CENTER, "reading the sound…", egui::FontId::proportional(10.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     drop(guard);

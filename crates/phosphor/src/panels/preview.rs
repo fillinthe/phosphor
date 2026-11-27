@@ -9,11 +9,11 @@ pub(crate) fn thumbnail(ui: &mut egui::Ui, tex: Option<egui::TextureId>, size: e
     p.rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     match tex {
         Some(t) => {
-            let tint = if enabled { Color32::WHITE } else { Color32::from_white_alpha(80) };
+            let tint = if enabled { Color32::WHITE } else { crate::theme::over_picture(80) };
             p.image(t, rect, FULL_UV, tint);
         }
         None => {
-            p.text(rect.center(), egui::Align2::CENTER_CENTER, "no source", egui::FontId::proportional(11.0), Color32::GRAY);
+            p.text(rect.center(), egui::Align2::CENTER_CENTER, "no source", egui::FontId::proportional(11.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     let stroke = if resp.hovered() { Stroke::new(1.0, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
@@ -68,7 +68,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     match st.texture {
         Some(tex) => paint_texture(ui.painter(), tex, frame),
         None => {
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "GPU unavailable", egui::FontId::proportional(16.0), Color32::GRAY);
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "GPU unavailable", egui::FontId::proportional(16.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     let resp = ui.interact(rect, egui::Id::new("preview_area"), if st.mouse_to_shaders { Sense::click_and_drag() } else { Sense::click() });
@@ -134,7 +134,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
         info = format!("mapped · {info}");
     }
     let font = egui::FontId::monospace(11.0);
-    let galley = ui.painter().layout_no_wrap(info, font.clone(), Color32::from_white_alpha(170));
+    let galley = ui.painter().layout_no_wrap(info, font.clone(), crate::theme::over_picture(170));
     // On the picture's corner, not the panel's (a tall panel letterboxes the picture far below its top).
     let pill = egui::Rect::from_min_max(
         frame.right_top() + egui::vec2(-galley.size().x - 18.0, 6.0),

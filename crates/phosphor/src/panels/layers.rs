@@ -413,7 +413,7 @@ pub(crate) fn layer_card(
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                     solo_button(ui, &mut layer.solo);
                     let name = RichText::new(&layer.name).strong().size(12.5);
-                    let name = if muted { name.color(Color32::GRAY) } else { name };
+                    let name = if muted { name.color(crate::theme::weak()) } else { name };
                     // The name shrinks (full name on hover) so it never runs under the buttons on the right.
                     // Narrow cards drop the up/down arrows (drag the thumbnail, or right-click › Move up/down).
                     let button = ui.spacing().interact_size.y + ui.spacing().item_spacing.x;
@@ -799,7 +799,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             if kind != crate::media::live::InputKind::Camera {
                 ui.separator();
             }
-            ui.label(RichText::new(kind.title()).small().color(Color32::GRAY));
+            ui.label(RichText::new(kind.title()).small().color(crate::theme::weak()));
             if let Some((_, n)) = note {
                 hint(ui, n.as_str());
             }
@@ -828,7 +828,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             }
         }
         ui.separator();
-        ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
+        ui.label(RichText::new("Stream address").small().color(crate::theme::weak()));
         let url_id = egui::Id::new(("live_url", layer));
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
         ui.horizontal(|ui| {
@@ -949,7 +949,7 @@ pub(crate) fn show_button(ui: &mut egui::Ui, layer: &mut LayerState) {
 
 /// Solo: only soloed layers reach the mix (an orange S).
 pub(crate) fn solo_button(ui: &mut egui::Ui, solo: &mut bool) -> egui::Response {
-    let color = if *solo { WARN } else { Color32::GRAY };
+    let color = if *solo { WARN } else { crate::theme::weak() };
     crate::ui::icon_toggle(ui, solo, RichText::new("S").small().strong().color(color)).on_hover_text("Solo: only soloed layers reach the mix")
 }
 

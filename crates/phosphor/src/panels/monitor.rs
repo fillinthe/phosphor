@@ -142,12 +142,12 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
     match tex {
         Some(t) => paint_texture(ui.painter(), t, frame),
         None => {
-            ui.painter().text(frame.center(), egui::Align2::CENTER_CENTER, "no picture (layer off?)", egui::FontId::proportional(13.0), Color32::GRAY);
+            ui.painter().text(frame.center(), egui::Align2::CENTER_CENTER, "no picture (layer off?)", egui::FontId::proportional(13.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     if cfg.grid {
         let p = ui.painter();
-        let stroke = Stroke::new(1.0, Color32::from_white_alpha(60));
+        let stroke = Stroke::new(1.0, crate::theme::over_picture(60));
         for k in 1..3 {
             let x = frame.left() + frame.width() * k as f32 / 3.0;
             let y = frame.top() + frame.height() * k as f32 / 3.0;

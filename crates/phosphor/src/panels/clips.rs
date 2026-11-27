@@ -8,7 +8,7 @@ pub const CLIP_PAGE_SIZE: usize = 9;
 
 /// Cut / Fade and Now / Beat / Bar: how clips and media land on layers.
 pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
-    ui.label(RichText::new("Launch").small().color(Color32::GRAY));
+    ui.label(RichText::new("Launch").small().color(crate::theme::weak()));
     let fade_target = ControlTarget::App(phosphor_engine::AppControl::LaunchFade);
     let was = comp.launch.fade;
     segmented(ui, &mut comp.launch.fade, &[(false, "Cut".to_string()), (true, "Fade".to_string())], |ui, r, fade| {

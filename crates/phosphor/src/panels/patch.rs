@@ -40,7 +40,7 @@ impl Graph for Patch {
         self.node(id).and_then(|n| patch::block(&n.block)).map_or_else(String::new, |b| b.about.to_string())
     }
     fn colour(&self, id: u32) -> Color32 {
-        self.node(id).and_then(|n| patch::block(&n.block)).map_or(Color32::GRAY, |b| group_colour(b.group))
+        self.node(id).and_then(|n| patch::block(&n.block)).map_or(crate::theme::faint(), |b| group_colour(b.group))
     }
     fn inputs(&self, id: u32) -> Vec<(String, phosphor_engine::PortKind)> {
         use phosphor_engine::PortKind;

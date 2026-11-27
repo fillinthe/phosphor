@@ -180,7 +180,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             card_frame(ui, is_current).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(format!("{}", i + 1)).monospace().strong().color(if is_current { accent() } else { Color32::GRAY }));
+                    ui.label(RichText::new(format!("{}", i + 1)).monospace().strong().color(if is_current { accent() } else { crate::theme::weak() }));
                     if crate::ui::small_command(ui, icon::PLAY).on_hover_text("Go to this cue").clicked() {
                         fire = Some(i);
                     }

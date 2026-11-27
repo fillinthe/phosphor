@@ -167,7 +167,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     let hidden: Vec<u64> = mapping.surfaces.iter().filter(|s| s.group.is_some() && !mapping.group_mix(s.group).0).map(|s| s.id).chain(mapping.masks.iter().filter(|m| m.group.is_some() && !mapping.group_mix(m.group).0).map(|m| m.id)).filter(|id| *selected != Some(*id) && !many.contains(id)).collect();
     for s in mapping.surfaces.iter_mut().filter(|s| !hidden.contains(&s.id)) {
         let is_selected = *selected == Some(s.id) || many.contains(&s.id);
-        let base = if s.enabled { accent() } else { Color32::GRAY };
+        let base = if s.enabled { accent() } else { crate::theme::faint() };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
         let id = ui.id().with(("surface", s.id));
         now_outline(ui, frame, &s.transform, s.clone(), |s| s.outline(12), base);
@@ -388,7 +388,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     let surfaces = &mapping.surfaces;
     for m in mapping.masks.iter_mut().filter(|m| !hidden.contains(&m.id)) {
         let id = ui.id().with(("mask", m.id));
-        let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
+        let color = if m.enabled { MASK_COLOR } else { crate::theme::faint() };
         let is_selected = *selected == Some(m.id);
         // Attached masks live in their slice's square: draw and drag them where they land on the output.
         let out: Vec<[f32; 2]> = m.points.iter().map(|p| mask_to_output(surfaces, m, *p)).collect();
@@ -587,7 +587,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                 match tex.filter(|_| o.enabled) {
                     Some(t) => paint_texture(p, t, fit_rect(pic.shrink(2.0), ow as f32 / oh.max(1) as f32)),
                     None => {
-                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(12.0), Color32::GRAY);
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(12.0), crate::theme::ON_PICTURE_WEAK);
                     }
                 }
                 let border = if selected { accent() } else if r.hovered() { crate::theme::faint() } else { crate::theme::line() };

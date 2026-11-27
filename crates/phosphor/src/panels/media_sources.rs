@@ -502,7 +502,7 @@ pub(crate) fn folder_tile(
         egui::Align2::LEFT_BOTTOM,
         text,
         egui::FontId::proportional(11.0),
-        Color32::LIGHT_GRAY,
+        ui.visuals().text_color(),
     );
     resp.on_hover_text(format!("{name}: {count} files · click to open"))
 }

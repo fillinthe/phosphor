@@ -182,7 +182,7 @@ fn layout_view(ui: &mut egui::Ui, st: &mut State, view: &mut View) {
         match tex.filter(|_| *on) {
             Some(t) => paint_texture(&p, t, screen),
             None => {
-                p.text(screen.center(), egui::Align2::CENTER_CENTER, crate::i18n::tr("Off"), egui::FontId::proportional(14.0), Color32::GRAY);
+                p.text(screen.center(), egui::Align2::CENTER_CENTER, crate::i18n::tr("Off"), egui::FontId::proportional(14.0), crate::theme::ON_PICTURE_WEAK);
             }
         }
         let selected = st.mapping_output == *id;
@@ -390,7 +390,7 @@ fn tiles_view(ui: &mut egui::Ui, st: &mut State) {
         match tex.filter(|_| o.enabled) {
             Some(t) => paint_texture(p, t, pic.shrink(2.0)),
             None => {
-                p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(14.0), Color32::GRAY);
+                p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(14.0), crate::theme::ON_PICTURE_WEAK);
             }
         }
         let r = child.interact(pic, child.id().with(("stage_pick", id)), Sense::click());

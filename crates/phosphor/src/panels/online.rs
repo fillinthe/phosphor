@@ -551,7 +551,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
         Some(tex) => paint_texture(p, tex, fit_rect(thumb_rect.shrink(1.0), thumbs.aspect(&item.thumb).unwrap_or(16.0 / 9.0))),
         None => {
             let text = if thumbs.is_pending(&item.thumb) { "…" } else { kind_icon(item.kind) };
-            p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
+            p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     let stroke = if local.is_some() { Stroke::new(2.0, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
@@ -559,7 +559,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     // Kind, and a tick once it's in the media bin.
     let corner = thumb_rect.left_top() + egui::vec2(4.0, 3.0);
     let badge = if local.is_some() { format!("{} {}", icon::CHECK, kind_icon(item.kind)) } else if item.kind == Kind::Picture { String::new() } else { kind_icon(item.kind).to_string() };
-    p.text(corner, egui::Align2::LEFT_TOP, badge, egui::FontId::proportional(12.0), Color32::from_white_alpha(220));
+    p.text(corner, egui::Align2::LEFT_TOP, badge, egui::FontId::proportional(12.0), crate::theme::over_picture(220));
     if !item.credit.commercial() {
         p.text(thumb_rect.right_top() + egui::vec2(-4.0, 3.0), egui::Align2::RIGHT_TOP, "NC", egui::FontId::proportional(10.0), WARN);
     }
@@ -572,7 +572,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     if name.chars().count() > max_chars {
         name = format!("{}…", name.chars().take(max_chars - 1).collect::<String>());
     }
-    p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
+    p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), ui.visuals().text_color());
     if let Some(path) = local {
         if item.kind != Kind::Font {
             resp.dnd_set_drag_payload(SourceDrag { name: crate::media::clip_name(path), source: crate::media::spec_for_path(path) });

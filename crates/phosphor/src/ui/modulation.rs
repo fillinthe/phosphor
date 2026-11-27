@@ -173,7 +173,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     let shared: Vec<(u64, String)> = if signal_only { Vec::new() } else { ui.ctx().data(|d| d.get_temp(egui::Id::new(MODULATORS))).unwrap_or_default() };
     let linked = m.map_or(0, |m| m.link);
     if !shared.is_empty() {
-        ui.label(RichText::new("SHARED MODULATORS").small().color(Color32::GRAY));
+        ui.label(RichText::new("SHARED MODULATORS").small().color(crate::theme::weak()));
         ui.horizontal_wrapped(|ui| {
             for (id, name) in &shared {
                 if crate::ui::pick_item(ui, linked == *id, format!("{} {name}", icon::LINK)).on_hover_text("Follow this modulator (set it up in the Modulators panel)").clicked() {
@@ -183,7 +183,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         });
     }
     let mut chips = |ui: &mut egui::Ui, title: &str, filter: fn(ModSource) -> bool| {
-        ui.label(RichText::new(title).small().color(Color32::GRAY));
+        ui.label(RichText::new(title).small().color(crate::theme::weak()));
         ui.horizontal_wrapped(|ui| {
             // "Hand / MIDI knob" only makes sense on a shared modulator (its value is the knob).
             for src in ModSource::ALL.into_iter().filter(|s| filter(*s) && (signal_only || *s != ModSource::Hand)) {
@@ -240,7 +240,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     }
     if mm.link == 0 && matches!(mm.source, ModSource::Steps | ModSource::Drawn) {
         let what = if mm.source == ModSource::Drawn { "Wave (drag to draw; a smooth loop through the points)" } else { "Steps (drag to set)" };
-        ui.label(RichText::new(what).small().color(Color32::GRAY));
+        ui.label(RichText::new(what).small().color(crate::theme::weak()));
         let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
         let playing = ((cycles.rem_euclid(1.0)) * 8.0) as usize;
         step_bars(ui, &mut mm.steps, Some(playing), false, 56.0);

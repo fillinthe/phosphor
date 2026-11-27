@@ -22,7 +22,7 @@ pub(crate) fn laser_rows(ui: &mut egui::Ui, grid: &super::clip_grid::Grid, comp:
             painter.rect_filled(head, 4.0, ui.visuals().faint_bg_color);
             painter.text(head.left_top() + egui::vec2(8.0, 8.0), egui::Align2::LEFT_TOP, &p.name, egui::FontId::proportional(13.0), ui.visuals().text_color());
             let now = looks.iter().find(|(id, _)| *id == p.look).or(looks.first()).map_or("", |l| l.1.as_str());
-            painter.text(head.left_top() + egui::vec2(8.0, 28.0), egui::Align2::LEFT_TOP, now, egui::FontId::proportional(11.0), Color32::GRAY);
+            painter.text(head.left_top() + egui::vec2(8.0, 28.0), egui::Align2::LEFT_TOP, now, egui::FontId::proportional(11.0), crate::theme::weak());
             for c in 0..grid.cols {
                 let look = p.clips.get(c).copied().unwrap_or(0);
                 let (rect, resp) = ui.allocate_exact_size(grid.cell, Sense::click());
@@ -39,7 +39,7 @@ pub(crate) fn laser_rows(ui: &mut egui::Ui, grid: &super::clip_grid::Grid, comp:
                         painter.text(rect.center_bottom() - egui::vec2(0.0, 4.0), egui::Align2::CENTER_BOTTOM, name, egui::FontId::proportional(11.0), ui.visuals().text_color());
                     }
                     None if look != 0 => {
-                        painter.text(rect.center(), egui::Align2::CENTER_CENTER, "(removed look)", egui::FontId::proportional(10.0), Color32::GRAY);
+                        painter.text(rect.center(), egui::Align2::CENTER_CENTER, "(removed look)", egui::FontId::proportional(10.0), crate::theme::weak());
                     }
                     None => {}
                 }

@@ -469,12 +469,12 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if !o.stage_photo.is_empty()
             && let Some(t) = thumbs.get_sized(&o.stage_photo, 2048)
         {
-            p.image(t, frame, FULL_UV, Color32::from_white_alpha((o.stage_photo_opacity.clamp(0.0, 1.0) * 255.0) as u8));
+            p.image(t, frame, FULL_UV, crate::theme::over_picture((o.stage_photo_opacity.clamp(0.0, 1.0) * 255.0) as u8));
         }
         if vs.snap {
             for k in 1..16 {
                 let f = k as f32 / 16.0;
-                let stroke = Stroke::new(1.0, Color32::from_white_alpha(if k % 4 == 0 { 40 } else { 18 }));
+                let stroke = Stroke::new(1.0, crate::theme::over_picture(if k % 4 == 0 { 40 } else { 18 }));
                 p.vline(frame.left() + f * frame.width(), frame.y_range(), stroke);
                 p.hline(frame.x_range(), frame.top() + f * frame.height(), stroke);
             }

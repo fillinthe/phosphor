@@ -381,7 +381,7 @@ pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
 pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
-            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
+            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(crate::theme::weak()));
             hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
             if crate::ui::small_command(ui, "Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));

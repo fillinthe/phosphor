@@ -48,7 +48,7 @@ pub(crate) fn light(ui: &mut egui::Ui, name: &str, flow: Flow, tip: &str) -> egu
 
 /// A group's heading ("IN", "OUT").
 pub(crate) fn heading(ui: &mut egui::Ui, name: &str, tip: &str) {
-    ui.label(RichText::new(name).small().strong().color(Color32::GRAY)).on_hover_text(tip);
+    ui.label(RichText::new(name).small().strong().color(crate::theme::weak())).on_hover_text(tip);
 }
 
 #[cfg(test)]

@@ -155,7 +155,7 @@ fn following_poll(st: &mut State) {
 /// Search, videos / pictures, View, Import, From a link.
 fn tools(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(crate::theme::weak()));
         crate::ui::text_field(ui, &mut st.media_view.search, "Search here", None);
     });
     ui.horizontal_wrapped(|ui| {
@@ -264,7 +264,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
                 let last = steps.len() - 1;
                 for (k, (name, path)) in steps.into_iter().enumerate() {
                     if k > 0 {
-                        ui.label(RichText::new(icon::CARET_RIGHT).color(Color32::GRAY));
+                        ui.label(RichText::new(icon::CARET_RIGHT).color(crate::theme::weak()));
                     }
                     if k == last {
                         ui.label(RichText::new(name).strong());

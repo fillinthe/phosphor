@@ -105,7 +105,7 @@ fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::Shade
         match tex {
             Some(t) => panels::paint_texture(p, t, rect),
             None => {
-                p.text(rect.center(), egui::Align2::CENTER_CENTER, "…", egui::FontId::proportional(18.0), Color32::GRAY);
+                p.text(rect.center(), egui::Align2::CENTER_CENTER, "…", egui::FontId::proportional(18.0), crate::theme::ON_PICTURE_WEAK);
             }
         }
         p.rect_stroke(rect, 4.0, Stroke::new(1.0, crate::theme::line()), StrokeKind::Inside);
@@ -290,7 +290,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
     // Search on its own row (nothing can cover it), then the rest wraps in narrow columns.
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(crate::theme::weak()));
         let clear = !st.explorer.search.is_empty();
         let w = ui.available_width() - if clear { 28.0 } else { 0.0 };
         ui.add(egui::TextEdit::singleline(&mut st.explorer.search).hint_text("Search effects, looks, categories…").desired_width(w));
@@ -376,7 +376,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 .response
                 .on_hover_text("Which picture the effect tiles are shown on: the layer you have selected, the whole mix, or one layer that stays put while you click around");
         }
-        ui.label(RichText::new("Previews").small().color(Color32::GRAY));
+        ui.label(RichText::new("Previews").small().color(crate::theme::weak()));
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Off, "Off");
@@ -522,12 +522,12 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     None => {
                         p.rect_filled(pic, 4.0, crate::theme::PICTURE_BG);
                         let glyph = if st.explorer.preview_mode == PreviewMode::Off { icon::MAGIC_WAND } else { "…" };
-                        p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), Color32::GRAY);
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), crate::theme::ON_PICTURE_WEAK);
                     }
                 }
                 let (cat, about) = shaders::info(desc.id);
                 p.text(egui::pos2(rect.left() + 6.0, pic.bottom() + 4.0), egui::Align2::LEFT_TOP, desc.name, egui::FontId::proportional(12.5), Color32::WHITE);
-                p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, cat, egui::FontId::proportional(10.0), Color32::GRAY);
+                p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, cat, egui::FontId::proportional(10.0), crate::theme::ON_PICTURE_WEAK);
                 let fav = st.explorer.favorites.iter().any(|f| f == desc.id);
                 if fav {
                     p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, crate::theme::filled_icons(14.0), crate::theme::FAVOURITE);
@@ -1520,7 +1520,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
     }
     window.show(ctx, |ui| {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+            ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(crate::theme::weak()));
             let edit = ui.add(egui::TextEdit::singleline(&mut b.search).hint_text("Type to search…  Enter adds the first match").desired_width(f32::INFINITY));
             if b.focus {
                 edit.request_focus();
