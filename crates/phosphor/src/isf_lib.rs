@@ -77,12 +77,32 @@ pub(crate) fn shader_files(dir: std::path::PathBuf) -> Vec<std::path::PathBuf> {
     files
 }
 
+/// The shader files watched for changes: (path, stem, slug, last changed, content hash), and the paths for a quick
+/// "already watched?" (thousands of files are looked over every two seconds).
+#[derive(Default)]
+struct Watched {
+    list: Vec<(std::path::PathBuf, String, String, Option<std::time::SystemTime>, u64)>,
+    paths: std::collections::HashSet<std::path::PathBuf>,
+}
+
+impl Watched {
+    fn add(&mut self, path: std::path::PathBuf, stem: String, slug: String, when: Option<std::time::SystemTime>, hash: u64) {
+        self.paths.insert(path.clone());
+        self.list.push((path, stem, slug, when, hash));
+    }
+}
+
+fn content_hash(text: &str) -> u64 {
+    phosphor_engine::custom::stable_hash(&[text.as_bytes()])
+}
+
 fn modified(p: &std::path::Path) -> Option<std::time::SystemTime> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }
 
-fn leak(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
+/// A name kept for the rest of the run: the same name read again (a rescan, a changed file) is the same copy.
+fn intern(s: String) -> &'static str {
+    shaders::intern(&s)
 }
 
 /// The ISF shaders shipped with Phosphor: Phosphor.app/Contents/Resources/isf on the Mac, `isf` next to the exe
@@ -164,7 +184,7 @@ fn lut_split_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
 }
 
 fn lut_mixer(luts: &[(String, crate::lut::Lut)], split: bool) -> Loaded {
-    let names: Vec<&'static str> = luts.iter().map(|(n, _)| leak(n.clone())).collect();
+    let names: Vec<&'static str> = luts.iter().map(|(n, _)| intern(n.clone())).collect();
     let names: &'static [&'static str] = Box::leak(names.into_boxed_slice());
     let last = (luts.len() - 1) as f32;
     let tables: Vec<crate::lut::Lut> = luts.iter().map(|(_, l)| l.resample(crate::lut::MIX_SIZE)).collect();
@@ -239,7 +259,7 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
     fn put(slots: &mut [Option<Param>], i: usize, name: String, min: f32, max: f32, default: f32, labels: &'static [&'static str]) {
         if let Some(s) = slots.get_mut(i) {
             let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
-            *s = Some(Param { name: leak(name), min: lo, max: hi, default: default.clamp(lo, hi), labels });
+            *s = Some(Param { name: intern(name), min: lo, max: hi, default: default.clamp(lo, hi), labels });
         }
     }
     for input in &shader.inputs {
@@ -255,7 +275,7 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
                 let hi = values.iter().copied().max().unwrap_or(1).max(lo + 1);
                 // A menu: one name per whole number from the lowest value (gaps keep their number).
                 let names: Vec<&'static str> = (lo..=hi)
-                    .map(|v| values.iter().position(|x| *x == v).and_then(|k| labels.get(k)).map_or_else(|| leak(v.to_string()), |l| leak(l.clone())))
+                    .map(|v| values.iter().position(|x| *x == v).and_then(|k| labels.get(k)).map_or_else(|| intern(v.to_string()), |l| intern(l.clone())))
                     .collect();
                 let names: &'static [&'static str] = if labels.is_empty() { &[] } else { Box::leak(names.into_boxed_slice()) };
                 put(&mut slots, o, name, lo as f32, hi as f32, *default as f32, names)
@@ -278,7 +298,7 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
             K::Image | K::Audio { .. } => {}
         }
     }
-    slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param::new(leak(format!("p{i}")), 0.0, 1.0, 0.0))).collect()
+    slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param::new(intern(format!("p{i}")), 0.0, 1.0, 0.0))).collect()
 }
 
 /// The engine's pass plan for a multi-pass ISF shader: which buffer each pass writes (by index)
@@ -369,33 +389,24 @@ fn reload(engine: &mut Engine, l: Loaded) {
 }
 
 fn install(engine: &mut Engine, l: Loaded, replace: bool) {
-    let desc: &'static ShaderDesc = Box::leak(Box::new(ShaderDesc {
-        id: leak(l.id),
-        name: leak(l.name),
-        entry: leak(l.entry),
-        params: Box::leak(l.params.into_boxed_slice()),
-    }));
-    shaders::set_custom_info(desc.id, l.category, leak(l.about));
-    if let Some(plan) = l.plan {
-        shaders::set_pass_plan(desc.entry, plan);
-    }
-    for (slot, w, h, rgba) in l.images {
-        engine.set_plan_image(desc.entry, slot, w, h, &rgba);
-    }
-    shaders::set_audio_slots(desc.entry, l.audio_slots.into_iter().map(|(s, fft)| (s, if fft { shaders::AudioTexture::Fft } else { shaders::AudioTexture::Wave })).collect());
-    if let Some(v) = l.vertex_entry {
-        shaders::set_vertex_entry(desc.entry, leak(v));
-    }
-    if let Some(n) = l.instances {
-        shaders::set_instances(desc.entry, match n {
+    // (The same description as last time when nothing in it changed: none is made again.)
+    let desc: &'static ShaderDesc = shaders::intern_desc(&l.id, &l.name, intern(l.entry), &l.params);
+    shaders::set_custom_info(desc.id, l.category, intern(l.about));
+    // Its plan, pictures, audio, vertex stage: in place with its build (for a changed file, once the new build is in).
+    let setup = phosphor_engine::ShaderSetup {
+        plan: l.plan,
+        audio_slots: l.audio_slots.into_iter().map(|(s, fft)| (s, if fft { shaders::AudioTexture::Fft } else { shaders::AudioTexture::Wave })).collect(),
+        vertex_entry: l.vertex_entry.map(intern),
+        instances: l.instances.map(|n| match n {
             phosphor_isf::Instances::Fixed(n) => shaders::Instances::Fixed(n),
             phosphor_isf::Instances::Param(i) => shaders::Instances::Param(i),
-        });
-    }
+        }),
+        images: l.images,
+    };
     if replace {
-        engine.replace_lazy(desc, l.wgsl);
+        engine.replace_lazy(desc, l.wgsl, setup);
     } else {
-        engine.register_lazy(desc, l.wgsl);
+        engine.register_lazy(desc, l.wgsl, setup);
     }
 }
 
@@ -410,12 +421,12 @@ impl IsfLibrary {
                 let mut seen_loose = std::collections::HashSet::new();
                 // Every LUT found, for the LUT mixer (at most 32: the picture stays small).
                 let mut luts: Vec<(String, crate::lut::Lut)> = Vec::new();
-                // Every file loaded, with when it was last changed (watched after the first scan).
-                let mut watched: Vec<(std::path::PathBuf, String, String, Option<std::time::SystemTime>)> = Vec::new();
+                // Every file loaded, with when it was last changed and a hash of what's in it (watched after the first scan).
+                let mut watched = Watched::default();
                 let dirs = folders();
                 // One file found (at the first scan, or dropped in a folder later): converted and sent unless a
                 // shader of that name is already loaded. Err = the app has gone (stop the thread).
-                let mut add = |path: std::path::PathBuf, luts: &mut Vec<(String, crate::lut::Lut)>, watched: &mut Vec<_>| -> Result<(), ()> {
+                let mut add = |path: std::path::PathBuf, luts: &mut Vec<(String, crate::lut::Lut)>, watched: &mut Watched| -> Result<(), ()> {
                     let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { return Ok(()) };
                     let slug = phosphor_engine::custom::slug(&stem);
                     // The same shader under a differently spelled name ("Bow Tie Horizontal" / "BowTieHorizontal").
@@ -426,7 +437,7 @@ impl IsfLibrary {
                     let Ok(fs) = std::fs::read_to_string(&path) else { return Ok(()) };
                     seen.insert(slug.clone());
                     seen_loose.insert(loose);
-                    watched.push((path.clone(), stem.clone(), slug.clone(), modified(&path)));
+                    watched.add(path.clone(), stem.clone(), slug.clone(), modified(&path), content_hash(&fs));
                     // A color-grading LUT (.cube): an effect of its own.
                     let found = if path.extension().is_some_and(|e| e == "cube") {
                         match crate::lut::parse_cube(&fs) {
@@ -470,18 +481,24 @@ impl IsfLibrary {
                     std::thread::sleep(std::time::Duration::from_secs(2));
                     for dir in &yours {
                         for path in shader_files(dir.clone()) {
-                            if !watched.iter().any(|(p, ..)| *p == path) && add(path, &mut luts_later, &mut watched).is_err() {
+                            if !watched.paths.contains(&path) && add(path, &mut luts_later, &mut watched).is_err() {
                                 return;
                             }
                         }
                     }
-                    for (path, stem, slug, when) in &mut watched {
+                    for (path, stem, slug, when, hash) in &mut watched.list {
                         let now = modified(path);
                         if now == *when {
                             continue;
                         }
                         *when = now;
                         let Ok(fs) = std::fs::read_to_string(&*path) else { continue };
+                        // Touched but the same (a cloud sync, a save with no change): nothing to build again.
+                        let new_hash = content_hash(&fs);
+                        if new_hash == *hash {
+                            continue;
+                        }
+                        *hash = new_hash;
                         let result = if path.extension().is_some_and(|e| e == "cube") {
                             Some(crate::lut::parse_cube(&fs).map(|lut| lut_effect(slug, stem, &lut)).map_err(|e| format!("{stem}.cube: {e}")))
                         } else {
@@ -520,7 +537,12 @@ impl IsfLibrary {
                     self.reloaded.push(name);
                 }
                 Ok(Found::Changed(name, Err(e))) => log::warn!("ISF: {name} changed but doesn't convert now: {e}"),
-                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    for note in engine.take_build_notes() {
+                        log::warn!("ISF: {note}");
+                    }
+                    return;
+                }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.rx = None;
                     return;

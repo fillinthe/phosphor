@@ -240,6 +240,8 @@ struct Pass {
     bufs: Vec<wgpu::TextureView>,
 }
 
+mod builds;
+pub use builds::{CustomCompiled, ShaderSetup};
 mod cutout;
 mod encode;
 mod external;
@@ -273,9 +275,6 @@ struct OutputExtra {
     ring: Vec<Option<Target>>,
     head: usize,
 }
-
-/// Shaders built at the same time on worker threads (Apple's shader compiler is heavy; more would stutter the show).
-const MAX_COMPILING: usize = 3;
 
 /// Why a preview is asked to draw again this frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -364,19 +363,11 @@ pub struct Engine {
     /// Which previews hold a real picture of what's asked for now (not a shader still building, not another tile's
     /// picture after the list moved).
     preview_ready: Vec<bool>,
-    custom_generation: u64,
-    /// Imported shaders waiting to be compiled on first use: entry → WGSL (without prelude).
-    pending_modules: HashMap<&'static str, String>,
     /// Shaders that failed to build, by entry, with the error.
     pub failed_modules: HashMap<&'static str, String>,
-    /// Shaders being compiled on a worker thread right now (drawn blank until they arrive).
-    compiling: HashSet<&'static str>,
-    compiled_tx: std::sync::mpsc::Sender<Compiled>,
-    compiled_rx: std::sync::mpsc::Receiver<Compiled>,
+    /// Shaders being built on worker threads (`builds`).
+    builds: builds::Builds,
 }
-
-/// A background shader build: entry → module + pipeline, or the error.
-type Compiled = (&'static str, Result<(wgpu::ShaderModule, wgpu::RenderPipeline), String>);
 
 impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
@@ -385,7 +376,6 @@ impl Engine {
         // Built-in audio visualizers read the live audio pictures at texture slot 1.
         crate::shaders::set_audio_slots("gen_spectrum", vec![(1, crate::shaders::AudioTexture::Fft)]);
         crate::shaders::set_audio_slots("gen_waveform", vec![(1, crate::shaders::AudioTexture::Wave)]);
-        let compiled = std::sync::mpsc::channel();
         let gpu_timer = timing::GpuTimer::new(&gpu.device, &gpu.queue);
         Self {
             gpu,
@@ -436,12 +426,8 @@ impl Engine {
             preview_src_stage: None,
             preview_targets: Vec::new(),
             preview_ready: Vec::new(),
-            custom_generation: 0,
-            pending_modules: HashMap::new(),
             failed_modules: HashMap::new(),
-            compiling: HashSet::new(),
-            compiled_tx: compiled.0,
-            compiled_rx: compiled.1,
+            builds: Default::default(),
         }
     }
 
@@ -453,123 +439,6 @@ impl Engine {
     /// Diagnostics for the bench: is GPU timing on and what has it read.
     pub fn gpu_timing_status(&self) -> String {
         self.gpu_timer.as_ref().map_or_else(|| "off (no timestamp queries on this device)".into(), |t| t.status())
-    }
-
-    /// Registers an already-converted shader (e.g. ISF) that is compiled the first time it is
-    /// drawn. `wgsl` must define `@fragment fn <entry>(in: VOut)` on top of the common prelude.
-    pub fn register_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
-        // Already built (a rescan of the library): keep it, so what's on screen doesn't blink while it rebuilds.
-        if !self.gpu.custom_modules.contains_key(desc.entry) && !self.compiling.contains(desc.entry) {
-            self.pending_modules.insert(desc.entry, wgsl);
-        }
-        crate::shaders::register_custom(desc);
-    }
-
-    /// An imported shader whose file changed: built again from `wgsl` (in the background, like a first use).
-    pub fn replace_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
-        self.gpu.forget_custom(desc.entry);
-        self.failed_modules.remove(desc.entry);
-        self.pending_modules.insert(desc.entry, wgsl);
-        crate::shaders::register_custom(desc);
-    }
-
-    /// Is an imported shader still waiting to be built (it draws blank until then)? Failures are in `failed_modules`.
-    pub fn shader_pending(&self, entry: &str) -> bool {
-        self.pending_modules.contains_key(entry) || self.compiling.contains(entry)
-    }
-
-    /// True if `entry` is ready to draw. Compiles pending shaders within a small per-frame budget
-    /// so browsing a big library never stalls the show.
-    /// Is this shader ready to draw? An imported shader used for the first time is validated and built on a
-    /// worker thread (naga + the Metal compiler can take a good fraction of a second), so the show never
-    /// hitches: the layer draws blank until it arrives.
-    fn ensure_module(&mut self, entry: &'static str) -> bool {
-        if self.failed_modules.contains_key(entry) || self.compiling.contains(entry) {
-            return false;
-        }
-        if !self.pending_modules.contains_key(entry) {
-            return true;
-        }
-        // A few at a time (opening a big effects list asks for dozens at once): the rest wait their turn.
-        if self.compiling.len() >= MAX_COMPILING {
-            return false;
-        }
-        let Some(src) = self.pending_modules.remove(entry) else { return true };
-        self.compiling.insert(entry);
-        let (device, layout) = self.gpu.compile_parts();
-        let tx = self.compiled_tx.clone();
-        let spawned = std::thread::Builder::new().name(format!("shader: {entry}")).spawn(move || {
-            let full = format!("{}\n{src}", crate::shaders::common_source());
-            let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
-            let result = crate::custom::validate(&full, prelude_lines).map_err(|e| e.to_string()).map(|()| {
-                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
-                let pipeline = crate::gpu::build_pipeline(&device, &layout, &module, entry, crate::gpu::FORMAT);
-                (module, pipeline)
-            });
-            let _ = tx.send((entry, result));
-        });
-        if spawned.is_err() {
-            self.compiling.remove(entry);
-            self.failed_modules.insert(entry, "couldn't start the shader compiler thread".into());
-        }
-        false
-    }
-
-    /// Installs shaders the worker threads finished since the last frame.
-    fn collect_compiled(&mut self) {
-        while let Ok((entry, result)) = self.compiled_rx.try_recv() {
-            self.compiling.remove(entry);
-            match result {
-                Ok((module, pipeline)) => self.gpu.install_custom(entry, module, pipeline),
-                Err(e) => {
-                    self.failed_modules.insert(entry, e);
-                }
-            }
-        }
-    }
-
-    /// Compiles a user shader (see `custom`). On success it is registered under `id` and can be
-    /// used like any built-in effect or generator.
-    pub fn compile_custom(&mut self, id: &str, source: &str) -> Result<&'static crate::shaders::ShaderDesc, crate::custom::CompileError> {
-        let header = crate::custom::parse_header(source)?;
-        self.custom_generation += 1;
-        let slug: String = id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-        let entry: &'static str = Box::leak(format!("custom_{slug}_{}", self.custom_generation).into_boxed_str());
-        let (full, prelude_lines) = crate::custom::module_source(source, entry)?;
-        crate::custom::validate(&full, prelude_lines)?;
-        let module = self.gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(entry),
-            source: wgpu::ShaderSource::Wgsl(full.into()),
-        });
-        self.gpu.custom_modules.insert(entry, module);
-        self.gpu.pipeline(entry);
-        let desc: &'static crate::shaders::ShaderDesc = Box::leak(Box::new(crate::custom::make_desc(id, &header, entry)));
-        if let Some(plan) = crate::custom::plan_for(&header) {
-            crate::shaders::set_pass_plan(entry, plan);
-        }
-        // The previous compile of this shader: nothing draws it once the new one is registered, so its module,
-        // pipelines and pass plan go (every compile used to leave them behind).
-        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| *e != entry && e.starts_with("custom_"));
-        crate::shaders::register_custom(desc);
-        if let Some(old) = old {
-            self.forget_custom_entry(old);
-        }
-        Ok(desc)
-    }
-
-    /// A user shader deleted (or renamed): unlisted, and its compiled module and pipelines dropped.
-    pub fn remove_custom(&mut self, id: &str) {
-        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| e.starts_with("custom_"));
-        crate::shaders::unregister_custom(id);
-        if let Some(old) = old {
-            self.forget_custom_entry(old);
-        }
-    }
-
-    /// Drops everything kept for a user shader's entry that nothing draws any more (an older compile).
-    fn forget_custom_entry(&mut self, entry: &'static str) {
-        self.gpu.forget_custom(entry);
-        crate::shaders::forget_entry(entry);
     }
 
     /// Asks for previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
@@ -752,6 +621,7 @@ impl Engine {
         // just finer). On graphics cards that can't draw into those it stays 8-bit.
         self.mix_format = if comp.deep_color && crate::gpu::deep_colour() { crate::gpu::DEEP_FORMAT } else { crate::gpu::FORMAT };
         let mix_format = self.mix_format;
+        self.prewarm_for(comp);
         for (i, slot) in self.accum.iter_mut().enumerate() {
             if i < 2 || !comp.groups.is_empty() {
                 Target::ensure_format(slot, &device, "accum", w, h, mix_format);

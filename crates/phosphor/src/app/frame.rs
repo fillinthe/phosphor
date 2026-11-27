@@ -37,6 +37,7 @@ impl PhosphorApp {
             self.state.isf.poll(engine);
         }
         crate::explorer::load_user_shaders(&mut self.state);
+        crate::explorer::poll_compiles(&mut self.state);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(run) = &mut self.bench
             && !run.rebuilt
