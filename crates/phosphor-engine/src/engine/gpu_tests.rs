@@ -1407,6 +1407,34 @@ fn a_big_picture_runs_its_effects_at_canvas_size() {
     assert_eq!(engine.chains.sizes(), vec![(32, 16)], "the chain ran at the canvas's size");
 }
 
+/// A chain drawn at the canvas's size keeps the clip's look: a blur of 8 is 8 of the clip's pixels either way (drawn
+/// smaller, effects first measured in the smaller picture's pixels: a 4K clip's blur came out twice as soft).
+#[test]
+fn a_shrunk_chain_keeps_the_clips_look() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 32, next_id: 100, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Image { name: "edge".into(), path: Some("edge.png".into()) }, ..Default::default() };
+    layer.effects.push(comp.new_effect("blur").unwrap());
+    comp.layers.push(layer);
+    // 256 x 64 (four times the canvas): black on the left half, white on the right.
+    let (w, h) = (256u32, 128u32);
+    let rgba: Vec<u8> = (0..w * h).flat_map(|i| if i % w < w / 2 { [0u8, 0, 0, 255] } else { [255, 255, 255, 255] }).collect();
+    engine.upload_rgba(1, w, h, &rgba);
+    let soft = |engine: &mut Engine, comp: &Composition| -> usize {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (ow, oh, px) = engine.read_output().expect("output");
+        let row = (oh / 2 * ow) as usize;
+        (0..ow as usize).filter(|x| (20..235).contains(&px[(row + x) * 4])).count()
+    };
+    let shrunk = soft(&mut engine, &comp);
+    assert_eq!(engine.chains.sizes(), vec![(64, 32)], "the chain ran at the canvas's size");
+    // Nudged a hair, the layer runs its chain at the clip's own size (the old way).
+    comp.layers[0].transform.x = 1e-6;
+    let full = soft(&mut engine, &comp);
+    assert!(full > 0, "the blur softens the edge");
+    assert!(shrunk.abs_diff(full) <= 1, "same softness drawn small ({shrunk} px) as at full size ({full} px)");
+}
+
 /// An unseen layer's thumbnail is redrawn about ten times a second, nothing drawn for it in between; after two
 /// seconds unseen its full-size picture is freed.
 #[test]

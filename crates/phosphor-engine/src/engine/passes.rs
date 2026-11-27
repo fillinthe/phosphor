@@ -399,6 +399,7 @@ impl Engine {
             return frame;
         }
         let (mut w, mut h) = frame.size();
+        let native = (w, h);
         let shrink = size.filter(|s| s.0 < w && s.1 < h);
         if let Some(s) = shrink {
             (w, h) = s;
@@ -411,7 +412,9 @@ impl Engine {
         // Borrowed from the pool until the caller has used the result (`ChainPool::release`).
         let mut views = self.chains.lease(&self.gpu.device, res_id, (w, h), format, self.frame_index);
         let mut base = Uniforms::with_params(&[]);
-        base.resolution = [w as f32, h as f32];
+        // Effects measure their sizes in the picture's own pixels (a blur of 8 = 8 of the clip's pixels), so a chain
+        // drawn smaller still tells them the clip's size: the same look as at full size, on fewer pixels.
+        base.resolution = [native.0 as f32, native.1 as f32];
         base.time = time;
 
         // Ping-pong across three views, never writing the one being read or the one holding
