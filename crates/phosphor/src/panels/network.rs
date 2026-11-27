@@ -30,7 +30,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         } else if crate::ui::command(ui, label(icon::BROADCAST, "Start session")).clicked() {
             match net.start() {
                 Ok(()) => *notice = None,
-                Err(e) => *notice = Some(e),
+                Err(e) => *notice = Some(crate::ui::notice::problem(e)),
             }
         }
     });

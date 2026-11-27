@@ -86,7 +86,7 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
             let id = ui.make_persistent_id(("fx", fx.id));
             let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
             let header = state.show_header(ui, |ui| {
-                let handle = ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(Color32::GRAY)).sense(Sense::drag()));
+                let handle = ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(crate::theme::weak())).sense(Sense::drag()));
                 handle.dnd_set_drag_payload(FxDrag(fx.id));
                 handle.on_hover_text("Drag to reorder");
                 let locked = is_locked(ui, &ControlTarget::EffectEnabled(fx.id));

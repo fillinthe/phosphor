@@ -50,9 +50,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         *notice = Some(format!("Only {added} of {asked} fit: a project holds {} modulators.", phosphor_engine::control::MAX_SHARED));
                     }
                 }
-                Err(e) => *notice = Some(format!("Couldn't load those modulators: {e}")),
+                Err(e) => *notice = Some(crate::ui::notice::failure(format!("Couldn't load those modulators: {e}"))),
             },
-            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
+            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(crate::ui::notice::failure(e)),
             None => {}
         }
         help(ui, "One source drives many controls: drag its link handle onto any slider (or right-click a slider, Modulate, then pick it). Chain one into the next.");

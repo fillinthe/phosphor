@@ -99,6 +99,50 @@ mod tests {
         assert!(bad.is_empty(), "docs/DESIGN.md, section 7:\n{}", bad.join("\n"));
     }
 
+    /// docs/DESIGN.md, section 3: words are ink from the Visuals or theme (`weak`, `faint`, `ON_PICTURE`,
+    /// `ON_PICTURE_WEAK`, `over_picture`), never egui's named grays: a fixed gray that reads on charcoal vanishes on
+    /// the light side, and a see-through white is a color picked by hand. None left anywhere outside theme.rs (white
+    /// and black stay: ink on a filled color, the picture's own black).
+    #[test]
+    fn no_named_grays() {
+        let grays = ["Color32::GRAY", "Color32::LIGHT_GRAY", "Color32::DARK_GRAY", "from_white_alpha("];
+        let mut bad = Vec::new();
+        for (rel, text) in sources() {
+            if rel == "theme.rs" {
+                continue;
+            }
+            let code = code_lines(&text);
+            for g in grays {
+                let n = code.matches(g).count();
+                if n > 0 {
+                    bad.push(format!("{rel}: {n} x {g}"));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "named grays: use ui.visuals() ink or theme::{{weak, faint, ON_PICTURE, ON_PICTURE_WEAK, over_picture}}:\n{}", bad.join("\n"));
+    }
+
+    /// Shortcuts in words come from the menu table (`menu::shortcut_of`, `with_command`, `command_key`), so Windows
+    /// and Linux say Ctrl where the Mac says ⌘: no string in the app spells the command key out by itself.
+    #[test]
+    fn shortcuts_are_spelled_by_the_menu() {
+        let mut bad = Vec::new();
+        for (rel, text) in sources() {
+            if rel == "menu.rs" || rel == "ui/budget.rs" {
+                continue;
+            }
+            let tests = text.find(concat!("#[cfg", "(test)]")).map_or(usize::MAX, |at| text[..at].lines().count());
+            for (n, line) in text.lines().enumerate().take(tests).filter(|(_, l)| !l.trim_start().starts_with("//")) {
+                // Only what's between quotes.
+                let quoted: String = line.split('"').skip(1).step_by(2).collect::<Vec<_>>().join(" ");
+                if ["⌘", "Cmd+", "Cmd-", "Cmd/", "Cmd (", "/ Cmd "].iter().any(|k| quoted.contains(k)) {
+                    bad.push(format!("{rel}:{}", n + 1));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "spell shortcuts with menu::shortcut_of / with_command / command_key:\n{}", bad.join("\n"));
+    }
+
     /// docs/DESIGN.md, section 3: raw colors outside theme.rs and ui/ only go down (color_budget.txt).
     #[test]
     fn raw_colours_only_go_down() {

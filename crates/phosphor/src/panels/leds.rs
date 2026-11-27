@@ -83,7 +83,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
     for f in &mut st.comp.dmx.fixtures {
         let is_sel = selected == Some(f.id);
-        let color = if !f.enabled { Color32::GRAY } else if is_sel { accent() } else { accent().gamma_multiply(0.6) };
+        let color = if !f.enabled { crate::theme::faint() } else if is_sel { accent() } else { accent().gamma_multiply(0.6) };
         let corners = match f.shape {
             // Found by camera: no ends or corners, just its lights (the middle moves them all).
             FixtureShape::Scanned if !f.positions.is_empty() => 0,

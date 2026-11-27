@@ -155,7 +155,7 @@ fn following_poll(st: &mut State) {
 /// Search, videos / pictures, View, Import, From a link.
 fn tools(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(crate::theme::weak()));
         crate::ui::text_field(ui, &mut st.media_view.search, "Search here", None);
     });
     ui.horizontal_wrapped(|ui| {
@@ -264,7 +264,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
                 let last = steps.len() - 1;
                 for (k, (name, path)) in steps.into_iter().enumerate() {
                     if k > 0 {
-                        ui.label(RichText::new(icon::CARET_RIGHT).color(Color32::GRAY));
+                        ui.label(RichText::new(icon::CARET_RIGHT).color(crate::theme::weak()));
                     }
                     if k == last {
                         ui.label(RichText::new(name).strong());
@@ -421,11 +421,13 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         }
     }
     let uses = st.comp.media_uses();
+    let picked = st.media_view.picked.clone();
     let targets = MediaTargets {
         layers: &layers,
         click: click_target.as_deref(),
         playing: &playing,
         uses: &uses,
+        picked: picked.as_deref(),
     };
     let collections = st.comp.media_collections.clone();
     let mut open_dir = None;

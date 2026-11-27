@@ -25,6 +25,8 @@ struct Ask {
     /// Already answered yes (asking is switched off): `confirmed` says so on its next call.
     answered: bool,
     dont_ask: bool,
+    /// Asked whatever "Ask before removing" says, with no "Don't ask again" (show-ending actions: `ask_confirm_always`).
+    always: bool,
 }
 
 const SLOT: &str = "phosphor_confirm_ask";
@@ -34,8 +36,22 @@ const SLOT: &str = "phosphor_confirm_ask";
 /// `confirmed` (same `id`), called every frame from where the thing is drawn.
 pub(crate) fn ask_confirm(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug, title: &str, body: &str, yes: &str) {
     let seen = ctx.input(|i| i.time);
-    let ask = Ask { key: egui::Id::new(("confirm", id)), title: title.into(), body: body.into(), yes: yes.into(), seen, answered: !confirm_removes(), dont_ask: false };
+    let ask = Ask { key: egui::Id::new(("confirm", id)), title: title.into(), body: body.into(), yes: yes.into(), seen, answered: !confirm_removes(), dont_ask: false, always: false };
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(SLOT), ask));
+}
+
+/// `ask_confirm` for what ends the show (quit or close the outputs while they're showing, replace a project with
+/// unsaved edits): always asked, and no "Don't ask again" (switching off the remove questions mustn't switch these off).
+pub(crate) fn ask_confirm_always(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug, title: &str, body: &str, yes: &str) {
+    let seen = ctx.input(|i| i.time);
+    let ask = Ask { key: egui::Id::new(("confirm", id)), title: title.into(), body: body.into(), yes: yes.into(), seen, answered: false, dont_ask: false, always: true };
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(SLOT), ask));
+}
+
+/// Is the question for `id` still waiting for its answer?
+pub(crate) fn asking(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug) -> bool {
+    let key = egui::Id::new(("confirm", id));
+    ctx.data(|d| d.get_temp::<Ask>(egui::Id::new(SLOT))).is_some_and(|a| a.key == key)
 }
 
 /// The pop-up for `ask_confirm(.., id, ..)` while it's open. True once, when the answer is yes. Cancel, Escape or
@@ -60,15 +76,18 @@ pub(crate) fn confirmed(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt
         heading(ui, ask.title.as_str());
         ui.label(ask.body.as_str());
         ui.add_space(4.0);
-        toggle(ui, &mut ask.dont_ask, "Don't ask again").on_hover_text("Removes happen straight away from now on. Switch asking back on in the brightness menu at the top: Ask before removing");
+        if !ask.always {
+            toggle(ui, &mut ask.dont_ask, "Don't ask again").on_hover_text("Removes happen straight away from now on. Switch asking back on in the brightness menu at the top: Ask before removing");
+        }
         ui.horizontal(|ui| {
-            yes = danger_button(ui, ask.yes.as_str()).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter));
+            // (Enter alone: a shortcut pressed again, Cmd+Return, isn't a yes.)
+            yes = danger_button(ui, ask.yes.as_str()).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.command);
             no = ui.button("Cancel").clicked();
         });
     });
     if yes || no || modal.should_close() {
         ctx.data_mut(|d| d.remove::<Ask>(slot));
-        if yes && ask.dont_ask {
+        if yes && ask.dont_ask && !ask.always {
             set_confirm_removes(false);
         }
         return yes;

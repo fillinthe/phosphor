@@ -134,7 +134,7 @@ pub(crate) fn fx_count_badge(ui: &mut egui::Ui, fx: usize, bypass: &mut bool) ->
         return None;
     }
     let mut active = !*bypass;
-    let color = if active { accent() } else { Color32::GRAY };
+    let color = if active { accent() } else { crate::theme::faint() };
     let r = crate::ui::icon_toggle(ui, &mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass these effects · right-click to map");
     if r.changed() {
         *bypass = !active;

@@ -87,7 +87,7 @@ fn drop_rows(ui: &egui::Ui, r: &egui::Response) -> Option<Vec<u64>> {
 fn layouts_bar(ui: &mut egui::Ui, mapping: &mut Mapping, acts: &mut Vec<SliceAct>) {
     let layouts: Vec<(u64, String, bool)> = mapping.layouts().map(|g| (g.id, g.name.clone(), g.enabled && g.opacity > 0.5)).collect();
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new(format!("{} Layouts", icon::STACK)).small().color(Color32::GRAY));
+        ui.label(RichText::new(format!("{} Layouts", icon::STACK)).small().color(crate::theme::weak()));
         for (id, name, showing) in &layouts {
             let target = ControlTarget::Layout(*id);
             let r = crate::ui::pick_item(ui, *showing, name.as_str()).on_hover_text("Click: fade to this layout (the others fade out; auto-fade time) · right-click: map it, rename, copy, delete");

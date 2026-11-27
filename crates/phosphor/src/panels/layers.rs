@@ -41,7 +41,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let id = st.comp.add_comp(&format!("Comp {n}"));
             st.selected = Some(id);
         }
-        ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; ⌘R = Surprise)");
+        ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text(format!("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; {} = Surprise)", crate::menu::shortcut_of(crate::menu::Action::Quick(crate::app::Quick::Surprise))));
         help(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
@@ -63,7 +63,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut group_action: Option<(u64, GroupAction)> = None;
     let mut comp_action: Option<(u64, super::stack::CompBandAct)> = None;
     let mut comp_stop: Vec<u64> = Vec::new();
-    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
+    let list = crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass, &mut comp.master_fade, &mut comp.master_fade_mod);
         if pick {
             *selected = Some(MASTER_ID);
@@ -170,6 +170,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         }
     });
+    let keys = layer_list_keys(ui, list.inner_rect, *selected);
     let media_launch = media_drop.and_then(|(idx, m)| Some((comp.layers.get(idx)?.id, comp.media_bin.get(m)?.clone())));
     if let Some((from, onto)) = drop {
         comp.drop_layer(from, onto);
@@ -183,6 +184,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     if let Some((gid, a)) = group_action {
         apply_group_action(st, gid, a);
     }
+    apply_layer_keys(st, keys);
     if let Some((id, a)) = comp_action {
         super::stack::apply_comp_band_act(st, id, a);
     }
@@ -200,6 +202,48 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     if let Some((layer, d)) = source_drop {
         let now = ui.ctx().input(|i| i.time);
         st.launch_source(layer, d.source, Vec::new(), d.name, now);
+    }
+}
+
+/// A key typed over a list of layers, for the selected layer.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum LayerKey {
+    /// Delete / Backspace: remove it (Undo brings it back).
+    Remove(u64),
+    /// Space: on / off.
+    OnOff(u64),
+}
+
+/// Delete / Backspace (remove) and Space (on / off) for the selected layer, only while the pointer is over a list of
+/// layers (`area`: the Layers panel's cards, the Stack's strips) and nobody is typing. Anywhere else they took a
+/// layer off the show by a slip of the hand (Edit › Delete Layer, Cmd+Backspace, works from anywhere). The keys are
+/// taken, so nothing else acts on the same press.
+pub(crate) fn layer_list_keys(ui: &egui::Ui, area: egui::Rect, selected: Option<u64>) -> Option<LayerKey> {
+    let id = selected.filter(|id| *id != MASTER_ID)?;
+    if !ui.rect_contains_pointer(area) || ui.ctx().egui_wants_keyboard_input() || super::designer_owns_keys(ui.ctx()) {
+        return None;
+    }
+    ui.input_mut(|i| {
+        if i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) | i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace) {
+            Some(LayerKey::Remove(id))
+        } else if i.consume_key(egui::Modifiers::NONE, egui::Key::Space) {
+            Some(LayerKey::OnOff(id))
+        } else {
+            None
+        }
+    })
+}
+
+/// Does what `layer_list_keys` asked (a group's id is left alone: groups have their own Delete).
+pub(crate) fn apply_layer_keys(st: &mut State, key: Option<LayerKey>) {
+    match key {
+        Some(LayerKey::Remove(id)) => remove_layer(st, id),
+        Some(LayerKey::OnOff(id)) => {
+            if let Some(l) = st.comp.layer_mut(id) {
+                l.enabled = !l.enabled;
+            }
+        }
+        None => {}
     }
 }
 
@@ -369,7 +413,7 @@ pub(crate) fn layer_card(
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                     solo_button(ui, &mut layer.solo);
                     let name = RichText::new(&layer.name).strong().size(12.5);
-                    let name = if muted { name.color(Color32::GRAY) } else { name };
+                    let name = if muted { name.color(crate::theme::weak()) } else { name };
                     // The name shrinks (full name on hover) so it never runs under the buttons on the right.
                     // Narrow cards drop the up/down arrows (drag the thumbnail, or right-click › Move up/down).
                     let button = ui.spacing().interact_size.y + ui.spacing().item_spacing.x;
@@ -507,7 +551,7 @@ pub(crate) fn layer_card(
                 action = Some(LayerAction::LeaveGroup);
                 ui.close();
             }
-        } else if crate::ui::command(ui, label(icon::STACK, "Group with the layer below (⌘G)")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
+        } else if crate::ui::command(ui, label(icon::STACK, &format!("Group with the layer below ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
             action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
@@ -755,7 +799,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             if kind != crate::media::live::InputKind::Camera {
                 ui.separator();
             }
-            ui.label(RichText::new(kind.title()).small().color(Color32::GRAY));
+            ui.label(RichText::new(kind.title()).small().color(crate::theme::weak()));
             if let Some((_, n)) = note {
                 hint(ui, n.as_str());
             }
@@ -784,7 +828,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             }
         }
         ui.separator();
-        ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
+        ui.label(RichText::new("Stream address").small().color(crate::theme::weak()));
         let url_id = egui::Id::new(("live_url", layer));
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
         ui.horizontal(|ui| {
@@ -804,7 +848,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
 /// the Mixer strip).
 pub(crate) fn arrange_items(ui: &mut egui::Ui) -> Option<LayerAction> {
     let mut action = None;
-    if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+    if crate::ui::command(ui, label(icon::COPY, &format!("Duplicate ({})", crate::menu::shortcut_of(crate::menu::Action::DuplicateLayer)))).clicked() {
         action = Some(LayerAction::Duplicate);
     }
     if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
@@ -899,6 +943,36 @@ pub(crate) fn show_button(ui: &mut egui::Ui, layer: &mut LayerState) {
 
 /// Solo: only soloed layers reach the mix (an orange S).
 pub(crate) fn solo_button(ui: &mut egui::Ui, solo: &mut bool) -> egui::Response {
-    let color = if *solo { WARN } else { Color32::GRAY };
+    let color = if *solo { WARN } else { crate::theme::weak() };
     crate::ui::icon_toggle(ui, solo, RichText::new("S").small().strong().color(color)).on_hover_text("Solo: only soloed layers reach the mix")
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    /// One frame with the pointer at `at` and `key` pressed; what `layer_list_keys` made of it for a list in `area`.
+    fn press(at: egui::Pos2, key: egui::Key, selected: Option<u64>) -> Option<LayerKey> {
+        let ctx = egui::Context::default();
+        let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(200.0, 400.0));
+        let events = vec![egui::Event::PointerMoved(at), egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }];
+        let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0))), events, ..Default::default() };
+        let mut got = None;
+        let mut out = ctx.run_ui(input, |ui| got = layer_list_keys(ui, area, selected));
+        out.textures_delta.clear();
+        got
+    }
+
+    /// Delete / Space reach the selected layer only with the pointer over the list; MASTER is never removed.
+    #[test]
+    fn layer_keys_only_over_the_list() {
+        let over = egui::pos2(50.0, 50.0);
+        let elsewhere = egui::pos2(600.0, 300.0);
+        assert_eq!(press(over, egui::Key::Backspace, Some(7)), Some(LayerKey::Remove(7)));
+        assert_eq!(press(over, egui::Key::Space, Some(7)), Some(LayerKey::OnOff(7)));
+        assert_eq!(press(elsewhere, egui::Key::Delete, Some(7)), None, "a stray Delete over the clip grid or preview");
+        assert_eq!(press(elsewhere, egui::Key::Space, Some(7)), None);
+        assert_eq!(press(over, egui::Key::Delete, Some(MASTER_ID)), None);
+        assert_eq!(press(over, egui::Key::Delete, None), None);
+    }
 }

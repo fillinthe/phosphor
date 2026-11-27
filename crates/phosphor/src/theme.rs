@@ -33,6 +33,14 @@ pub const PICTURE_BG: Color32 = Color32::from_rgb(5, 7, 8);
 pub const PICTURE_GRID: Color32 = Color32::from_rgb(40, 42, 44);
 /// Words drawn on a picture or a colored fill (a fader's value, a tab with no kind).
 pub const ON_PICTURE: Color32 = Color32::from_gray(220);
+/// Quiet words on a picture or `PICTURE_BG` (a placeholder "…", "no source", "Off" on a dark frame): a step below
+/// `ON_PICTURE`, the same at any brightness (5.9:1 on `PICTURE_BG`).
+pub const ON_PICTURE_WEAK: Color32 = Color32::from_gray(150);
+/// See-through white over the show's picture (a hint drawn on an output, guide lines on a stage photo, a dimmed
+/// picture's tint): `alpha` 0..255.
+pub fn over_picture(alpha: u8) -> Color32 {
+    Color32::from_white_alpha(alpha)
+}
 /// Banners and notices that float over everything (dark at any brightness, light words): a problem, good news,
 /// Map mode, Learn.
 pub const PROBLEM_FILL: Color32 = Color32::from_rgb(52, 26, 20);
@@ -74,6 +82,57 @@ pub fn faint() -> Color32 {
     let s = palette(brightness()).stroke;
     if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { tone(s.saturating_sub(80)) } else { tone(s.saturating_add(85)) }
 }
+
+/// Words a step quieter than the text (`hint`, a count, a "not set"): egui's `weak_text_color`, set by
+/// `set_brightness` to read at 4.5:1 or better on every panel tone (`ink_at`). For painters with no `Ui` at hand;
+/// never a hand-picked gray for words.
+pub fn weak() -> Color32 {
+    let g = WEAK.load(std::sync::atomic::Ordering::Relaxed);
+    Color32::from_rgb(g[0], g[1], g[2])
+}
+
+/// `weak` as set by `set_brightness` (r, g, b).
+static WEAK: AtomicRgb = AtomicRgb::new([132, 134, 135]);
+
+/// Three bytes behind one atomic (no lock for a color read every frame).
+struct AtomicRgb(std::sync::atomic::AtomicU32);
+
+impl AtomicRgb {
+    const fn new([r, g, b]: [u8; 3]) -> Self {
+        Self(std::sync::atomic::AtomicU32::new(u32::from_be_bytes([0, r, g, b])))
+    }
+    fn load(&self, o: std::sync::atomic::Ordering) -> [u8; 3] {
+        let [_, r, g, b] = self.0.load(o).to_be_bytes();
+        [r, g, b]
+    }
+    fn store(&self, c: Color32, o: std::sync::atomic::Ordering) {
+        self.0.store(u32::from_be_bytes([0, c.r(), c.g(), c.b()]), o);
+    }
+}
+
+/// WCAG contrast ratio of two opaque colors (1 = the same, 21 = black on white).
+pub fn contrast(a: Color32, b: Color32) -> f32 {
+    let lum = |c: Color32| {
+        let ch = |v: u8| {
+            let v = v as f32 / 255.0;
+            if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * ch(c.r()) + 0.7152 * ch(c.g()) + 0.0722 * ch(c.b())
+    };
+    let (x, y) = (lum(a), lum(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+/// The quietest ink (a `tone`) that reads at `ratio` or better on `bg`: lighter than it on the dark side, darker on
+/// the light side.
+fn ink_at(bg: Color32, light: bool, ratio: f32) -> Color32 {
+    let steps: Box<dyn Iterator<Item = u8>> = if light { Box::new((0..=bg.g()).rev()) } else { Box::new(bg.g()..=255) };
+    steps.map(tone).find(|c| contrast(*c, bg) >= ratio).unwrap_or(if light { Color32::BLACK } else { Color32::WHITE })
+}
+
+/// Contrast the words keep on every panel tone (`set_brightness`): text, and quiet text (`weak`).
+const TEXT_CONTRAST: f32 = 7.0;
+const WEAK_CONTRAST: f32 = 4.6;
 
 /// True while the interface is on the light side (`set_brightness` above about half).
 static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -261,7 +320,8 @@ pub fn apply(ctx: &egui::Context) {
         use egui::{FontId, TextStyle};
         // Compact: smaller labels so more controls fit on screen.
         s.text_styles = [
-            (TextStyle::Small, FontId::proportional(9.0)),
+            // (10.5, was 9: status words, badges and counts are read at a glance in a dark room.)
+            (TextStyle::Small, FontId::proportional(10.5)),
             (TextStyle::Body, FontId::proportional(11.5)),
             (TextStyle::Button, FontId::proportional(11.5)),
             (TextStyle::Heading, FontId::proportional(14.0)),
@@ -326,6 +386,20 @@ pub fn set_brightness(ctx: &egui::Context, b: f32) {
     v.selection.bg_fill = accent.gamma_multiply(if light { 0.4 } else { 0.32 });
     v.selection.stroke = Stroke::new(1.0, accent);
     v.hyperlink_color = accent;
+    // Words read on every panel tone: the hovered row (`faint_bg_color`) is the lightest one on the dark side and
+    // the darkest on the light side, so ink that reads there reads everywhere. Text at 7:1 at least, quiet text
+    // (`weak_text_color`, hints) at 4.6:1, never egui's text at 60% alpha (2.7:1 on the default charcoal).
+    let worst = tone(p.faint);
+    let text = ink_at(worst, light, TEXT_CONTRAST);
+    // (Never quieter than egui's own text.)
+    let further = |a: Color32, b: Color32| if (a.g() < b.g()) == light { a } else { b };
+    let text = further(text, v.widgets.noninteractive.fg_stroke.color);
+    let weak = ink_at(worst, light, WEAK_CONTRAST);
+    v.widgets.noninteractive.fg_stroke.color = text;
+    let button = v.widgets.inactive.fg_stroke.color;
+    v.widgets.inactive.fg_stroke.color = further(button, text);
+    v.weak_text_color = Some(weak);
+    WEAK.store(weak, std::sync::atomic::Ordering::Relaxed);
     // Sliders: a thick filled bar with a thin line where the value sits (no round knob).
     v.slider_trailing_fill = true;
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.18 };
@@ -366,6 +440,25 @@ mod brightness_tests {
             let faint = super::faint().g() as i32;
             assert!((faint - panel).abs() >= 70, "faint {faint} too close to the panel {panel} at {b}");
             assert_ne!(super::line(), super::faint());
+        }
+        super::set_brightness(&ctx, super::DEFAULT_BRIGHTNESS);
+    }
+
+    /// Words read at every brightness, on every panel tone: text at 7:1, quiet text (hints) at 4.5:1 or better, and
+    /// quiet text stays quieter than text.
+    #[test]
+    fn words_keep_their_contrast() {
+        let ctx = eframe::egui::Context::default();
+        for b in [0.0, 0.2, 0.35, 0.5, 0.51, 0.75, 1.0] {
+            super::set_brightness(&ctx, b);
+            let v = ctx.global_style().visuals.clone();
+            let (text, weak) = (v.text_color(), v.weak_text_color());
+            // (`theme::weak` is the same color, but a global: other tests set the brightness at the same time.)
+            for bg in [v.panel_fill, v.window_fill, v.faint_bg_color, v.extreme_bg_color] {
+                assert!(super::contrast(weak, bg) >= 4.5, "weak {weak:?} on {bg:?} at {b}: {:.2}", super::contrast(weak, bg));
+                assert!(super::contrast(text, bg) >= 7.0, "text {text:?} on {bg:?} at {b}: {:.2}", super::contrast(text, bg));
+            }
+            assert!(super::contrast(text, v.panel_fill) > super::contrast(weak, v.panel_fill), "weak quieter than text at {b}");
         }
         super::set_brightness(&ctx, super::DEFAULT_BRIGHTNESS);
     }

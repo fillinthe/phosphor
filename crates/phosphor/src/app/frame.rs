@@ -15,7 +15,7 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(msg) = self.state.gpu_guard.as_ref().and_then(|g| g.poll()) {
-            self.state.notice = Some(msg);
+            self.state.notice = Some(crate::ui::notice::failure(msg));
         }
         // Buttons counted afresh; mapped presses handed to the buttons they're for.
         crate::ui::press::begin_frame(&ctx, wall);
@@ -66,7 +66,9 @@ impl PhosphorApp {
             d.insert_temp(egui::Id::new(panels::LEARNING), self.state.control.learning.clone());
         });
         self.control_requests(&ctx);
+        self.guard_close(&ctx);
         self.menu_actions(&ctx, now);
+        self.guard_answers(&ctx);
         self.fade_in_effects();
         self.shortcuts(&ctx);
         let busy = ctx.input(|i| i.pointer.any_down()) || self.output_pointer_down();

@@ -46,6 +46,7 @@ pub(crate) use cues::format_tc;
 mod controls;
 mod files;
 mod frame;
+mod guard;
 #[cfg(not(target_arch = "wasm32"))]
 mod import;
 mod init;
@@ -139,6 +140,7 @@ const KEY_HELP_ICONS: &str = "help_icons_chosen";
 const KEY_SLIDERS_JUMP: &str = "sliders_jump";
 /// Ask "are you sure?" before removing things ("0": the user ticked Don't ask again).
 const KEY_CONFIRM_REMOVES: &str = "confirm_removes";
+const KEY_MEDIA_CLICK_PLAYS: &str = "media_click_plays";
 /// Clip launches are undo steps ("1": the user switched it on).
 const KEY_UNDO_PLAYBACK: &str = "undo_playback";
 /// The Donate button in the top bar ("0": the user hid it).
@@ -202,6 +204,10 @@ pub struct OutputShared {
     pub cover_checked: f64,
     /// When that was last written to the log (once a minute at most).
     pub cover_logged: f64,
+    /// A bare key (F, E, Esc) pressed once in this window and when: it acts on the second press (`pressed_twice`).
+    pub armed: Option<(egui::Key, f64)>,
+    /// Words for the main window's notice ("Press F again…"), taken by the app each frame (never shown on the output).
+    pub said: Option<String>,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next
@@ -524,6 +530,11 @@ pub struct State {
     /// When autosave last looked, and a hash of what was last written (only a changed project is saved).
     autosave_at: f64,
     saved_hash: u64,
+    /// `history.generation()` as of the last save or open: the project is "edited" (window title, the question
+    /// before New) while they differ. `saving` = (hash, generation) of saves still being written.
+    saved_generation: u64,
+    #[cfg(not(target_arch = "wasm32"))]
+    saving: Vec<(u64, u64)>,
     /// Saves are written on a thread of their own (a slow drive never stops the show).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) project_saver: crate::project_save::ProjectSaver,
@@ -646,7 +657,7 @@ impl State {
             let name = format!("{}.phosphor", self.cloud_project.as_ref().map_or("My show", |(_, n)| n.as_str()));
             self.notice = Some(match crate::web_files::download(&name, &self.comp.to_json()) {
                 Ok(()) => format!("Downloaded {name} to this computer (File › Open loads it again)"),
-                Err(e) => format!("Download failed: {e}"),
+                Err(e) => crate::ui::notice::failure(format!("Download failed: {e}")),
             });
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -656,6 +667,11 @@ impl State {
                 let hash = hash_text(&json);
                 let job = crate::project_save::Job { path: p.clone(), json, auto, secs: crate::backups::now_secs() };
                 self.project_saver.save(job, hash);
+                self.saving.retain(|(h, _)| *h != hash);
+                self.saving.push((hash, self.history.generation()));
+                if self.saving.len() > 8 {
+                    self.saving.remove(0);
+                }
             }
             None => self.save_project_as(),
         }
@@ -687,14 +703,19 @@ impl State {
             let current = self.project_path.as_deref() == Some(done.path.as_str());
             if current && !matches!(done.outcome, Outcome::Failed(_)) {
                 self.saved_hash = done.hash;
+                if let Some(k) = self.saving.iter().position(|(h, _)| *h == done.hash) {
+                    self.saved_generation = self.saving.remove(k).1;
+                }
             }
-            let said = match done.outcome {
-                Outcome::Saved { backup: None } => format!("Saved {name}"),
-                Outcome::Saved { backup: Some(e) } => format!("Saved {name} (its backup couldn't be made: {e})"),
-                Outcome::KeptHere => format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else"),
-                Outcome::Failed(e) => format!("Save failed: {e}"),
+            use crate::ui::notice::Kind;
+            let (said, kind) = match done.outcome {
+                Outcome::Saved { backup: None } => (format!("Saved {name}"), Kind::News),
+                Outcome::Saved { backup: Some(e) } => (format!("Saved {name} (its backup couldn't be made: {e})"), Kind::Problem),
+                Outcome::KeptHere => (format!("Saved {name} on this computer: its drive isn't connected. Save again when it's back, or File › Save As… to put it somewhere else"), Kind::Problem),
+                Outcome::Failed(e) => (format!("Save failed: {e}"), Kind::Failure),
             };
-            self.notice = Some(if done.auto && said.starts_with("Saved ") { format!("Autosaved ({})", said.trim_start_matches("Saved ")) } else { said });
+            let said = if done.auto && said.starts_with("Saved ") { format!("Autosaved ({})", said.trim_start_matches("Saved ")) } else { said };
+            self.notice = Some(crate::ui::notice::of(kind, said));
         }
     }
 
@@ -741,6 +762,10 @@ impl State {
             // Level with the copy; a copy that is ahead of a drive that's back counts as unsaved, so Save (and
             // autosave) writes it to the drive.
             self.saved_hash = if there && ahead { 0 } else { hash_text(&self.comp.to_json()) };
+            if there && ahead {
+                // Not on the drive yet: edited until it's saved there.
+                self.saved_generation = u64::MAX;
+            }
             self.notice = Some(if there {
                 format!("\"{name}\": opened this computer's copy, saved while its drive was away. Save puts it on the drive")
             } else {
@@ -751,7 +776,7 @@ impl State {
         if !there {
             // No copy either (never opened on this computer): said plainly, and it stays in Recent for when the
             // drive is back. (It used to be dropped from Recent on the first failed click.)
-            self.notice = Some(format!("Couldn't open \"{name}\": its drive isn't connected ({asked}), and this computer has no copy of it yet. Plug the drive in once: from then on Phosphor keeps a copy here, so it opens without the drive."));
+            self.notice = Some(crate::ui::notice::problem(format!("Couldn't open \"{name}\": its drive isn't connected ({asked}), and this computer has no copy of it yet. Plug the drive in once: from then on Phosphor keeps a copy here, so it opens without the drive.")));
             return false;
         }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map(|c| (c, j)).map_err(|e| e.to_string())) {
@@ -766,13 +791,13 @@ impl State {
                 #[cfg(target_arch = "wasm32")]
                 let _ = json;
                 if newer {
-                    self.notice = Some("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it.".into());
+                    self.notice = Some(crate::ui::notice::problem("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it."));
                 }                true
             }
             Err(e) => {
                 // (It stays in Recent: right-click › Forget takes it out. A file that can't be read today may be fine
                 // once its drive has finished mounting.)
-                self.notice = Some(format!("Open failed: {e}"));
+                self.notice = Some(crate::ui::notice::failure(format!("Open failed: {e}")));
                 false
             }
         }
@@ -795,6 +820,7 @@ impl State {
         self.pending_triggers.clear();
 
         self.history.start_over(&self.comp);
+        self.saved_generation = self.history.generation();
         self.cue_run.project_opened();
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -804,12 +830,17 @@ impl State {
         self.outputs_on_open();
     }
 
+    /// The project has edits since it was opened or last saved (an edit still settling counts too).
+    pub fn edited(&self) -> bool {
+        self.history.generation() != self.saved_generation || self.history.edit_pending()
+    }
+
     /// Projects set to "open outputs on their screens" do so when loaded (and at launch).
     pub fn outputs_on_open(&mut self) {
         if self.comp.outputs_on_open {
             let missing = self.send_outputs_to_screens();
             if !missing.is_empty() {
-                self.notice = Some(format!("Outputs not opened, screen not connected: {}", missing.join(", ")));
+                self.notice = Some(crate::ui::notice::problem(format!("Outputs not opened, screen not connected: {}", missing.join(", "))));
             }
         }
     }
@@ -1128,6 +1159,16 @@ impl State {
         }
     }
 
+    /// Output windows on / off from a button: opening happens at once; closing goes through Output › Show / Hide
+    /// Output Windows (next frame), which asks first while they're showing (`app::guard`).
+    pub fn request_output_toggle(&mut self) {
+        if self.output_open() {
+            self.menu_requests.push(crate::menu::Action::ToggleOutput);
+        } else {
+            self.toggle_output();
+        }
+    }
+
     pub fn output_open(&self) -> bool {
         self.output.lock().unwrap().values().any(|o| o.open)
     }
@@ -1215,6 +1256,9 @@ pub struct PhosphorApp {
     /// This run is a bench/test (stays true after the bench finishes and `bench` is cleared): nothing it does may be
     /// saved over the user's project, settings or crash-recovery snapshot.
     bench_session: bool,
+    /// A show-ending action waiting for its "are you sure?" (`guard`), and a quit that has had its yes.
+    guarded: Option<guard::Guarded>,
+    quit_confirmed: bool,
     gather_windows: bool,
     remote_published: f64,
     #[cfg(not(target_arch = "wasm32"))]
@@ -1396,7 +1440,7 @@ impl eframe::App for PhosphorApp {
             let now = ui.ctx().input(|i| i.time);
             self.panics.retain(|t| now - t < 5.0);
             self.panics.push(now);
-            self.state.notice = Some("Phosphor hit an internal error and skipped a frame (details in crash.log).".into());
+            self.state.notice = Some(crate::ui::notice::failure("Phosphor hit an internal error and skipped a frame (details in crash.log)."));
             ui.ctx().request_repaint();
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -1461,29 +1505,26 @@ impl PhosphorApp {
                     st.cloud_project = None;
                     st.notice = Some(format!("Opened {name}"));
                 }
-                Err(e) => st.notice = Some(format!("Couldn't open {name}: {e}")),
+                Err(e) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't open {name}: {e}"))),
             }
         }
         let mut cloud_layouts = None;
+        let mut from_account = None;
         let events = st.account.tick(ctx);
         // (A save from the File menu has no Account window open: what went wrong is said in the status note.)
         if let Some(e) = st.account.fresh_error() {
-            st.notice = Some(e);
+            st.notice = Some(crate::ui::notice::failure(e));
         }
         for e in events {
             match e {
+                // (Opened once any unsaved edits or a showing output have had their question: `guard`.)
                 crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {
-                    Ok(comp) => {
-                        st.load_composition(comp);
-                        st.project_path = None;
-                        st.account_ui.name = name.clone();
-                        st.notice = Some(format!("Opened {name} from your account. Undo (⌘Z) brings the previous project back."));
-                        st.cloud_project = Some((id, name));
-                    }
-                    Err(err) => st.notice = Some(format!("Couldn't open {name}: {err}")),
+                    Ok(comp) => from_account = Some(guard::Guarded::FromAccount(id, name, Box::new(comp))),
+                    Err(err) => st.notice = Some(crate::ui::notice::failure(format!("Couldn't open {name}: {err}"))),
                 },
                 crate::account::Event::Saved(id, name) => {
                     st.notice = Some(format!("Saved {name} to your account"));
+                    st.saved_generation = st.history.generation();
                     // Its file on this computer knows its account copy from now on.
                     #[cfg(not(target_arch = "wasm32"))]
                     if let Some(p) = &st.project_path {
@@ -1505,6 +1546,9 @@ impl PhosphorApp {
         }
         if let Some(text) = cloud_layouts {
             self.apply_account_layouts(&text);
+        }
+        if let Some(g) = from_account {
+            self.guard(ctx, g);
         }
     }
 

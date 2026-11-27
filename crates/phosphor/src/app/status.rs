@@ -28,7 +28,7 @@ impl PhosphorApp {
                 let outs: Vec<(String, bool)> = st.comp.outputs.iter().filter(|o| o.enabled).map(|o| (o.name.clone(), st.output_window_open(o.id))).collect();
                 let r = ui
                     .horizontal(|ui| {
-                        ui.label(small(icon::PROJECTOR_SCREEN.to_string(), Color32::GRAY));
+                        ui.label(small(icon::PROJECTOR_SCREEN.to_string(), crate::theme::weak()));
                         for (name, open) in &outs {
                             let dot = if *open { theme::accent() } else { crate::theme::faint() };
                             ui.label(small(format!("{} {name}", icon::CIRCLE), dot));
@@ -44,10 +44,13 @@ impl PhosphorApp {
                 if st.stream.running() {
                     let t = st.stream.elapsed(now) as u32;
                     let what = if st.stream.settings.destination == crate::stream::Destination::File { "REC" } else { "LIVE" };
-                    ui.label(small(format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE));
+                    // (Filled badges: what's going out live must read at a glance.)
+                    if crate::ui::state_badge(ui, format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE).on_hover_text("Streaming or recording: click to open its panel").clicked() {
+                        open_tab = Some(crate::panels::Tab::Stream);
+                    }
                 }
                 if st.comp.blackout > 0.0
-                    && ui.add(egui::Label::new(small(format!("{} BLACKOUT", icon::MOON), LIVE)).sense(egui::Sense::click())).on_hover_text("Every output is fading or faded to black: click to bring the show back").clicked()
+                    && crate::ui::state_badge(ui, format!("{} BLACKOUT", icon::MOON), LIVE).on_hover_text("Every output is fading or faded to black: click to bring the show back").clicked()
                 {
                     lift_blackout = true;
                 }
@@ -59,7 +62,7 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 if st.net.running() {
                     let n = st.net.peers().len();
-                    ui.label(small(format!("{} Session · {n} connected", icon::DEVICE_MOBILE), Color32::GRAY));
+                    ui.label(small(format!("{} Session · {n} connected", icon::DEVICE_MOBILE), crate::theme::weak()));
                 }
                 web_toggle = super::web_badge(ui, st, now);
                 // What's coming in and going out: each light is on while something keeps flowing.
@@ -154,10 +157,10 @@ impl PhosphorApp {
                         self.toggle_library();
                     }
                     ui.separator();
-                    let cpu_color = if whole >= 70.0 { theme::DANGER } else if whole >= 40.0 { theme::WARN } else { Color32::GRAY };
+                    let cpu_color = if whole >= 70.0 { theme::DANGER } else if whole >= 40.0 { theme::WARN } else { crate::theme::weak() };
                     ui.add_sized([70.0, 16.0], egui::Label::new(RichText::new(format!("CPU {whole:>3.0}%")).small().monospace().color(cpu_color)))
                         .on_hover_text(format!("Phosphor's share of the whole computer ({cores:.0} cores). Counted per core, as Activity Monitor does: {:.0}%", s.cpu_percent));
-                    ui.label(RichText::new(perf).small().monospace().color(if slow { theme::WARN } else { Color32::GRAY }))
+                    ui.label(RichText::new(perf).small().monospace().color(if slow { theme::WARN } else { crate::theme::weak() }))
                         .on_hover_text("Frame rate, the engine's time per frame, memory");
                 });
             });

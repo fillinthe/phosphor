@@ -396,7 +396,7 @@ pub(crate) fn cpu_color(share: f32) -> Color32 {
     } else if share >= 0.3 {
         WARN
     } else {
-        Color32::GRAY
+        crate::theme::weak()
     }
 }
 

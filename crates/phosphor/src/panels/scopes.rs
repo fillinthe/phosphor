@@ -43,7 +43,7 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
     match st.scopes.texture(ui.ctx()) {
         Some(t) => paint_texture(ui.painter(), t.id(), rect.shrink(4.0)),
         None => {
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "measuring…", egui::FontId::proportional(13.0), Color32::GRAY);
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "measuring…", egui::FontId::proportional(13.0), crate::theme::ON_PICTURE_WEAK);
         }
     }
     ui.allocate_rect(rect, Sense::hover());

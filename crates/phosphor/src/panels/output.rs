@@ -74,9 +74,9 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::field(ui, "All output windows", |ui| {
         let text = if st.output_open() { "Close" } else { "Open" };
         if steady_button(ui, text, &["Close", "Open"]).clicked() {
-            st.toggle_output();
+            st.request_output_toggle();
         }
-        help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+        help(ui, "In the output window (keys pressed twice, so a stray key can't drop the show): F = fullscreen, E = mapping handles, Esc = back to a window. Drag it to a projector first.");
     });
     ui.separator();
 
@@ -174,7 +174,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         {
             let mut at_login = crate::login_item::is_enabled();
             if crate::ui::toggle(ui, &mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
-                st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| format!("Couldn't change the login item: {e}")));
+                st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| crate::ui::notice::failure(format!("Couldn't change the login item: {e}"))));
             }
         }
         crate::ui::toggle(ui, &mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")
@@ -387,7 +387,7 @@ pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
 pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
-            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
+            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(crate::theme::weak()));
             hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
             if crate::ui::small_command(ui, "Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));

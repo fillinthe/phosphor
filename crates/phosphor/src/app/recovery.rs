@@ -43,7 +43,7 @@ impl PhosphorApp {
             }
         }
         if s.session && let Err(e) = st.net.start() {
-            st.notice = Some(e);
+            st.notice = Some(crate::ui::notice::problem(e));
         }
         if s.audio_open {
             let _ = st.audio.open(s.audio_device.as_deref());
@@ -85,7 +85,7 @@ impl PhosphorApp {
                         let (w, h) = (self.state.comp.width, self.state.comp.height);
                         let now = ui.ctx().input(|i| i.time);
                         if let Err(e) = self.state.stream.start(w, h, now) {
-                            self.state.notice = Some(e);
+                            self.state.notice = Some(crate::ui::notice::failure(e));
                         }
                         self.recovered = None;
                     }

@@ -107,7 +107,7 @@ impl State {
         }
         let (w, h) = (self.comp.width, self.comp.height);
         if let Err(e) = self.stream.start(w, h, now) {
-            self.notice = Some(e);
+            self.notice = Some(crate::ui::notice::failure(e));
             (self.stream.settings, self.stream.mute_audio) = saved;
             self.stream.offline = false;
             return;
@@ -139,7 +139,7 @@ impl State {
         (self.stream.settings, self.stream.mute_audio) = o.saved;
         self.stream.offline = false;
         if !ok {
-            self.notice = Some(format!("Rendering stopped: {}", self.stream.status().0));
+            self.notice = Some(crate::ui::notice::failure(format!("Rendering stopped: {}", self.stream.status().0)));
             return;
         }
         self.recording_saved(&path);

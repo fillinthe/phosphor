@@ -174,7 +174,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     });
     let (status, error, sent, dropped, log) = stream.status();
     if !status.is_empty() {
-        ui.colored_label(if error { WARN } else { Color32::GRAY }, status);
+        ui.colored_label(if error { WARN } else { crate::theme::weak() }, status);
     }
     if running || sent > 0 {
         ui.monospace(format!("frames sent {sent} · dropped {dropped}"));
@@ -250,7 +250,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
             });
             let (status, error, ..) = r.status();
             if running && !status.is_empty() {
-                ui.colored_label(if error { WARN } else { Color32::GRAY }, status);
+                ui.colored_label(if error { WARN } else { crate::theme::weak() }, status);
             }
         });
     }
@@ -290,8 +290,8 @@ fn stream_health(ui: &mut egui::Ui, stream: &crate::stream::Streamer) {
     crate::ui::history_graph(ui, egui::vec2(160.0, 20.0), &kbps, &marks, crate::stream::HISTORY)
         .on_hover_text("Last two minutes: bitrate (line); red = frames dropped or falling behind real time");
     let (color, text) = match stream.health() {
-        Health::Starting => (Color32::GRAY, "Measuring…".to_string()),
-        Health::Good => (Color32::GRAY, format!("{} Healthy · {:.1} Mbit/s", icon::CHECK_CIRCLE, last.kbps / 1000.0)),
+        Health::Starting => (crate::theme::weak(), "Measuring…".to_string()),
+        Health::Good => (crate::theme::weak(), format!("{} Healthy · {:.1} Mbit/s", icon::CHECK_CIRCLE, last.kbps / 1000.0)),
         Health::Struggling { dropped, speed } => (
             WARN,
             if dropped > 0 {

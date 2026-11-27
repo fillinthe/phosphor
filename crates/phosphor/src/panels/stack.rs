@@ -56,6 +56,9 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let mut acts = StackActs::default();
     let adding = ui.input(|i| i.modifiers.shift || i.modifiers.command);
+    // Where the layer strips are (Delete / Space act on the selected layer only with the pointer over them).
+    let mut strips = egui::Rect::NOTHING;
+    let mut keys = None;
     {
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_selected, also_clips, media, .. } = st;
         let ctx = ui.ctx().clone();
@@ -126,7 +129,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     let is_selected = *selected == Some(layer.id) || also_selected.contains(&layer.id);
                     let dimmed = any_solo && !layer.solo;
                     let indent = 10.0 * (band.is_some() as u8 + parent.is_some() as u8) as f32;
-                    ui.horizontal(|ui| {
+                    let row = ui.horizontal(|ui| {
                         let strip = Strip { thumb, aspect, is_selected, dimmed, err: err.as_deref(), feeds: &feeds, others: &others, indent, size: egui::vec2(strip_w, grid.cell.y) };
                         let o = layer_strip(ui, layer, &strip, &mut out);
                         if o.select {
@@ -162,6 +165,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                         }
                         super::clip_grid::clip_cells(ui, &grid, &mut cx, layer, idx, &mut out);
                     });
+                    strips = strips.union(egui::Rect::from_min_size(row.response.rect.min, egui::vec2(strip_w + indent, row.response.rect.height())));
                 }
             }
             if comp.layers.is_empty() {
@@ -170,8 +174,10 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
             ui.add_space(6.0);
             master_strip(ui, comp, *selected == Some(MASTER_ID), &mut acts, selected);
             crate::ui::carry_scroll(ui);
+            keys = super::layers::layer_list_keys(ui, strips.intersect(ui.clip_rect()), *selected);
         });
     }
+    super::layers::apply_layer_keys(st, keys);
     apply_row_out(ui, st, out, now);
     apply_stack_acts(st, acts, now);
 }
@@ -186,7 +192,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
     crate::ui::toolbar(ui, |ui| {
         ui.menu_button(label(icon::PLUS, "Layer"), |ui| {
             ui.set_min_width(260.0);
-            if crate::ui::command(ui, label(icon::PLUS, "One layer (⌘ Shift N)")).clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, &format!("One layer ({})", crate::menu::shortcut_of(crate::menu::Action::AddLayer)))).clicked() {
                 add = 1;
                 ui.close();
             }
@@ -204,7 +210,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
             ui.separator();
             let sel = selected_layers(st);
-            if crate::ui::command_if(ui, !sel.is_empty(), label(icon::STACK, "Group the selected layers (⌘G)")).on_hover_text("Mix them together first, then treat them like one layer: on/off, opacity, blend, effects").clicked() {
+            if crate::ui::command_if(ui, !sel.is_empty(), label(icon::STACK, &format!("Group the selected layers ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).on_hover_text("Mix them together first, then treat them like one layer: on/off, opacity, blend, effects").clicked() {
                 group_selected = true;
                 ui.close();
             }
@@ -329,7 +335,7 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                         }
                         let name: String = layer.name.chars().take(18).collect();
                         let name = RichText::new(name).strong();
-                        let name = if s.dimmed { name.color(Color32::GRAY) } else if s.is_selected { name.color(accent()) } else { name };
+                        let name = if s.dimmed { name.color(crate::theme::weak()) } else if s.is_selected { name.color(accent()) } else { name };
                         let (mut fill, mut beat_all, mut row_midi) = (false, false, None);
                         let r = ui.menu_button(name, |ui| {
                             super::clips::row_menu(ui, layer, &mut fill, &mut beat_all, &mut row_midi);
@@ -431,7 +437,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
         ui.close();
     }
     ui.separator();
-    if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+    if crate::ui::command(ui, label(icon::COPY, &format!("Duplicate ({})", crate::menu::shortcut_of(crate::menu::Action::DuplicateLayer)))).clicked() {
         act(ui, LayerAction::Duplicate);
     }
     if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
@@ -451,7 +457,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
         if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
             act(ui, LayerAction::LeaveGroup);
         }
-    } else if crate::ui::command(ui, label(icon::STACK, "Group with the layer below (⌘G)")).clicked() {
+    } else if crate::ui::command(ui, label(icon::STACK, &format!("Group with the layer below ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).clicked() {
         act(ui, LayerAction::GroupWithBelow);
     }
     #[cfg(not(target_arch = "wasm32"))]

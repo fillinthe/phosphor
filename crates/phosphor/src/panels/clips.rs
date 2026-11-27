@@ -8,7 +8,7 @@ pub const CLIP_PAGE_SIZE: usize = 9;
 
 /// Cut / Fade and Now / Beat / Bar: how clips and media land on layers.
 pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
-    ui.label(RichText::new("Launch").small().color(Color32::GRAY));
+    ui.label(RichText::new("Launch").small().color(crate::theme::weak()));
     let fade_target = ControlTarget::App(phosphor_engine::AppControl::LaunchFade);
     let was = comp.launch.fade;
     segmented(ui, &mut comp.launch.fade, &[(false, "Cut".to_string()), (true, "Fade".to_string())], |ui, r, fade| {
@@ -177,6 +177,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     transport_bar(ui, st);
     ui.add_space(4.0);
     let (grid, mut out) = Grid::new(ui, st);
+    let mut add_layer = false;
     {
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, .. } = st;
         let ctx = ui.ctx().clone();
@@ -218,11 +219,17 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             }
             }
             if n == 0 {
-                crate::ui::empty_note(ui, "Add layers first; each layer gets a row of clip slots.");
+                crate::ui::toolbar(ui, |ui| {
+                    crate::ui::empty_note(ui, "Add layers first; each layer gets a row of clip slots.");
+                    add_layer = crate::ui::command(ui, label(icon::PLUS, "Add layer")).clicked();
+                });
             }
             super::clip_lasers::laser_rows(ui, &grid, comp, ROW_HEADER_W);
             crate::ui::carry_scroll(ui);
         });
+    }
+    if add_layer {
+        st.add_layer();
     }
     apply_row_out(ui, st, out, now);
 }

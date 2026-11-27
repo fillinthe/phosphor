@@ -127,7 +127,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             }
             crate::ui::toolbar(ui, |ui| {
                 crate::ui::heading(ui, format!("{} {}", icon::PROJECTOR_SCREEN, o.name));
-                toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
+                super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
             });
             let mut acts = Vec::new();
             super::slice_tree::slice_rows(ui, &mut o.mapping, selected_surface, &mut acts);
@@ -398,7 +398,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         });
         let now = ui.input(|i| i.time);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
-        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged or resized slice lands on the grid without bending. Hold Cmd (Ctrl on Windows) while dragging to place it freely");
+        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text(format!("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged or resized slice lands on the grid without bending. Hold {} while dragging to place it freely", crate::menu::command_key()));
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)").changed() && vs.drawing {
@@ -411,7 +411,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
-        help(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
+        help(ui, &format!("Pinch or {}-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points", crate::menu::command_key()));
     });
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {
@@ -469,12 +469,12 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if !o.stage_photo.is_empty()
             && let Some(t) = thumbs.get_sized(&o.stage_photo, 2048)
         {
-            p.image(t, frame, FULL_UV, Color32::from_white_alpha((o.stage_photo_opacity.clamp(0.0, 1.0) * 255.0) as u8));
+            p.image(t, frame, FULL_UV, crate::theme::over_picture((o.stage_photo_opacity.clamp(0.0, 1.0) * 255.0) as u8));
         }
         if vs.snap {
             for k in 1..16 {
                 let f = k as f32 / 16.0;
-                let stroke = Stroke::new(1.0, Color32::from_white_alpha(if k % 4 == 0 { 40 } else { 18 }));
+                let stroke = Stroke::new(1.0, crate::theme::over_picture(if k % 4 == 0 { 40 } else { 18 }));
                 p.vline(frame.left() + f * frame.width(), frame.y_range(), stroke);
                 p.hline(frame.x_range(), frame.top() + f * frame.height(), stroke);
             }
@@ -740,7 +740,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         }
     });
     ui.separator();
-    crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
+    super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
     crate::ui::toggle(ui, &mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
     crate::ui::toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern");
     crate::ui::toggle(ui, &mut vs.snap, "Snap to grid");
@@ -897,18 +897,20 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                 crate::ui::toggle_mapped(ui, &mut m.enabled, "ON", ControlTarget::MaskEnabled(m.id));
+                // (Its help rides in its name row, never a row of its own.)
+                help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
                 crate::ui::text_field(ui, &mut m.name, "", Some(f32::INFINITY));
             });
-            help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
             mask_settings(ui, m);
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
         } else {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
+                help(ui, &format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
                 crate::ui::text_field(ui, &mut o.name, "", Some(f32::INFINITY));
             });
-            toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
+            super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
             super::program_picker(ui, o, &comps);
             crate::ui::field(ui, "Size", |ui| {
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));
@@ -918,8 +920,6 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             color_grade_editor(ui, o.id, &mut o.color);
             #[cfg(not(target_arch = "wasm32"))]
             super::projector::projector_settings(ui, o, projectors);
-            ui.separator();
-            help(ui, &format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
         }
     });
     if let Some((sid, a)) = fx_action {

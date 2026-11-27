@@ -84,7 +84,7 @@ impl State {
                     self.mad_probe.begin(&file);
                     self.mad_import = Some(file);
                 }
-                Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+                Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Couldn't import {path}: {e}"))),
             }
             return;
         }
@@ -97,7 +97,7 @@ impl State {
                 let with_screens = screens.is_some();
                 self.avc_import = Some(AvcImport { file, chosen, vdmx, screens, with_screens });
             }
-            Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+            Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Couldn't import {path}: {e}"))),
         }
     }
 
@@ -133,9 +133,10 @@ impl State {
             msg.push_str(&format!(" Effects left out: {}.", left.join(", ")));
         }
         if missing > 0 {
-            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+            msg.push_str(&format!(" {missing} media files aren't on this computer — plug in the drive, or Media › Find missing media…"));
         }
-        self.notice = Some(msg);
+        // (Files not here are something to fix: it stays until OK.)
+        self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
     }
 
     /// Brings the MadMapper project waiting in `mad_import` in: as a new project, or added to this one. Says what
@@ -168,9 +169,10 @@ impl State {
         }
         let missing = self.missing_media().len();
         if missing > 0 {
-            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+            msg.push_str(&format!(" {missing} media files aren't on this computer — plug in the drive, or Media › Find missing media…"));
         }
-        self.notice = Some(msg);
+        // (Files not here are something to fix: it stays until OK.)
+        self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
     }
 
     /// Media files the project uses that aren't where it says.
@@ -312,7 +314,7 @@ impl PhosphorApp {
                         "Live" => "Camera",
                         _ => "Generator",
                     };
-                    let text = format!("{kind} · {}{}", v.name, if missing { " (not on this Mac)" } else { "" });
+                    let text = format!("{kind} · {}{}", v.name, if missing { " (not on this computer)" } else { "" });
                     crate::ui::hint(ui, text);
                 }
             });
@@ -332,7 +334,7 @@ impl PhosphorApp {
             }
             ui.add_space(6.0);
             if found.is_none() {
-                crate::ui::hint(ui, "Looking at the pictures (their sizes, whether they're on this Mac)…");
+                crate::ui::hint(ui, "Looking at the pictures (their sizes, whether they're on this computer)…");
                 ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
             }
             ui.add_enabled_ui(found.is_some(), |ui| crate::ui::toolbar(ui, |ui| {

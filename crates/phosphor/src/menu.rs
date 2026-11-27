@@ -42,6 +42,8 @@ pub enum Action {
     ZoomOut,
     ZoomReset,
     ToggleOutput,
+    /// Every output fades to black (and back on the next press): the panic button, always reachable.
+    Blackout,
     Identify,
     Syphon,
     WebControl,
@@ -162,7 +164,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             S,
             I(A::AddLayer, "Add Layer", Some((true, Key::N))),
             I(A::DuplicateLayer, "Duplicate Layer", Some((false, Key::D))),
-            I(A::DeleteLayer, "Delete Layer", None),
+            I(A::DeleteLayer, "Delete Layer", Some((false, Key::Backspace))),
             I(A::Group, "Group with the Layer Below", Some((false, Key::G))),
             I(A::Ungroup, "Ungroup", Some((true, Key::G))),
             S,
@@ -210,6 +212,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "Output",
         &[
+            I(A::Blackout, "Blackout On / Off", Some((false, Key::B))),
             I(A::ToggleOutput, "Show / Hide Output Windows", Some((false, Key::Enter))),
             D("Send Output To"),
             I(A::Identify, "Identify Outputs", None),
@@ -245,6 +248,7 @@ pub fn shortcut_text(s: Shortcut) -> String {
     let key = match key {
         Key::Equals => "+".to_string(),
         Key::Enter => "Return".to_string(),
+        Key::Backspace => "Backspace".to_string(),
         k => k.symbol_or_name().to_string(),
     };
     if cfg!(target_os = "macos") {
@@ -252,6 +256,28 @@ pub fn shortcut_text(s: Shortcut) -> String {
     } else {
         format!("Ctrl+{}{key}", if shift { "Shift+" } else { "" })
     }
+}
+
+/// The shortcut of a menu action as words ("⌘B", "Ctrl+B"), or "" when it has none.
+pub fn shortcut_of(a: Action) -> String {
+    MENUS
+        .iter()
+        .flat_map(|(_, entries)| entries.iter())
+        .find_map(|e| match e {
+            Entry::Item(x, _, sc) if *x == a => Some(shortcut_text(*sc)),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// The key held for shortcuts, as words: "⌘" on the Mac, "Ctrl" elsewhere ("Pinch or ⌘-scroll to zoom").
+pub fn command_key() -> &'static str {
+    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
+}
+
+/// A key with the command key, as words: "⌘L" on the Mac, "Ctrl+L" elsewhere (for keys a canvas reads itself).
+pub fn with_command(key: &str) -> String {
+    if cfg!(target_os = "macos") { format!("⌘{key}") } else { format!("Ctrl+{key}") }
 }
 
 /// Shortcuts typed into the window (the macOS menu bar handles its own and swallows the keys).
@@ -265,8 +291,8 @@ pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
         for (_, entries) in MENUS {
             for e in entries.iter() {
                 let I(action, _, Some((s, key))) = e else { continue };
-                // Zoom keys are egui's own; text fields keep their own undo.
-                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo)) || (designer && matches!(action, A::DuplicateLayer)) {
+                // Zoom keys are egui's own; text fields keep their own undo and Cmd+Backspace (delete to the line's start).
+                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo | A::DeleteLayer)) || (designer && matches!(action, A::DuplicateLayer)) {
                     continue;
                 }
                 let mods = if shift { egui::Modifiers::COMMAND | egui::Modifiers::SHIFT } else { egui::Modifiers::COMMAND };
@@ -289,9 +315,12 @@ pub mod native {
 
     use super::{Action, Entry, MENUS};
 
+    /// (No Backspace: the menu bar would take Cmd+Backspace from every text field. Delete Layer's shortcut is read
+    /// from the window instead, `pressed`.)
     fn code(key: egui::Key) -> Option<Code> {
         use eframe::egui::Key as K;
         Some(match key {
+            K::B => Code::KeyB,
             K::N => Code::KeyN,
             K::O => Code::KeyO,
             K::S => Code::KeyS,

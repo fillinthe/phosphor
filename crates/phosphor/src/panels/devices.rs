@@ -24,7 +24,7 @@ fn permissions(ui: &mut egui::Ui) {
             ui.label(name).on_hover_text(why.as_str());
             let (glyph, color) = match status {
                 Status::Allowed => (icon::CHECK_CIRCLE, accent()),
-                Status::NotAsked => (icon::QUESTION, Color32::GRAY),
+                Status::NotAsked => (icon::QUESTION, crate::theme::weak()),
                 Status::Denied | Status::Restricted => (icon::WARNING, crate::theme::WARN),
             };
             ui.label(RichText::new(format!("{glyph} {}", status.label())).color(color));
@@ -116,7 +116,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             let blocked = st.net.blocked();
             if !blocked.is_empty() {
                 ui.add_space(4.0);
-                ui.label(RichText::new("Blocked addresses").small().color(Color32::GRAY));
+                ui.label(RichText::new("Blocked addresses").small().color(crate::theme::weak()));
                 for ip in blocked {
                     crate::ui::toolbar(ui, |ui| {
                         ui.monospace(&ip);

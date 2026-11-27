@@ -83,7 +83,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     }
     let address = crate::control::default_osc_address(target);
     ui.horizontal(|ui| {
-        ui.label(RichText::new("OSC").small().color(Color32::GRAY));
+        ui.label(RichText::new("OSC").small().color(crate::theme::weak()));
         ui.monospace(&address).on_hover_text("Always works, no mapping needed. Send 0–1 (1 = press for buttons and clips). A layer's, group's or slice's name works in place of its number (/phosphor/layer/intro_loop/opacity), and * reaches them all. By place, for a controller page that works on any project: /phosphor/layers/2/… = the second layer from the bottom, /phosphor/selected/layer/… = the selected layer, and after either fx/1/… = its first effect.");
         if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy address").clicked() {
             ui.ctx().copy_text(address.clone());

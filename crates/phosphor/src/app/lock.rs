@@ -33,10 +33,11 @@ impl Lock {
     }
 }
 
-/// Menu actions that still work while locked.
+/// Menu actions that still work while locked. (Quit and closing the outputs ask first while they're showing:
+/// `app::guard`.)
 pub fn allowed_when_locked(a: &crate::menu::Action) -> bool {
     use crate::menu::Action as A;
-    matches!(a, A::Quit | A::ToggleOutput | A::Lock | A::Identify)
+    matches!(a, A::Quit | A::ToggleOutput | A::Blackout | A::Lock | A::Identify)
 }
 
 impl PhosphorApp {
@@ -129,9 +130,11 @@ impl PhosphorApp {
                 ui.separator();
                 let (stop, play) = (format!("{} Output", icon::STOP), format!("{} Output", icon::PLAY));
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
-                if crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {
-                    self.state.toggle_output();
+                if crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output window. In it: F twice = fullscreen, Esc twice = back to a window").clicked() {
+                    self.state.request_output_toggle();
                 }
+                // (Blackout stays in reach while locked.)
+                super::menus::blackout_button(ui, &mut self.state);
                 ui.label(format!("{} {}", icon::LIGHTNING, super::menus::launch_summary(&self.state.comp)));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if crate::ui::command(ui, format!("{} Unlock", icon::LOCK_OPEN)).clicked() {

@@ -27,12 +27,8 @@ impl PhosphorApp {
         let st = &mut self.state;
         let selected_layer = st.selected.filter(|id| *id != phosphor_engine::MASTER_ID && st.comp.layers.iter().any(|l| l.id == *id));
         match a {
-            A::NewProject => {
-                st.load_composition(Composition::starter());
-                st.project_path = None;
-                st.cloud_project = None;
-                st.notice = Some("New project. Undo (⌘Z) brings the previous one back.".into());
-            }
+            // (Asks first when the project has unsaved edits or is on the outputs: Undo can't bring it back.)
+            A::NewProject => self.guard(ctx, super::guard::Guarded::NewProject),
             A::Open => {
                 #[cfg(not(target_arch = "wasm32"))]
                 st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project or packed show", &["phosphor", crate::pack::EXT])));
@@ -166,7 +162,15 @@ impl PhosphorApp {
             A::ZoomIn => ctx.set_zoom_factor((ctx.zoom_factor() * 1.1).min(3.0)),
             A::ZoomOut => ctx.set_zoom_factor((ctx.zoom_factor() / 1.1).max(0.5)),
             A::ZoomReset => ctx.set_zoom_factor(1.0),
+            // Closing the outputs while they show asks first (`guard`); opening them is at once.
+            A::ToggleOutput if st.output_open() => self.guard(ctx, super::guard::Guarded::OutputsOff),
             A::ToggleOutput => st.toggle_output(),
+            A::Blackout => {
+                let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
+                if !st.comp.control_locked(&target) {
+                    st.comp.blackout_on = !st.comp.blackout_on;
+                }
+            }
             A::Identify => st.identify_outputs(now),
             A::Syphon => *st.comp.share_out_mut() = !st.comp.share_out(),
             A::Ndi => st.comp.ndi.enabled = !st.comp.ndi.enabled,
@@ -241,10 +245,15 @@ impl PhosphorApp {
         let show = crate::show::bundled().map(|b| b.manifest.name.clone());
         #[cfg(target_arch = "wasm32")]
         let show: Option<String> = None;
-        let title = match (show, project) {
-            (Some(s), _) => format!("{s} — Phosphor VJ show"),
-            (None, Some(p)) => format!("{p} — Phosphor VJ"),
-            (None, None) => "Phosphor VJ".into(),
+        // Edits not saved yet: "— Edited" after the name, as Mac documents say it (settled edits only, so a drag
+        // doesn't make the title flicker).
+        let edited = self.state.history.generation() != self.state.saved_generation;
+        let title = match (show, project, edited) {
+            (Some(s), _, _) => format!("{s} — Phosphor VJ show"),
+            (None, Some(p), true) => format!("{p} — Edited — Phosphor VJ"),
+            (None, Some(p), false) => format!("{p} — Phosphor VJ"),
+            (None, None, true) => "Untitled — Edited — Phosphor VJ".into(),
+            (None, None, false) => "Phosphor VJ".into(),
         };
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -278,13 +287,13 @@ impl PhosphorApp {
                 // the Outputs strip.)
                 for (i, (name, _)) in super::layout::LAYOUTS.iter().enumerate() {
                     let (glyph, text, tip) = match *name {
-                        "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues (⌘1)"),
-                        "Outputs" => (icon::PROJECTOR_SCREEN, "Outputs", "Outputs and inputs: every output, mapping, screens, streaming, session, LEDs, audio in (⌘2)"),
-                        "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators (⌘3)"),
-                        "Designer" => (icon::GRAPH, "Designer", "Build a comp as boxes wired together: pictures, effects, mixes (⌘4)"),
+                        "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues"),
+                        "Outputs" => (icon::PROJECTOR_SCREEN, "Outputs", "Outputs and inputs: every output, mapping, screens, streaming, session, LEDs, audio in"),
+                        "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators"),
+                        "Designer" => (icon::GRAPH, "Designer", "Build a comp as boxes wired together: pictures, effects, mixes"),
                         other => (icon::LAYOUT, other, ""),
                     };
-                    let tip = format!("{tip}. Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.");
+                    let tip = format!("{tip} ({}). Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.", crate::menu::shortcut_of(crate::menu::Action::Area(i)));
                     // Each area in its color: the show in the accent, outputs and controllers in theirs (their panels' tabs match).
                     let color = match *name {
                         "Outputs" => theme::Hue::Output.color(),
@@ -300,7 +309,8 @@ impl PhosphorApp {
                 // Short on room (narrow window, in-window menus): the next buttons become icons, names on hover.
                 // (Also when, last frame, these ran into the buttons on the right: longer words in another language,
                 // a narrow window. It goes back once there's plenty of room.)
-                // Output, Blackout and Search go to icons.
+                // Search goes to an icon and Donate and the account's name step aside; Output and Blackout keep their
+                // words at any width (what ends or saves a show must read at a glance).
                 let squeezed_key = egui::Id::new("top_bar_squeezed");
                 let squeezed: u8 = ui.ctx().data(|d| d.get_temp(squeezed_key)).unwrap_or(0);
                 let narrow = ui.available_width() < 560.0;
@@ -308,33 +318,26 @@ impl PhosphorApp {
                 let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
                 // (Surprise and the other Quick actions: the Quick menu, ⌘R, the Layers panel's Quick menu and each
                 // layer's own buttons. Not a big button here: most shows never press it.)
-                let (stop, play) = (named(icon::STOP, "Output"), named(icon::PLAY, "Output"));
+                let (stop, play) = (format!("{} Output", icon::STOP), format!("{} Output", icon::PLAY));
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
                 let r = crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off (they go back to the screens they filled last time) · right-click: pick a screen");
                 if r.clicked() {
-                    self.state.toggle_output();
+                    self.state.request_output_toggle();
                 }
                 r.right_menu(|ui| {
                     crate::ui::heading(ui, "Fullscreen on");
                     crate::ui::screen_menu(ui, &mut self.state);
                 });
-                // Blackout: every output fades to black (and back on the next press); right-click maps it.
-                let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
-                let black = self.state.comp.blackout_on;
-                let r = crate::ui::mode_button(ui, black, named(icon::MOON, "Blackout")).on_hover_text("Every output fades to black; press again to bring the show back (fade time: Outputs › Master) · right-click: map to a key or pad");
-                if r.clicked() && !crate::ui::is_locked(ui, &target) {
-                    self.state.comp.blackout_on = !black;
-                }
-                crate::ui::map_menu(ui, &r, target);
+                blackout_button(ui, &mut self.state);
                 ui.separator();
-                if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
+                if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, &format!("Search  {}", crate::menu::shortcut_of(crate::menu::Action::Palette)))).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
-                if crate::ui::icon_toggle(ui, &mut self.state.panel_browser, icon::SQUARES_FOUR).on_hover_text("Panel browser (Shift ⌘P): every panel here, open or closed: show, close, bring back").changed() {
+                if crate::ui::icon_toggle(ui, &mut self.state.panel_browser, icon::SQUARES_FOUR).on_hover_text(format!("Panel browser ({}): every panel here, open or closed: show, close, bring back", crate::menu::shortcut_of(crate::menu::Action::PanelBrowser))).changed() {
                     // (the toggle flips it)
                 }
                 if crate::ui::mode_button(ui, self.state.map_mode, format!("{} MAP", icon::PLUG))
-                    .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
+                    .on_hover_text(format!("Map mode ({}): click any control, then move a MIDI knob, send OSC or press a key to link them", crate::menu::shortcut_of(crate::menu::Action::MapMode)))
                     .clicked()
                 {
                     self.state.map_mode = !self.state.map_mode;
@@ -342,8 +345,10 @@ impl PhosphorApp {
                 }
                 let left_end = ui.cursor().left();
                 let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    account_button(ui, &mut self.state);
-                    crate::support::donate_button(ui);
+                    account_button(ui, &mut self.state, compact);
+                    if !compact {
+                        crate::support::donate_button(ui);
+                    }
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
                     self.state.updater.top_bar_button(ui);
                     // Help: the manual lives on the website (always the latest), in the app's language.
@@ -389,6 +394,10 @@ impl PhosphorApp {
                             let mut ask = crate::ui::confirm_removes();
                             if crate::ui::toggle(ui, &mut ask, "Ask before removing").on_hover_text("On: an \"are you sure?\" before a watched folder, a collection or its folder is removed. Ticking \"Don't ask again\" there switches this off").changed() {
                                 crate::ui::set_confirm_removes(ask);
+                            }
+                            let mut click_plays = crate::panels::media_click_plays();
+                            if crate::ui::toggle(ui, &mut click_plays, "A click in Media plays").on_hover_text("Off (the usual): a click on a file in Media picks it, a double-click or a drag plays it. On: a single click puts it on air").changed() {
+                                crate::panels::set_media_click_plays(click_plays);
                             }
                             let mut launches = crate::history::undo_playback();
                             if crate::ui::toggle(ui, &mut launches, "Undo includes clip launches").on_hover_text("Off (the usual): Undo steps through your edits (settings, effects, values, layout) and leaves what's playing on each layer alone. On: launching a clip or changing a layer's source is an undo step too").changed() {
@@ -449,7 +458,7 @@ impl PhosphorApp {
                     0 if gap < 8.0 => 1,
                     1 if gap < 8.0 && in_window => 2,
                     2 if gap > 330.0 => 1,
-                    1 if gap > 270.0 => 0,
+                    1 if gap > 300.0 => 0,
                     s => s,
                 };
                 if now_squeezed != squeezed {
@@ -652,8 +661,23 @@ pub(crate) fn open_doc(name: &str) {
 }
 
 /// Top bar: who's signed in (or "Sign in"); opens the Account window.
-fn account_button(ui: &mut egui::Ui, st: &mut State) {
+/// Blackout in the top bar (also while locked): every output fades to black and back on the next press; right-click
+/// maps it. Always in words, at any width.
+pub(crate) fn blackout_button(ui: &mut egui::Ui, st: &mut State) {
+    let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
+    let black = st.comp.blackout_on;
+    let tip = format!("Every output fades to black; press again to bring the show back ({}; fade time: Outputs › Master) · right-click: map to a key or pad", crate::menu::shortcut_of(crate::menu::Action::Blackout));
+    let r = crate::ui::mode_button(ui, black, format!("{} Blackout", icon::MOON)).on_hover_text(tip);
+    if r.clicked() && !crate::ui::is_locked(ui, &target) {
+        st.comp.blackout_on = !black;
+    }
+    crate::ui::map_menu(ui, &r, target);
+}
+
+/// `compact`: the icon alone (the top bar is short of room; the name is in its tooltip).
+fn account_button(ui: &mut egui::Ui, st: &mut State, compact: bool) {
     let text = match &st.account.user {
+        _ if compact => icon::USER_CIRCLE.to_string(),
         Some(u) => {
             let name = u.email.split('@').next().unwrap_or(&u.email);
             let short: String = name.chars().take(14).collect();

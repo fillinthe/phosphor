@@ -1272,6 +1272,12 @@ impl PhosphorApp {
                 println!("QUICK takeover: web control off");
                 continue;
             }
+            if name == "blackout" {
+                // Blackout on (pictures of the top bar's and status line's BLACKOUT).
+                self.state.comp.blackout_on = true;
+                println!("QUICK blackout: on");
+                continue;
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if name == "qr" {
                 // Audience play: put the QR code layer on the output.

@@ -141,7 +141,7 @@ impl PhosphorApp {
             Command::SetGenerator(id) => apply_palette(st, PaletteDrag { effect: None, generator: Some(id) }, None),
             Command::OpenTab(tab) => self.show_tab(tab),
             Command::TriggerColumn(c) => st.trigger(Trigger::Column(c), now),
-            Command::ToggleOutput => st.toggle_output(),
+            Command::ToggleOutput => st.request_output_toggle(),
             Command::ResetLayout => self.reset_area_layout(),
             Command::NewLayer => {
                 st.add_layer();
@@ -165,7 +165,7 @@ impl PhosphorApp {
                 if st.net.running() {
                     st.net.stop();
                 } else if let Err(e) = st.net.start() {
-                    st.notice = Some(e);
+                    st.notice = Some(crate::ui::notice::problem(e));
                 }
             }
         }

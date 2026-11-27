@@ -227,7 +227,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
                     ui.monospace(RichText::new(format!("{value:.3}")).small());
                     let mapped: Vec<String> = comp.control_maps.iter().filter(|m| m.source == *source).map(|m| crate::control::target_label(comp, &m.target)).collect();
                     if mapped.is_empty() {
-                        ui.label(RichText::new("not mapped").small().color(Color32::GRAY));
+                        ui.label(RichText::new("not mapped").small().color(crate::theme::weak()));
                     } else {
                         ui.label(RichText::new(format!("{} {}", icon::ARROW_RIGHT, mapped.join(", "))).small().color(accent()));
                     }
@@ -342,9 +342,9 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         match picked {
             Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<Vec<phosphor_engine::ControlMap>>(&json) {
                 Ok(maps) => comp.control_maps = maps,
-                Err(e) => *notice = Some(format!("Couldn't load those mappings: {e}")),
+                Err(e) => *notice = Some(crate::ui::notice::failure(format!("Couldn't load those mappings: {e}"))),
             },
-            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
+            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(crate::ui::notice::failure(e)),
             None => {}
         }
         if listening {
