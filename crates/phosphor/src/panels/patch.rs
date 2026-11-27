@@ -253,8 +253,8 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
     let (mut undo, mut redo) = (false, false);
     crate::ui::toolbar(ui, |ui| {
         crate::ui::nodes::zoom_controls(ui, &key);
-        undo = crate::ui::small_command_if(ui, !hist.undo.is_empty(), icon::ARROW_U_UP_LEFT).on_hover_text("Undo (Cmd+Z)").clicked();
-        redo = crate::ui::small_command_if(ui, !hist.redo.is_empty(), icon::ARROW_U_UP_RIGHT).on_hover_text("Redo (Shift+Cmd+Z)").clicked();
+        undo = crate::ui::small_command_if(ui, !hist.undo.is_empty(), icon::ARROW_U_UP_LEFT).on_hover_text(format!("Undo ({})", crate::menu::shortcut_of(crate::menu::Action::Undo))).clicked();
+        redo = crate::ui::small_command_if(ui, !hist.redo.is_empty(), icon::ARROW_U_UP_RIGHT).on_hover_text(format!("Redo ({})", crate::menu::shortcut_of(crate::menu::Action::Redo))).clicked();
     });
     let area = ui.available_rect_before_wrap();
     if ui.rect_contains_pointer(area) && !ui.ctx().egui_wants_keyboard_input() {

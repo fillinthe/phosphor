@@ -287,13 +287,13 @@ impl PhosphorApp {
                 // the Outputs strip.)
                 for (i, (name, _)) in super::layout::LAYOUTS.iter().enumerate() {
                     let (glyph, text, tip) = match *name {
-                        "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues (⌘1)"),
-                        "Outputs" => (icon::PROJECTOR_SCREEN, "Outputs", "Outputs and inputs: every output, mapping, screens, streaming, session, LEDs, audio in (⌘2)"),
-                        "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators (⌘3)"),
-                        "Designer" => (icon::GRAPH, "Designer", "Build a comp as boxes wired together: pictures, effects, mixes (⌘4)"),
+                        "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues"),
+                        "Outputs" => (icon::PROJECTOR_SCREEN, "Outputs", "Outputs and inputs: every output, mapping, screens, streaming, session, LEDs, audio in"),
+                        "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators"),
+                        "Designer" => (icon::GRAPH, "Designer", "Build a comp as boxes wired together: pictures, effects, mixes"),
                         other => (icon::LAYOUT, other, ""),
                     };
-                    let tip = format!("{tip}. Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.");
+                    let tip = format!("{tip} ({}). Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.", crate::menu::shortcut_of(crate::menu::Action::Area(i)));
                     // Each area in its color: the show in the accent, outputs and controllers in theirs (their panels' tabs match).
                     let color = match *name {
                         "Outputs" => theme::Hue::Output.color(),
@@ -338,14 +338,14 @@ impl PhosphorApp {
                 }
                 crate::ui::map_menu(ui, &r, target);
                 ui.separator();
-                if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
+                if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, &format!("Search  {}", crate::menu::shortcut_of(crate::menu::Action::Palette)))).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
-                if crate::ui::icon_toggle(ui, &mut self.state.panel_browser, icon::SQUARES_FOUR).on_hover_text("Panel browser (Shift ⌘P): every panel here, open or closed: show, close, bring back").changed() {
+                if crate::ui::icon_toggle(ui, &mut self.state.panel_browser, icon::SQUARES_FOUR).on_hover_text(format!("Panel browser ({}): every panel here, open or closed: show, close, bring back", crate::menu::shortcut_of(crate::menu::Action::PanelBrowser))).changed() {
                     // (the toggle flips it)
                 }
                 if crate::ui::mode_button(ui, self.state.map_mode, format!("{} MAP", icon::PLUG))
-                    .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
+                    .on_hover_text(format!("Map mode ({}): click any control, then move a MIDI knob, send OSC or press a key to link them", crate::menu::shortcut_of(crate::menu::Action::MapMode)))
                     .clicked()
                 {
                     self.state.map_mode = !self.state.map_mode;

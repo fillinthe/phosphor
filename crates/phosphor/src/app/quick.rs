@@ -89,7 +89,7 @@ impl State {
             for l in &mut self.comp.layers {
                 l.still();
             }
-            self.notice = Some("Motion off: the look stays still (undo with ⌘Z)".into());
+            self.notice = Some(format!("Motion off: the look stays still (undo with {})", crate::menu::shortcut_of(crate::menu::Action::Undo)));
             return;
         }
         let mut d = dice();
@@ -108,13 +108,15 @@ impl State {
         match q {
             Quick::Surprise => {
                 self.comp.surprise(now32, &mut d);
-                self.notice = Some("Surprise: a random look on every layer that moves with the sound. ⌘Z undoes it; Quick › Stop the Motion keeps it still".into());
+                self.notice = Some(format!("Surprise: a random look on every layer that moves with the sound. {} undoes it; Quick › Stop the Motion keeps it still", crate::menu::shortcut_of(crate::menu::Action::Undo)));
             }
             Quick::InstantSet => {
                 self.comp.instant_set(now32, &mut d);
                 self.selected = self.comp.layers.last().map(|l| l.id);
                 self.clip_page = 0;
-                self.notice = Some("Instant set: hit columns 1–8 (keys 1–9), tap the tempo. Undo (⌘Z) brings your layers back.".into());
+                // (The keys it names are the columns it filled on the first bank: `CLIP_PAGE_SIZE` at most.)
+                let keys = self.comp.clip_columns.clamp(1, crate::panels::CLIP_PAGE_SIZE);
+                self.notice = Some(format!("Instant set: press keys 1–{keys} to play its columns, tap the tempo. {} brings your layers back.", crate::menu::shortcut_of(crate::menu::Action::Undo)));
             }
             _ => {
                 let Some(id) = layer else {
@@ -180,7 +182,7 @@ pub(crate) fn layers_quick_menu(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let target = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&st.comp.layers, id));
-    if crate::ui::command(ui, format!("{} Surprise · {where_}", icon::DICE_FIVE)).on_hover_text(format!("{} (⌘R: all layers)", Quick::Surprise.about())).clicked() {
+    if crate::ui::command(ui, format!("{} Surprise · {where_}", icon::DICE_FIVE)).on_hover_text(format!("{} ({}: all layers)", Quick::Surprise.about(), crate::menu::shortcut_of(crate::menu::Action::Quick(Quick::Surprise)))).clicked() {
         match target {
             Some(id) => st.quick_on(Quick::SurpriseLayer, Some(id), now),
             None => st.quick(Quick::Surprise, now),

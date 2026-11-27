@@ -41,7 +41,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let id = st.comp.add_comp(&format!("Comp {n}"));
             st.selected = Some(id);
         }
-        ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; ⌘R = Surprise)");
+        ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text(format!("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; {} = Surprise)", crate::menu::shortcut_of(crate::menu::Action::Quick(crate::app::Quick::Surprise))));
         help(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
@@ -551,7 +551,7 @@ pub(crate) fn layer_card(
                 action = Some(LayerAction::LeaveGroup);
                 ui.close();
             }
-        } else if crate::ui::command(ui, label(icon::STACK, "Group with the layer below (⌘G)")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
+        } else if crate::ui::command(ui, label(icon::STACK, &format!("Group with the layer below ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
             action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
@@ -848,7 +848,7 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
 /// the Mixer strip).
 pub(crate) fn arrange_items(ui: &mut egui::Ui) -> Option<LayerAction> {
     let mut action = None;
-    if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+    if crate::ui::command(ui, label(icon::COPY, &format!("Duplicate ({})", crate::menu::shortcut_of(crate::menu::Action::DuplicateLayer)))).clicked() {
         action = Some(LayerAction::Duplicate);
     }
     if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {

@@ -604,7 +604,7 @@ pub(crate) fn zoom_controls(ui: &mut egui::Ui, key: &str) {
     let id = egui::Id::new(("node_canvas", key));
     let zoom: f32 = ui.ctx().data(|d| d.get_temp(id.with("zoom"))).unwrap_or(1.0);
     let ask = |ui: &egui::Ui, by: f32| ui.ctx().data_mut(|d| d.insert_temp(id.with("zoom_by"), by));
-    if super::small_command(ui, icon::MINUS).on_hover_text("Zoom out (or pinch, or Cmd-scroll over the canvas)").clicked() {
+    if super::small_command(ui, icon::MINUS).on_hover_text(format!("Zoom out (or pinch, or {}-scroll over the canvas)", crate::menu::command_key())).clicked() {
         ask(ui, 0.8);
     }
     if super::small_command(ui, format!("{:.0}%", zoom * 100.0)).on_hover_text("Full size").clicked() {

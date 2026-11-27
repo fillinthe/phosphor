@@ -1254,7 +1254,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
             (None, None) if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
             _ => crate::ui::hint(ui, "not compiled"),
         };
-        crate::ui::help(ui, "Right-click the canvas (or drop a wire on it) to add a block: type to find one · drag from a block's right dot to another's left dot to wire it, or onto the dot beside a setting to drive it with a Numbers block · right-click a wire to put a block on it · drag a band to select several; Delete, Cmd+D, Cmd+C / V, arrows, Cmd+Z · right-click a block: Switch off, Look at this box, Reset settings · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
+        crate::ui::help(ui, &format!("Right-click the canvas (or drop a wire on it) to add a block: type to find one · drag from a block's right dot to another's left dot to wire it, or onto the dot beside a setting to drive it with a Numbers block · right-click a wire to put a block on it · drag a band to select several; Delete, {}, {} / V, arrows, {} · right-click a block: Switch off, Look at this box, Reset settings · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)", crate::menu::with_command("D"), crate::menu::with_command("C"), crate::menu::shortcut_of(crate::menu::Action::Undo)));
     });
     ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
     if show_code {

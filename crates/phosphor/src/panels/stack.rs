@@ -192,7 +192,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
     crate::ui::toolbar(ui, |ui| {
         ui.menu_button(label(icon::PLUS, "Layer"), |ui| {
             ui.set_min_width(260.0);
-            if crate::ui::command(ui, label(icon::PLUS, "One layer (⌘ Shift N)")).clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, &format!("One layer ({})", crate::menu::shortcut_of(crate::menu::Action::AddLayer)))).clicked() {
                 add = 1;
                 ui.close();
             }
@@ -210,7 +210,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
             ui.separator();
             let sel = selected_layers(st);
-            if crate::ui::command_if(ui, !sel.is_empty(), label(icon::STACK, "Group the selected layers (⌘G)")).on_hover_text("Mix them together first, then treat them like one layer: on/off, opacity, blend, effects").clicked() {
+            if crate::ui::command_if(ui, !sel.is_empty(), label(icon::STACK, &format!("Group the selected layers ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).on_hover_text("Mix them together first, then treat them like one layer: on/off, opacity, blend, effects").clicked() {
                 group_selected = true;
                 ui.close();
             }
@@ -437,7 +437,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
         ui.close();
     }
     ui.separator();
-    if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+    if crate::ui::command(ui, label(icon::COPY, &format!("Duplicate ({})", crate::menu::shortcut_of(crate::menu::Action::DuplicateLayer)))).clicked() {
         act(ui, LayerAction::Duplicate);
     }
     if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
@@ -457,7 +457,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
         if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
             act(ui, LayerAction::LeaveGroup);
         }
-    } else if crate::ui::command(ui, label(icon::STACK, "Group with the layer below (⌘G)")).clicked() {
+    } else if crate::ui::command(ui, label(icon::STACK, &format!("Group with the layer below ({})", crate::menu::shortcut_of(crate::menu::Action::Group)))).clicked() {
         act(ui, LayerAction::GroupWithBelow);
     }
     #[cfg(not(target_arch = "wasm32"))]

@@ -135,7 +135,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(crate::theme::weak()));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            help(ui, "Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, Cmd+A / D / C / V / L (lock)");
+            help(ui, &format!("Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, {} / D / C / V / L (lock)", crate::menu::with_command("A")));
         } else if st.comp.surface.on_page().next().is_none() {
             crate::ui::empty_note(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
@@ -311,7 +311,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                                 ui.close();
                             }
                         });
-                        corner.on_hover_text("Locked in place: click the padlock to unlock (or Cmd+L)");
+                        corner.on_hover_text(format!("Locked in place: click the padlock to unlock (or {})", crate::menu::with_command("L")));
                     }
                     let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty()) || (w.kind == WidgetKind::Meter && !w.inputs.is_empty());
                     if !wired && w.kind != WidgetKind::Label {
@@ -624,7 +624,7 @@ fn group_items(ui: &mut egui::Ui, ids: &[u64], all_locked: bool, menu: bool) -> 
     if all_locked {
         item(ui, icon::LOCK_OPEN, "Unlock", "Let it move and resize again", |ids| Act::Lock(ids, false));
     } else {
-        item(ui, icon::LOCK, "Lock", "Keep it where it is: no moving, resizing or arranging until unlocked (Cmd+L)", |ids| Act::Lock(ids, true));
+        item(ui, icon::LOCK, "Lock", &format!("Keep it where it is: no moving, resizing or arranging until unlocked ({})", crate::menu::with_command("L")), |ids| Act::Lock(ids, true));
     }
     ui.separator();
     if crate::ui::danger_button(ui, label(icon::TRASH, &many("Delete"))).clicked() {
@@ -935,7 +935,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         if typed {
             w.keep_inside(cols);
         }
-        toggle(ui, &mut w.locked, label(icon::LOCK, "Lock")).on_hover_text("Keep it where it is: no moving, resizing or arranging until unlocked (Cmd+L on the canvas)");
+        toggle(ui, &mut w.locked, label(icon::LOCK, "Lock")).on_hover_text(format!("Keep it where it is: no moving, resizing or arranging until unlocked ({} on the canvas)", crate::menu::with_command("L")));
     });
     if w.kind == WidgetKind::Text {
         ui.add_space(4.0);

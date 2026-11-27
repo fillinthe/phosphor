@@ -133,7 +133,7 @@ impl State {
             msg.push_str(&format!(" Effects left out: {}.", left.join(", ")));
         }
         if missing > 0 {
-            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+            msg.push_str(&format!(" {missing} media files aren't on this computer — plug in the drive, or Media › Find missing media…"));
         }
         // (Files not here are something to fix: it stays until OK.)
         self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
@@ -169,7 +169,7 @@ impl State {
         }
         let missing = self.missing_media().len();
         if missing > 0 {
-            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+            msg.push_str(&format!(" {missing} media files aren't on this computer — plug in the drive, or Media › Find missing media…"));
         }
         // (Files not here are something to fix: it stays until OK.)
         self.notice = Some(if missing > 0 { crate::ui::notice::problem(msg) } else { msg });
@@ -312,7 +312,7 @@ impl PhosphorApp {
                         "Live" => "Camera",
                         _ => "Generator",
                     };
-                    let text = format!("{kind} · {}{}", v.name, if missing { " (not on this Mac)" } else { "" });
+                    let text = format!("{kind} · {}{}", v.name, if missing { " (not on this computer)" } else { "" });
                     crate::ui::hint(ui, text);
                 }
             });
@@ -332,7 +332,7 @@ impl PhosphorApp {
             }
             ui.add_space(6.0);
             if found.is_none() {
-                crate::ui::hint(ui, "Looking at the pictures (their sizes, whether they're on this Mac)…");
+                crate::ui::hint(ui, "Looking at the pictures (their sizes, whether they're on this computer)…");
                 ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
             }
             ui.add_enabled_ui(found.is_some(), |ui| crate::ui::toolbar(ui, |ui| {

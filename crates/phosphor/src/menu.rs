@@ -270,6 +270,16 @@ pub fn shortcut_of(a: Action) -> String {
         .unwrap_or_default()
 }
 
+/// The key held for shortcuts, as words: "⌘" on the Mac, "Ctrl" elsewhere ("Pinch or ⌘-scroll to zoom").
+pub fn command_key() -> &'static str {
+    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
+}
+
+/// A key with the command key, as words: "⌘L" on the Mac, "Ctrl+L" elsewhere (for keys a canvas reads itself).
+pub fn with_command(key: &str) -> String {
+    if cfg!(target_os = "macos") { format!("⌘{key}") } else { format!("Ctrl+{key}") }
+}
+
 /// Shortcuts typed into the window (the macOS menu bar handles its own and swallows the keys).
 pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
     let typing = ctx.memory(|m| m.focused().is_some());

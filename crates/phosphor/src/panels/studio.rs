@@ -398,7 +398,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         });
         let now = ui.input(|i| i.time);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
-        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged or resized slice lands on the grid without bending. Hold Cmd (Ctrl on Windows) while dragging to place it freely");
+        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text(format!("A dragged point lands on another slice's point nearby, otherwise on the grid; a dragged or resized slice lands on the grid without bending. Hold {} while dragging to place it freely", crate::menu::command_key()));
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)").changed() && vs.drawing {
@@ -411,7 +411,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
-        help(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
+        help(ui, &format!("Pinch or {}-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points", crate::menu::command_key()));
     });
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {

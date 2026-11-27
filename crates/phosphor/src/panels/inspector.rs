@@ -132,7 +132,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 let title = format!("{} Clip {} · column {}", icon::SQUARES_FOUR, k.name, c + 1);
                 crate::ui::section(ui, "inspector_clip", title, true, |ui| {
                     if also_clips > 0 {
-                        ui.horizontal(|ui| hint(ui, format!("Editing {} clips", also_clips + 1)).on_hover_text("How a press plays, sound and own settings go to all of them. Click a clip without Shift / Cmd to edit just one."));
+                        ui.horizontal(|ui| hint(ui, format!("Editing {} clips", also_clips + 1)).on_hover_text(format!("How a press plays, sound and own settings go to all of them. Click a clip without Shift / {} to edit just one.", crate::menu::command_key())));
                     }
                     if let Some(a) = super::clip_editor(ui, layer, c, true, is_movie) {
                         clip_act = Some((c, a));
@@ -143,7 +143,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             if also > 0 {
-                ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one."));
+                ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text(format!("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / {} to edit just one.", crate::menu::command_key())));
             }
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), canvas, position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default(), numbers };

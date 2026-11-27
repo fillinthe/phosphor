@@ -464,13 +464,13 @@ impl PhosphorApp {
                     // Undo / Redo right here: on a projector there's no menu bar to reach for after a bad drag.
                     let bar = egui::Rect::from_min_size(rect.left_bottom() + egui::vec2(12.0, -42.0), egui::vec2(rect.width() - 24.0, 30.0));
                     ui.scope_builder(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
-                        if crate::ui::command_if(ui, out.can_undo, crate::ui::label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("Undo the last change (Cmd/Ctrl+Z)").clicked() {
+                        if crate::ui::command_if(ui, out.can_undo, crate::ui::label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text(format!("Undo the last change ({})", crate::menu::shortcut_of(crate::menu::Action::Undo))).clicked() {
                             out.undo_steps.push(-1);
                         }
-                        if crate::ui::command_if(ui, out.can_redo, crate::ui::label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text("Redo (Shift+Cmd/Ctrl+Z)").clicked() {
+                        if crate::ui::command_if(ui, out.can_redo, crate::ui::label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text(format!("Redo ({})", crate::menu::shortcut_of(crate::menu::Action::Redo))).clicked() {
                             out.undo_steps.push(1);
                         }
-                        ui.label(egui::RichText::new("Mapping edit: drag corners · Cmd/Ctrl+Z undo · E hides handles · F fullscreen").size(13.0).color(crate::theme::over_picture(160)));
+                        ui.label(egui::RichText::new(&format!("Mapping edit: drag corners · {} undo · E twice hides handles · F twice = fullscreen", crate::menu::shortcut_of(crate::menu::Action::Undo))).size(13.0).color(crate::theme::over_picture(160)));
                     });
                 }
             },

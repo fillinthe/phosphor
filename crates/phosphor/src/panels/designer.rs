@@ -107,10 +107,10 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 path.truncate(i + 1);
             }
         }
-        if crate::ui::command_if(ui, can_undo, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("Takes back the last change: a box, a wire, a setting, anything (Cmd-Z, the same Undo as the Edit menu)").clicked() {
+        if crate::ui::command_if(ui, can_undo, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text(format!("Takes back the last change: a box, a wire, a setting, anything ({}, the same Undo as the Edit menu)", crate::menu::shortcut_of(crate::menu::Action::Undo))).clicked() {
             step = Some(-1);
         }
-        if crate::ui::command_if(ui, can_redo, label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text("Puts back what Undo took away (Shift-Cmd-Z)").clicked() {
+        if crate::ui::command_if(ui, can_redo, label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text(format!("Puts back what Undo took away ({})", crate::menu::shortcut_of(crate::menu::Action::Redo))).clicked() {
             step = Some(1);
         }
         crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));

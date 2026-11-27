@@ -46,7 +46,7 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
             view.fit = true;
         }
         venue_menu(ui, st);
-        help(ui, "Drag an output (or an LED fixture, shown lit with what it's sent) to where it is in the venue; its corner sizes it, edges snap to the others. Scroll or drag the black to move around, pinch or Cmd-scroll to zoom. Click one to pick it in the Mapping Studio.");
+        help(ui, &format!("Drag an output (or an LED fixture, shown lit with what it's sent) to where it is in the venue; its corner sizes it, edges snap to the others. Scroll or drag the black to move around, pinch or {}-scroll to zoom. Click one to pick it in the Mapping Studio.", crate::menu::command_key()));
     });
     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(TILES), tiles));
     if tiles {
