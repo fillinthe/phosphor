@@ -82,6 +82,8 @@ struct LayerResources {
     generator: Option<Target>,
     /// Outgoing source during a transition.
     generator_out: Option<Target>,
+    /// The source drawn at thumbnail size while nothing shows the layer (`quiet`).
+    generator_small: Option<Target>,
     media_out: Option<Media>,
     /// RGB copies of incoming/outgoing (when YUV) and the blended result.
     trans: [Option<Target>; 3],
@@ -109,6 +111,8 @@ struct LayerResources {
     /// A layer with its own frame rate: its last finished picture, and when it was drawn.
     held: Option<Target>,
     held_at: f32,
+    /// Since when nobody has seen it (`quiet`): drawn small, and after a while its full-size source picture goes.
+    quiet_since: Option<f32>,
 }
 
 /// A multi-pass shader's buffers: two textures each (read one, write the other), and which is
@@ -120,6 +124,16 @@ struct PassBuffers {
     /// Frames this shader has drawn here (its FRAMEINDEX: ISF counts from when the effect starts, so "capture on the
     /// first frames" works whenever it's added).
     frames: u32,
+}
+
+/// Which of a layer's pictures a source draws in (`Engine::resolve_spec`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SourceSlot {
+    Main,
+    /// The outgoing side of a transition.
+    Outgoing,
+    /// Thumbnail size, while nothing shows the layer (`quiet`).
+    Small,
 }
 
 /// Resource keys for the effect a "Through an effect" transition runs on the incoming / outgoing picture.
@@ -236,6 +250,7 @@ mod mesh;
 mod passes;
 mod pool;
 mod previews;
+mod quiet;
 mod sample;
 mod timing;
 #[cfg(test)]
@@ -1165,13 +1180,26 @@ impl Engine {
             if !layer.enabled {
                 continue;
             }
+            // How much of it shows in the mix: nothing when muted (solo elsewhere, Mix off), faded out, or its side
+            // of the crossfader is down; nor when its group is faded out.
+            let muted = (any_solo && !layer.solo) || !layer.in_mix;
+            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
+            let group_hidden = open_group.and_then(|g| comp.group(g)).is_some_and(|g| !self.group_seen(g, ctx));
+            // Nothing shows it at full size: source and effects at its thumbnail's size, the thumbnail kept live for
+            // cueing (`quiet`). Back in sight, it's drawn at full size that frame.
+            let small = self.out_of_sight(layer, opacity > 0.001 && !group_hidden, ctx);
+            if self.skip_quiet(layer.id, small, opacity, time) {
+                continue;
+            }
+            let thumb_scale = THUMBNAIL_WIDTH as f32 / w as f32;
             // Its own frame rate: between its frames, the picture it drew last (source and effects skipped).
-            let held = (layer.render_fps > 0.0 && layer.transition.is_none())
+            let held = (!small && layer.render_fps > 0.0 && layer.transition.is_none())
                 .then(|| self.layers.get(&layer.id).and_then(|r| r.held.as_ref().filter(|_| time >= r.held_at && time - r.held_at < 1.0 / layer.render_fps)))
                 .flatten()
                 .map(|t| Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height });
-            let frame = if let Some(frame) = held {
-                frame
+            // (`at_thumb`: drawn at the thumbnail's scale, so it's placed on a canvas that size.)
+            let (frame, at_thumb) = if let Some(frame) = held {
+                (frame, false)
             } else {
                 // A generator at a lower render size (then scaled up by the layer's fit).
                 let (gw, gh) = match &layer.source {
@@ -1181,7 +1209,8 @@ impl Engine {
                     }
                     _ => (w, h),
                 };
-                let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, gw, gh, time, mods, passes);
+                let ((gw, gh), slot) = if small { (quiet::scaled((gw, gh), thumb_scale), SourceSlot::Small) } else { ((gw, gh), SourceSlot::Main) };
+                let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, slot, gw, gh, time, mods, passes);
                 // A stopped clip fades out to nothing over its transition.
                 let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
                 let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
@@ -1189,7 +1218,7 @@ impl Engine {
                 };
                 match &layer.transition {
                     Some(t) if t.progress(time) < 1.0 => {
-                        if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, passes) {
+                        if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], SourceSlot::Outgoing, w, h, time, mods, passes) {
                             // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
                             let shader = (t.kind == crate::model::TransitionKind::Shader)
                                 .then(|| crate::shaders::transition(&t.effect))
@@ -1229,20 +1258,35 @@ impl Engine {
                 } else if let Some(res) = self.layers.get_mut(&layer.id) {
                     res.feed_pre = None;
                 }
-                let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, layer.chain(), frame, time, mods, &comp.layers, passes) };
-                if layer.render_fps > 0.0 {
+                // The effects at the size it shows at: the thumbnail's while nobody sees it, the canvas's for a picture
+                // much bigger than that (a 4K clip in an HD show). Moved, turned or pinned, it may show bigger: as it is.
+                let generated = small && matches!(layer.source, SourceSpec::Generator(_));
+                let size = if small {
+                    (!generated).then(|| quiet::scaled(frame.size(), thumb_scale))
+                } else if layer.transform.is_identity() && !layer.is_data() {
+                    quiet::chain_size(frame.size(), (w, h), layer.fit)
+                } else {
+                    None
+                };
+                let before = frame.size();
+                let frame = if layer.fx_bypass { frame } else { self.apply_effects_at(layer.id, layer.chain(), frame, size, time, mods, &comp.layers, passes) };
+                let at_thumb = generated || (small && frame.size() != before);
+                if layer.render_fps <= 0.0 {
+                    if let Some(res) = self.layers.get_mut(&layer.id) {
+                        res.held = None;
+                    }
+                } else if !small {
                     let (fw, fh) = frame.size();
                     let res = self.layers.entry(layer.id).or_default();
                     Target::ensure(&mut res.held, &device, "held layer", fw, fh);
                     res.held_at = time;
                     let view = res.held.as_ref().unwrap().view.clone();
                     push_fit_copy(view, &frame, (fw, fh), FitMode::Stretch, (fw, fh), passes);
-                } else if let Some(res) = self.layers.get_mut(&layer.id) {
-                    res.held = None;
                 }
-                frame
+                (frame, at_thumb)
             };
-            self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, passes);
+            let placed_on = if at_thumb { (THUMBNAIL_WIDTH, thumb_h) } else { (w, h) };
+            self.push_thumbnail(layer.id, layer.fit, &frame, placed_on, thumb_h, passes);
             if wanted.contains(&layer.id) {
                 // Points keep their own size and precision (a model's vertices aren't resampled into the canvas).
                 let data = layer.is_data();
@@ -1271,8 +1315,6 @@ impl Engine {
                     push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), passes);
                 }
             }
-            let muted = (any_solo && !layer.solo) || !layer.in_mix;
-            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
             if opacity <= 0.001 {
                 self.chains.release(layer.id);
                 continue;

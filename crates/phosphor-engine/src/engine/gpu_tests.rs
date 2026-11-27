@@ -1355,3 +1355,78 @@ fn effect_chains_share_their_pictures_and_keep_their_own_results() {
     let i = ((h / 2 * w + w / 2) * 4) as usize;
     assert!(px[i] > 250 && px[i + 1] > 250 && px[i + 2] > 250, "white, inverted by the master, inverted by the slice: {:?}", &px[i..i + 4]);
 }
+
+/// A layer nobody sees (faded out) is drawn at its thumbnail's size, its thumbnail still right; faded up, it's drawn
+/// at full size that same frame. One with trails keeps its full size (they'd start over).
+#[test]
+fn a_faded_out_layer_draws_at_thumbnail_size() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 960, height: 540, next_id: 100, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 1.0, 0.0], opacity: 0.0, ..Default::default() };
+    layer.effects.push(comp.new_effect("invert").unwrap());
+    comp.layers.push(layer);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let small = engine.layers[&1].generator_small.as_ref().map(|t| (t.width, t.height));
+    assert_eq!(small, Some((THUMBNAIL_WIDTH, 135)), "drawn at the thumbnail's size");
+    assert!(engine.layers[&1].generator.is_none(), "not at full size");
+    assert_eq!(engine.chains.sizes(), vec![(THUMBNAIL_WIDTH, 135)], "its effects at that size too");
+    let (_, _, px) = engine.read_layer_thumbnail(1).expect("thumbnail");
+    assert!(px[0] > 240 && px[1] < 15 && px[2] > 240, "green inverted = magenta: {:?}", &px[..4]);
+    // Faded up: full size now, on screen.
+    comp.layers[0].opacity = 1.0;
+    let px = middle(&mut engine, &comp);
+    assert!(px[0] > 240 && px[1] < 15 && px[2] > 240, "magenta on screen: {px:?}");
+    assert_eq!(engine.layers[&1].generator.as_ref().map(|t| (t.width, t.height)), Some((960, 540)));
+    // Shown on its own somewhere (a preview window): full size even faded out.
+    comp.layers[0].opacity = 0.0;
+    engine.request_monitors(vec![(1, 64, 36)]);
+    engine.layers.get_mut(&1).unwrap().generator = None;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].generator.is_some(), "a preview window shows it");
+    // Trails keep full size.
+    let trails = comp.new_effect("trails").unwrap();
+    comp.layers[0].effects.push(trails);
+    engine.layers.get_mut(&1).unwrap().generator = None;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].generator.is_some(), "trails: full size");
+}
+
+/// A picture much bigger than the canvas goes through its effects at the size it shows at, and looks the same.
+#[test]
+fn a_big_picture_runs_its_effects_at_canvas_size() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 16, next_id: 100, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Image { name: "big".into(), path: Some("big.png".into()) }, ..Default::default() };
+    layer.effects.push(comp.new_effect("invert").unwrap());
+    comp.layers.push(layer);
+    // 128 x 64 of blue: four times the canvas.
+    let rgba: Vec<u8> = [0u8, 0, 255, 255].repeat(128 * 64);
+    engine.upload_rgba(1, 128, 64, &rgba);
+    let px = middle(&mut engine, &comp);
+    assert!(px[0] > 240 && px[1] > 240 && px[2] < 15, "blue inverted = yellow: {px:?}");
+    assert_eq!(engine.chains.sizes(), vec![(32, 16)], "the chain ran at the canvas's size");
+}
+
+/// An unseen layer's thumbnail is redrawn about ten times a second, nothing drawn for it in between; after two
+/// seconds unseen its full-size picture is freed.
+#[test]
+fn an_unseen_layer_is_drawn_now_and_then() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 960, height: 540, next_id: 100, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("plasma".into()), ..Default::default() };
+    layer.effects.push(comp.new_effect("invert").unwrap());
+    comp.layers.push(layer);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    assert!(engine.layers[&1].generator.is_some());
+    comp.layers[0].opacity = 0.0;
+    let counts: Vec<usize> = (1..=12).map(|i| engine.render(&comp, i as f32 / 60.0, &ModInputs::default()).passes).collect();
+    let most = *counts.iter().max().unwrap();
+    assert_eq!(counts.iter().filter(|c| **c == most).count(), 2, "drawn on 2 frames of 12: {counts:?}");
+    assert!(engine.layers[&1].generator.is_some(), "kept a while");
+    engine.render(&comp, 5.0, &ModInputs::default());
+    assert!(engine.layers[&1].generator.is_none(), "freed after two seconds unseen");
+    // Back in sight: drawn at full size that frame.
+    comp.layers[0].opacity = 1.0;
+    engine.render(&comp, 5.1, &ModInputs::default());
+    assert!(engine.layers[&1].generator.is_some());
+}

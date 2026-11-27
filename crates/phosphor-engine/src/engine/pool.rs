@@ -87,6 +87,12 @@ impl ChainPool {
     pub(super) fn set_count(&self) -> usize {
         self.sets.values().map(Vec::len).sum()
     }
+
+    /// The sizes chains ran at (tests).
+    #[cfg(test)]
+    pub(super) fn sizes(&self) -> Vec<(u32, u32)> {
+        self.sets.keys().map(|k| (k.0, k.1)).collect()
+    }
 }
 
 #[cfg(test)]

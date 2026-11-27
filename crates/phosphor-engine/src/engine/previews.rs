@@ -109,10 +109,10 @@ impl Engine {
                     out
                 }
                 PreviewItem::Generator(id) => shaders::generator(id).and_then(|desc| {
-                    self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, pw, ph, time, mods, passes)
+                    self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], SourceSlot::Main, pw, ph, time, mods, passes)
                 }),
                 // A few seconds in, so shaders that start dark (fades, feedback) show something in a still.
-                PreviewItem::Clip(id, values) => self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), values, &[], false, pw, ph, time + 7.0, mods, passes),
+                PreviewItem::Clip(id, values) => self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), values, &[], SourceSlot::Main, pw, ph, time + 7.0, mods, passes),
                 // (Unwrapped above; a Stage inside a Stage draws nothing.)
                 PreviewItem::Stage(_) => None,
             };
