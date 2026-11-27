@@ -193,6 +193,31 @@ mod native;
 #[cfg(target_os = "macos")]
 pub use native::macos::WindowChromeMetrics;
 
+/// PHOSPHOR PATCH: a screen as winit sees it (on Linux the app has no other way to list them: X11 and Wayland alike).
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Monitor {
+    /// What the system calls it (X11: the output, "HDMI-1"; Wayland: the compositor's name). Empty when unknown.
+    pub name: String,
+    /// Top-left corner on the desktop, in pixels.
+    pub position: [i32; 2],
+    /// Size in pixels.
+    pub size: [u32; 2],
+    /// Pixels per point.
+    pub scale: f64,
+    /// The primary screen (Wayland has none).
+    pub primary: bool,
+}
+
+/// PHOSPHOR PATCH: the screens winit knows, in `available_monitors()` order: the order
+/// `egui::ViewportCommand::SetMonitor` counts in. None outside the event loop's callbacks (an app's `update` / `logic`
+/// and its viewports' callbacks run inside them).
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(feature = "glow", feature = "wgpu_no_default_features"))]
+pub fn monitors() -> Option<Vec<Monitor>> {
+    native::monitors()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(any(feature = "glow", feature = "wgpu_no_default_features"))]
 pub use native::run::EframeWinitApplication;

@@ -203,7 +203,7 @@ mod tests {
     use super::*;
 
     fn d(id: u32, name: &str, x: f32) -> Display {
-        Display { id, name: name.into(), x, y: 0.0, w: 1920.0, h: 1080.0, pixels: (1920, 1080), main: id == 1 }
+        Display { id, name: name.into(), x, y: 0.0, w: 1920.0, h: 1080.0, pixels: (1920, 1080), at_px: (x as i32, 0), main: id == 1, old_key: String::new() }
     }
     fn out(output: u64, filling: Option<u32>, open: bool) -> Placed {
         Placed { output, name: format!("Projector {output}"), open, filling, screen: String::new() }
