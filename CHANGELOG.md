@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Mac: a full-screen output stays put. macOS sometimes moved it back under the menu bar, so the picture (and every
   mapped slice) slid down and the desktop showed above it; Phosphor now notices within a second and puts it back.
 - Windows: a full-screen output no longer has a thin white line along its top edge.
+- Windows: on a computer with no graphics card driver installed, Phosphor now says so when it starts (it can only
+  draw very slowly there) instead of just running at a frame a second.
 - Transform shows a layer's position in pixels of its canvas (X 480 px) and its size as a percentage (Scale 150%,
   Scale X / Y too); right-click › Value takes pixels and percentages. Saved projects are unchanged.
 - Saving no longer stops Phosphor while a slow drive (an external, network or sleeping disk) takes its time: the
