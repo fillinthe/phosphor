@@ -18,8 +18,97 @@ use std::sync::Arc;
 /// mustn't each wait for their own screen's refresh, one after another, on the one thread that paints them.)
 pub static PRESENT_MODE_FOR: std::sync::OnceLock<fn(egui::ViewportId) -> Option<wgpu::PresentMode>> = std::sync::OnceLock::new();
 
-struct SurfaceState {
+/// PHOSPHOR PATCH: called right after egui presents a window's frame (Phosphor's bench times the output windows).
+pub static PRESENTED: std::sync::OnceLock<fn(egui::ViewportId)> = std::sync::OnceLock::new();
+
+/// PHOSPHOR PATCH: a window's surface, shared so the app can present that window itself from another thread
+/// (Phosphor's render thread draws the output windows there, so a slow interface frame never holds a projector up).
+/// While [`SharedSurface::set_app_presents`] is on, egui still runs the window's interface and uploads its textures,
+/// but never configures the surface, takes a texture from it or presents it. Both sides hold the surface's lock from
+/// configuring or taking a texture until presenting, so the surface is never used by both at once.
+pub struct SharedSurface {
     surface: wgpu::Surface<'static>,
+    lock: std::sync::Mutex<()>,
+    app_presents: std::sync::atomic::AtomicBool,
+    /// The window's size in physical pixels as egui last heard it (width in the high half).
+    size: std::sync::atomic::AtomicU64,
+    /// Who configured the surface last (`BY_EGUI` / `BY_APP`): the other side configures again before using it.
+    configured_by: std::sync::atomic::AtomicU8,
+}
+
+/// [`SharedSurface`] configured by egui.
+const BY_EGUI: u8 = 1;
+/// [`SharedSurface`] configured by the app.
+const BY_APP: u8 = 2;
+
+impl SharedSurface {
+    fn new(surface: wgpu::Surface<'static>, width: u32, height: u32) -> Self {
+        let shared = Self {
+            surface,
+            lock: std::sync::Mutex::new(()),
+            app_presents: std::sync::atomic::AtomicBool::new(false),
+            size: std::sync::atomic::AtomicU64::new(0),
+            configured_by: std::sync::atomic::AtomicU8::new(0),
+        };
+        shared.set_size(width, height);
+        shared
+    }
+
+    fn hold(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn set_size(&self, width: u32, height: u32) {
+        self.size.store((u64::from(width) << 32) | u64::from(height), std::sync::atomic::Ordering::Release);
+    }
+
+    /// The window's size in physical pixels, as egui last heard it.
+    pub fn size(&self) -> (u32, u32) {
+        let v = self.size.load(std::sync::atomic::Ordering::Acquire);
+        ((v >> 32) as u32, v as u32)
+    }
+
+    /// The app presents this window from now on (`true`), or egui paints it again (`false`).
+    pub fn set_app_presents(&self, on: bool) {
+        self.app_presents.store(on, std::sync::atomic::Ordering::Release);
+    }
+
+    pub fn app_presents(&self) -> bool {
+        self.app_presents.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// For the app to present this window: the lock (hold it until the frame is presented), the surface, and whether
+    /// it must be configured first (egui configured it since the app last did).
+    pub fn take(&self) -> (std::sync::MutexGuard<'_, ()>, &wgpu::Surface<'static>, bool) {
+        let guard = self.hold();
+        let configure = self.configured_by.load(std::sync::atomic::Ordering::Acquire) != BY_APP;
+        (guard, &self.surface, configure)
+    }
+
+    /// The app configured the surface (call while holding the lock from [`SharedSurface::take`]).
+    pub fn app_configured(&self) {
+        self.configured_by.store(BY_APP, std::sync::atomic::Ordering::Release);
+    }
+}
+
+/// Every window's [`SharedSurface`] by viewport (dropped ones are left out on the next registration).
+static SHARED_SURFACES: std::sync::Mutex<Vec<(ViewportId, std::sync::Weak<SharedSurface>)>> = std::sync::Mutex::new(Vec::new());
+
+fn register_shared(viewport_id: ViewportId, shared: &Arc<SharedSurface>) {
+    let mut all = SHARED_SURFACES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    all.retain(|(id, s)| *id != viewport_id && s.strong_count() > 0);
+    all.push((viewport_id, Arc::downgrade(shared)));
+}
+
+/// PHOSPHOR PATCH: the surface of one window, while that window is open (see [`SharedSurface`]). The app must never
+/// let the last reference go on another thread: the window would then close on that thread (winit wants the main one).
+pub fn shared_surface(viewport_id: ViewportId) -> Option<Arc<SharedSurface>> {
+    let all = SHARED_SURFACES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    all.iter().find(|(id, _)| *id == viewport_id).and_then(|(_, s)| s.upgrade())
+}
+
+struct SurfaceState {
+    surface: Arc<SharedSurface>,
     alpha_mode: wgpu::CompositeAlphaMode,
     width: u32,
     height: u32,
@@ -112,7 +201,25 @@ impl Painter {
         self.render_state.clone()
     }
 
+    /// PHOSPHOR PATCH: configures a window's surface outside a paint: not while the app presents that window (egui
+    /// configures it again when it paints it next), and holding the surface's lock otherwise.
     fn configure_surface(
+        surface_state: &mut SurfaceState,
+        render_state: &RenderState,
+        config: &SurfaceConfig,
+    ) {
+        let shared = Arc::clone(&surface_state.surface);
+        shared.set_size(surface_state.width, surface_state.height);
+        if shared.app_presents() {
+            surface_state.needs_reconfigure = true;
+            return;
+        }
+        let _held = shared.hold();
+        Self::configure_held(surface_state, render_state, config);
+    }
+
+    /// Configures a window's surface; the caller holds its lock.
+    fn configure_held(
         surface_state: &mut SurfaceState,
         render_state: &RenderState,
         config: &SurfaceConfig,
@@ -141,7 +248,7 @@ impl Painter {
         surface_state.present_mode_asked = asked;
         let present_mode = match asked {
             Some(m @ (wgpu::PresentMode::AutoVsync | wgpu::PresentMode::AutoNoVsync)) => m,
-            Some(m) if surface_state.surface.get_capabilities(&render_state.adapter).present_modes.contains(&m) => m,
+            Some(m) if surface_state.surface.surface.get_capabilities(&render_state.adapter).present_modes.contains(&m) => m,
             _ => present_mode,
         };
 
@@ -152,6 +259,7 @@ impl Painter {
             alpha_mode: surface_state.alpha_mode,
             view_formats: vec![render_state.target_format],
             ..surface_state
+                .surface
                 .surface
                 .get_default_config(&render_state.adapter, width, height)
                 .expect("The surface isn't supported by this adapter")
@@ -166,7 +274,9 @@ impl Painter {
         let scope = render_state.device.push_error_scope(wgpu::ErrorFilter::Validation);
         surface_state
             .surface
+            .surface
             .configure(&render_state.device, &surf_config);
+        surface_state.surface.configured_by.store(BY_EGUI, std::sync::atomic::Ordering::Release);
         let error = {
             let mut fut = std::pin::pin!(scope.pop());
             match std::future::Future::poll(fut.as_mut(), &mut std::task::Context::from_waker(std::task::Waker::noop())) {
@@ -335,6 +445,9 @@ impl Painter {
                 wgpu::CompositeAlphaMode::Auto
             }
         };
+        // PHOSPHOR PATCH: shared with the app (`shared_surface`).
+        let surface = Arc::new(SharedSurface::new(surface, width, height));
+        register_shared(viewport_id, &surface);
         self.surfaces.insert(
             viewport_id,
             SurfaceState {
@@ -480,10 +593,12 @@ impl Painter {
         {
             // SAFETY: `as_hal::<Metal>()` returns `None` unless this surface is backed by wgpu's
             // Metal backend.
+            // PHOSPHOR PATCH: the shared surface (the app may be presenting this window).
+            let shared = Arc::clone(&state.surface);
             unsafe {
                 if let (Some(render_state), Some(hal_surface)) = (
                     self.render_state.as_ref(),
-                    state.surface.as_hal::<wgpu::hal::api::Metal>(),
+                    shared.surface.as_hal::<wgpu::hal::api::Metal>(),
                 ) {
                     hal_surface
                         .render_layer()
@@ -637,13 +752,32 @@ impl Painter {
             )
         };
 
+        // PHOSPHOR PATCH: a window the app presents itself (`SharedSurface`): the uploads above still go (every window
+        // shares the textures), and nothing is drawn to its surface here.
+        let shared = Arc::clone(&surface_state.surface);
+        if shared.app_presents() {
+            render_state.queue.submit(core::iter::chain(user_cmd_bufs, [encoder.finish()]));
+            render_queue_guard.commands_submitted = true;
+            let mut renderer = render_state.renderer.write();
+            #[expect(clippy::iter_over_hash_type)] // Order doesn't matter here
+            for id in textures_delta.free.drain() {
+                renderer.free_texture(&id);
+            }
+            return vsync_sec;
+        }
+        // Held until the frame is presented; the app configured the surface last: configured again here first.
+        let _held = shared.hold();
+        if shared.configured_by.load(std::sync::atomic::Ordering::Acquire) == BY_APP {
+            surface_state.needs_reconfigure = true;
+        }
+
         // PHOSPHOR PATCH: a window asked for another present mode since its surface was configured.
         if surface_state.configured && present_mode_asked(viewport_id) != surface_state.present_mode_asked {
             surface_state.needs_reconfigure = true;
         }
 
         if surface_state.needs_reconfigure {
-            Self::configure_surface(surface_state, render_state, &self.config.surface);
+            Self::configure_held(surface_state, render_state, &self.config.surface);
             surface_state.needs_reconfigure = false;
         }
 
@@ -652,7 +786,7 @@ impl Painter {
         if !surface_state.configured {
             let due = surface_state.configure_tried.is_none_or(|t| t.elapsed().as_secs_f32() >= 2.0);
             if due && surface_state.width > 0 && surface_state.height > 0 {
-                Self::configure_surface(surface_state, render_state, &self.config.surface);
+                Self::configure_held(surface_state, render_state, &self.config.surface);
             }
             if !surface_state.configured {
                 self.context.request_repaint_after_for(std::time::Duration::from_secs(2), viewport_id);
@@ -664,7 +798,7 @@ impl Painter {
             profiling::scope!("get_current_texture");
             // This is what vsync-waiting happens on my Mac.
             let start = web_time::Instant::now();
-            let output_frame = surface_state.surface.get_current_texture();
+            let output_frame = shared.surface.get_current_texture();
             vsync_sec += start.elapsed().as_secs_f32();
             output_frame
         };
@@ -678,7 +812,7 @@ impl Painter {
             other => {
                 match (*self.config.on_surface_status)(&other) {
                     SurfaceErrorAction::Reconfigure => {
-                        Self::configure_surface(surface_state, render_state, &self.config.surface);
+                        Self::configure_held(surface_state, render_state, &self.config.surface);
                         self.context.request_repaint_of(viewport_id);
                     }
                     SurfaceErrorAction::RecreateSurface => {
@@ -835,6 +969,9 @@ impl Painter {
             let start = web_time::Instant::now();
             render_state.queue.present(output_frame);
             vsync_sec += start.elapsed().as_secs_f32();
+        }
+        if let Some(presented) = PRESENTED.get() {
+            presented(viewport_id);
         }
 
         vsync_sec
