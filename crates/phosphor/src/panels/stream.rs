@@ -19,6 +19,8 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         .collect();
     let waiting = st.stream_bar.is_some();
     let State { stream, notice, stream_audio_devices, .. } = st;
+    #[cfg(not(target_os = "macos"))]
+    let _ = stream_audio_devices;
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
         let s = &mut stream.settings;
@@ -117,7 +119,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         if ui.horizontal(|ui| Level::range(&mut kbps, 1000.0, 30000.0, "Bitrate (kbps)").default(6000.0).log().width(320.0).show(ui)).inner.changed() {
             s.kbps = kbps.round() as u32;
         }
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(target_os = "macos")]
         crate::ui::field(ui, "Audio", |ui| {
             let current = if s.audio_device < 0 {
                 "None".to_string()
@@ -137,7 +139,11 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toolbar(ui, |ui| {
             #[cfg(not(target_arch = "wasm32"))]
             toggle(ui, &mut s.program_sound, label(icon::FILM_STRIP, "Movie sound")).on_hover_text("Phosphor's own sound (the movies playing) in the stream or recording, mixed with the audio device above when one is chosen");
+            #[cfg(target_os = "macos")]
             help(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
+            // Elsewhere: what this computer encodes with, and the sound there is (a capture device is the Mac's only).
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "macos")))]
+            help(ui, &format!("{}. Sound from an audio device is Mac only for now; Movie sound adds the sound of the movies playing in Phosphor.", crate::video_encoders::describe(crate::video_encoders::Codec::H264)));
         });
     });
     ui.add_space(4.0);

@@ -90,6 +90,8 @@ mod stream;
 #[cfg(not(target_arch = "wasm32"))]
 mod stream_audio;
 #[cfg(not(target_arch = "wasm32"))]
+mod video_encoders;
+#[cfg(not(target_arch = "wasm32"))]
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
 mod pad_kit;

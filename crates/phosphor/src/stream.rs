@@ -53,7 +53,8 @@ pub enum FileFormat {
     HapQAlpha,
     /// Hap R (BC7): Hap's best color, with transparency; the size of Hap Q, slower to record.
     HapR,
-    /// HEVC (H.265) through the Mac's encoder: about half the size of H.264 at the same quality.
+    /// HEVC (H.265) through the computer's encoder (VideoToolbox, a graphics card's, else x265): about half the size of
+    /// H.264 at the same quality.
     Hevc,
 }
 
@@ -331,7 +332,9 @@ pub fn reconnect_delay(n: u32) -> f64 {
     (2.0 * 2f64.powi(n.saturating_sub(1).min(3) as i32)).min(15.0)
 }
 
-/// AVFoundation audio capture devices as (index, name), from FFmpeg's device listing.
+/// AVFoundation audio capture devices as (index, name), from FFmpeg's device listing (the Mac's; other systems record
+/// Phosphor's own sound only).
+#[cfg(target_os = "macos")]
 pub fn list_audio_devices() -> Vec<(i32, String)> {
     let Some(ffmpeg) = ffmpeg_path() else { return Vec::new() };
     let Ok(out) = crate::os::command(ffmpeg).args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""]).stdin(Stdio::null()).output() else {
@@ -367,6 +370,17 @@ pub fn ffmpeg_path() -> Option<String> {
         .or_else(|| {
             crate::os::command("ffmpeg").arg("-version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().map(|_| "ffmpeg".into())
         })
+}
+
+/// Why there's no FFmpeg, and what to do about it on this system.
+pub fn ffmpeg_missing() -> String {
+    if cfg!(target_os = "macos") {
+        "FFmpeg not found: it comes inside Phosphor.app. Install Phosphor again, or install FFmpeg with: brew install ffmpeg".into()
+    } else if cfg!(windows) {
+        "FFmpeg not found: ffmpeg.exe comes beside Phosphor.exe. Install Phosphor again, or put ffmpeg.exe on the PATH".into()
+    } else {
+        "FFmpeg not found: it comes in Phosphor's folder. Install Phosphor again, or install FFmpeg with: sudo apt install ffmpeg".into()
+    }
 }
 
 /// How long FFmpeg gets to finish a file after its input ends before it's ended (a stuck one never stays).
@@ -546,7 +560,7 @@ impl Streamer {
         if self.settings.destination == Destination::File && self.settings.file_format.hap().is_some() {
             return self.start_hap(width, height, now);
         }
-        let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
+        let ffmpeg = ffmpeg_path().ok_or_else(ffmpeg_missing)?;
         let s = &self.settings;
         let (fmt, target) = s.target();
         if s.destination == Destination::Whip && !s.whip_url.trim().starts_with("http") {
@@ -557,15 +571,17 @@ impl Streamer {
         }
         let fps = s.fps.clamp(1, 120);
         let mut args: Vec<String> = vec![
+            // (No `-thread_queue_size` on the inputs: FFmpeg 9 made it a muxer option and refuses it on an input,
+            // which stopped every stream and recording with "Error opening input files".)
             "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-stats_period", "1", "-y",
-            "-thread_queue_size", "1024",
             "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{width}x{height}"), "-framerate", &fps.to_string(), "-i", "pipe:0",
         ]
         .into_iter()
         .map(String::from)
         .collect();
         let whip = s.destination == Destination::Whip;
-        let audio_device = if self.mute_audio { -1 } else { s.audio_device };
+        // (A capture device is AVFoundation's: the Mac only. A project from a Mac records without it elsewhere.)
+        let audio_device = if self.mute_audio || !cfg!(target_os = "macos") { -1 } else { s.audio_device };
         let program = s.program_sound && !self.mute_audio;
         // A sound file (an offline render's soundtrack), when nothing live is recorded.
         let file_sound = s.sound_file.clone().filter(|_| audio_device < 0 && !program);
@@ -580,7 +596,7 @@ impl Streamer {
         }
         if audio_device >= 0 {
             // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
-            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{audio_device}")].map(String::from));
+            args.extend(["-f", "avfoundation", "-i", &format!(":{audio_device}")].map(String::from));
         }
         if program {
             // Phosphor's own sound (the movie-sound mix), fed on the clock from a local socket.
@@ -610,28 +626,37 @@ impl Streamer {
             args.extend(["-vf".into(), format!("scale=-2:{}", s.height)]);
         }
         let file_mov = s.destination == Destination::File && target.to_lowercase().ends_with(".mov");
-        if s.destination == Destination::File && s.file_format == FileFormat::Hevc {
-            // HEVC holds the same quality at about 60 % of H.264's bitrate: that's where the smaller file comes from.
-            let kbps = (s.kbps as f32 * 0.6) as u32;
-            args.extend(
-                ["-c:v", "hevc_videotoolbox", "-b:v", &format!("{kbps}k"), "-maxrate", &format!("{kbps}k"), "-tag:v", "hvc1", "-g", &(fps * 2).to_string(), "-pix_fmt", "yuv420p"]
-                    .map(String::from),
-            );
+        let codec = if s.destination == Destination::File && s.file_format == FileFormat::Hevc {
+            crate::video_encoders::Codec::Hevc
         } else if file_mov {
-            args.extend(["-c:v", "prores_videotoolbox", "-profile:v", "2", "-pix_fmt", "yuv422p10le"].map(String::from));
+            crate::video_encoders::Codec::ProRes
         } else {
-            args.extend(
-                [
-                    "-c:v", "h264_videotoolbox", "-b:v", &format!("{}k", s.kbps), "-maxrate", &format!("{}k", s.kbps),
-                    "-bufsize", &format!("{}k", s.kbps * 2), "-g", &(fps * 2).to_string(), "-pix_fmt", "yuv420p",
-                ]
-                .map(String::from),
-            );
-            if whip {
-                // WebRTC players take H.264 Baseline only (no B-frames); a keyframe every second for fast joins.
-                args.extend(["-profile:v", "baseline", "-bf", "0", "-g", &fps.to_string()].map(String::from));
+            crate::video_encoders::Codec::H264
+        };
+        // This computer's encoder (VideoToolbox on the Mac; elsewhere the graphics card's when it works, else FFmpeg's own).
+        let encoder = crate::video_encoders::pick(codec, whip);
+        args.extend(["-c:v", encoder.name].map(String::from));
+        args.extend(encoder.live.iter().map(|a| a.to_string()));
+        match codec {
+            crate::video_encoders::Codec::Hevc => {
+                // HEVC holds the same quality at about 60 % of H.264's bitrate: that's where the smaller file comes from.
+                let kbps = (s.kbps as f32 * 0.6) as u32;
+                args.extend(["-b:v", &format!("{kbps}k"), "-maxrate", &format!("{kbps}k"), "-tag:v", "hvc1", "-g", &(fps * 2).to_string()].map(String::from));
+            }
+            crate::video_encoders::Codec::ProRes => args.extend(["-profile:v", "2"].map(String::from)),
+            crate::video_encoders::Codec::H264 => {
+                args.extend(
+                    ["-b:v", &format!("{}k", s.kbps), "-maxrate", &format!("{}k", s.kbps), "-bufsize", &format!("{}k", s.kbps * 2), "-g", &(fps * 2).to_string()]
+                        .map(String::from),
+                );
+                if whip {
+                    // WebRTC players take H.264 Baseline only (no B-frames); a keyframe every second for fast joins.
+                    args.extend(encoder.baseline.unwrap_or_default().iter().map(|a| a.to_string()));
+                    args.extend(["-g", &fps.to_string()].map(String::from));
+                }
             }
         }
+        args.extend(["-pix_fmt", encoder.pix_fmt].map(String::from));
         let extra = s.extra_targets();
         if extra.is_empty() {
             args.extend(fmt);
@@ -891,6 +916,36 @@ mod tests {
         s.stop();
         s.frame_due(t + 100.0);
         assert!(!s.running(), "Stop means stop");
+    }
+}
+
+/// Recording smoke test: a recording comes out as a movie in its codec with this system's encoders (VideoToolbox on
+/// the Mac; elsewhere the graphics card's or FFmpeg's own). Skipped without FFmpeg.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod record_tests {
+    use super::*;
+
+    #[test]
+    fn recordings_come_out_in_their_codec() {
+        let Some(ffmpeg) = ffmpeg_path() else { return };
+        let dir = std::env::temp_dir().join(format!("phosphor-record-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (w, h) = (320, 180);
+        for (file, file_format, codec) in [("a.mp4", FileFormat::Auto, "h264"), ("b.mp4", FileFormat::Hevc, "hevc"), ("c.mov", FileFormat::Auto, "prores")] {
+            let path = dir.join(file).to_string_lossy().to_string();
+            let settings = StreamSettings { destination: Destination::File, file_path: path.clone(), file_format, fps: 30, height: 0, audio_device: -1, ..Default::default() };
+            let mut s = Streamer::new(settings);
+            s.offline = true; // every frame kept
+            s.start(w, h, 0.0).unwrap();
+            for i in 0..20u32 {
+                s.push(w, h, vec![(i * 12) as u8; (w * h * 4) as usize]);
+            }
+            s.stop_and_wait();
+            let probe = crate::os::command(&ffmpeg).args(["-hide_banner", "-i", &path]).output().unwrap();
+            let text = String::from_utf8_lossy(&probe.stderr);
+            assert!(text.contains(&format!("Video: {codec}")), "{file}: {text}\nstatus: {:?}", s.status());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

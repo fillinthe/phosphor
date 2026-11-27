@@ -333,7 +333,7 @@ fn read_errors(stderr: Option<std::process::ChildStderr>) -> std::thread::JoinHa
 }
 
 fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
-    let ffmpeg = crate::stream::ffmpeg_path().ok_or("FFmpeg isn't available")?;
+    let ffmpeg = crate::stream::ffmpeg_path().ok_or_else(crate::stream::ffmpeg_missing)?;
     let (w, h) = job.size.apply(job.probe.width, job.probe.height);
     let total = (job.probe.seconds * job.probe.fps).max(1.0);
     let scale = format!("scale={w}:{h}:flags=lanczos");
@@ -377,13 +377,13 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
                     Quality::Best => "2",
                 };
                 // The Mac's encoder; elsewhere FFmpeg's own.
-                let encoder = if cfg!(target_os = "macos") { "prores_videotoolbox" } else { "prores_ks" };
-                args.extend(["-c:v", encoder, "-profile:v", profile, "-pix_fmt", "yuv422p10le"].map(String::from));
+                let encoder = crate::video_encoders::offline(crate::video_encoders::Codec::ProRes);
+                args.extend(["-c:v", encoder.name, "-profile:v", profile, "-pix_fmt", encoder.pix_fmt].map(String::from));
             } else {
                 let kbps = (w as f64 * h as f64 * job.probe.fps * h264_bits(job.quality) / 1000.0) as u64;
-                let encoder = if cfg!(target_os = "macos") { "h264_videotoolbox" } else { "libx264" };
+                let encoder = crate::video_encoders::offline(crate::video_encoders::Codec::H264);
                 args.extend(
-                    ["-c:v", encoder, "-b:v", &format!("{kbps}k"), "-g", "1", "-bf", "0", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+                    ["-c:v", encoder.name, "-b:v", &format!("{kbps}k"), "-g", "1", "-bf", "0", "-pix_fmt", encoder.pix_fmt, "-movflags", "+faststart"]
                         .map(String::from),
                 );
             }
