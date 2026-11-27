@@ -529,6 +529,14 @@ impl PhosphorApp {
             let at = std::env::var("PHOSPHOR_MEDIA_DIR").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| dir.clone());
             app.state.media_view.show(crate::panels::MediaSource::Folder(dir), Some(at));
         }
+        // Drawing on the processor (Windows' Basic Render Driver: no graphics card driver installed) runs at about a
+        // frame a second and freezes; say why once, at the start (report 2026-11-26, the only card on that PC).
+        #[cfg(not(target_arch = "wasm32"))]
+        if app.state.render_state.as_ref().is_some_and(|rs| rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu) {
+            let n = "No graphics card driver was found, so the picture is drawn by the processor and will be very slow. Install the driver for this computer's graphics card, then restart Phosphor.";
+            log::warn!(target: "phosphor::gpu", "{n}");
+            app.state.notice = Some(n.into());
+        }
         // (PHOSPHOR_NOTICE = a message to show in the bar, for pictures of it.)
         if app.bench.is_some() && let Ok(n) = std::env::var("PHOSPHOR_NOTICE") {
             app.state.notice = Some(n);
