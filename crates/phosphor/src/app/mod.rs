@@ -67,6 +67,8 @@ mod timeline;
 #[cfg(not(target_arch = "wasm32"))]
 mod timecode_out;
 mod recovery;
+mod readbacks;
+pub(crate) use readbacks::ReadFor;
 mod render;
 mod settings;
 mod areas;
@@ -498,6 +500,8 @@ pub struct State {
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
+    /// Pictures read back once for the app, not here yet (`read_back`).
+    pub(crate) readbacks: readbacks::Readbacks,
     pub media_view: panels::MediaView,
     /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
     pub map_mode: bool,
@@ -1212,6 +1216,9 @@ pub struct PhosphorApp {
     /// Panics caught in the last few seconds (UI keeps running instead of closing).
     panics: Vec<f64>,
     /// Panels living in their own OS windows.
+    /// The snapshot's file, picked before its picture came back (`run_readbacks` writes it then).
+    #[cfg(not(target_arch = "wasm32"))]
+    snapshot_path: Option<std::path::PathBuf>,
     detached: Vec<Tab>,
     /// Built-in and saved layouts, and which opens at startup.
     layouts: Layouts,

@@ -51,10 +51,20 @@ impl Capture {
 
     /// Same, remembering `tag` for the frame that comes back (one ring can carry several pictures).
     pub fn enqueue_tagged(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, out: &Target, tag: u64) -> bool {
-        let padded_row = (out.width * 4).div_ceil(256) * 256;
-        let size = (padded_row * out.height) as u64;
+        self.enqueue_region(device, queue, out, [0, 0], [out.width, out.height], tag)
+    }
+
+    /// Same, for the `size` pixels of `out` from `origin` (one pixel for an eyedropper), clamped to the picture.
+    pub fn enqueue_region(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, out: &Target, origin: [u32; 2], size: [u32; 2], tag: u64) -> bool {
+        if out.width == 0 || out.height == 0 {
+            return false;
+        }
+        let origin = [origin[0].min(out.width.saturating_sub(1)), origin[1].min(out.height.saturating_sub(1))];
+        let (width, height) = (size[0].clamp(1, out.width - origin[0]), size[1].clamp(1, out.height - origin[1]));
+        let padded_row = (width * 4).div_ceil(256) * 256;
+        let size = (padded_row * height) as u64;
         // Drop slots whose size no longer matches (resolution changed).
-        self.slots.retain(|s| s.state.load(Ordering::Acquire) != FREE || (s.width == out.width && s.height == out.height));
+        self.slots.retain(|s| s.state.load(Ordering::Acquire) != FREE || (s.width == width && s.height == height));
         let free = self.slots.iter().position(|s| s.state.load(Ordering::Acquire) == FREE);
         let idx = match free {
             Some(i) => i,
@@ -68,8 +78,8 @@ impl Capture {
                         mapped_at_creation: false,
                     }),
                     state: Arc::new(AtomicU8::new(FREE)),
-                    width: out.width,
-                    height: out.height,
+                    width,
+                    height,
                     padded_row,
                 });
                 self.slots.len() - 1
@@ -80,12 +90,12 @@ impl Capture {
         let slot = &self.slots[idx];
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("capture") });
         encoder.copy_texture_to_buffer(
-            out.texture.as_image_copy(),
+            wgpu::TexelCopyTextureInfo { origin: wgpu::Origin3d { x: origin[0], y: origin[1], z: 0 }, ..out.texture.as_image_copy() },
             wgpu::TexelCopyBufferInfo {
                 buffer: &slot.buffer,
                 layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(padded_row), rows_per_image: None },
             },
-            out.texture.size(),
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
         queue.submit([encoder.finish()]);
         slot.state.store(IN_FLIGHT, Ordering::Release);

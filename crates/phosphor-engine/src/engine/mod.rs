@@ -21,6 +21,19 @@ enum Media {
     Compressed { target: Target, alpha: Option<Target>, format: CompressedFormat },
 }
 
+/// A picture read back once (`Engine::request_read`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ReadSource {
+    /// The program (the composition before outputs).
+    Output,
+    /// One output after its mapping, by id.
+    OutputOf(u64),
+    /// A layer's (or group's) small thumbnail picture.
+    LayerThumbnail(u64),
+    /// One pixel of the program at (u, v), 0..1, y down (the eyedropper).
+    OutputPixel([f32; 2]),
+}
+
 /// GPU block-compressed picture formats (Hap): the GPU samples them directly, no CPU decoding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompressedFormat {
@@ -307,6 +320,8 @@ pub struct Engine {
     audio_fft: Option<Target>,
     /// Readback ring for layer thumbnails (remote page); idle unless asked.
     thumb_capture: Capture,
+    /// Readback ring for the app's one-off reads (`request_read`); idle unless asked.
+    one_off_reads: Capture,
     /// LED / DMX pixel sampling of the program.
     sampler: sample::PixelSampler,
     frame_index: u64,
@@ -394,6 +409,7 @@ impl Engine {
             audio_wave: None,
             audio_fft: None,
             thumb_capture: Capture::default(),
+            one_off_reads: Capture::with_slots(4),
             sampler: Default::default(),
             frame_index: 0,
             output_targets: HashMap::new(),

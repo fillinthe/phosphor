@@ -289,6 +289,7 @@ impl PhosphorApp {
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
+                readbacks: Default::default(),
                 map_mode: false,
                 fx_fades: Vec::new(),
                 project_path: stored(KEY_PROJECT_PATH).filter(|p| !p.is_empty()),
@@ -425,6 +426,8 @@ impl PhosphorApp {
             detached,
         };
         #[cfg(not(target_arch = "wasm32"))]
+            snapshot_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
         match snapshot {
             Some(s) => app.restore(s),
             // A normal start (not a test, not an exported show): back where it was when it last closed.
