@@ -790,6 +790,41 @@ fn is_custom_generator(id: &str) -> bool {
     id.starts_with(CUSTOM_GENERATOR) || id.starts_with(ISF_GENERATOR) || id.starts_with(FFGL_GENERATOR)
 }
 
+static INTERNED: std::sync::Mutex<Option<std::collections::HashSet<&'static str>>> = std::sync::Mutex::new(None);
+static INTERNED_DESCS: std::sync::Mutex<Option<std::collections::HashMap<&'static str, Vec<&'static ShaderDesc>>>> = std::sync::Mutex::new(None);
+
+/// The one copy of `s` for the rest of the run (names in a `ShaderDesc` or `Param` live as long as the app): a name
+/// met again (a shader compiled again, a file reloaded, a header read twice) is the copy made the first time.
+pub fn intern(s: &str) -> &'static str {
+    let mut set = INTERNED.lock().unwrap_or_else(|e| e.into_inner());
+    let set = set.get_or_insert_with(Default::default);
+    if let Some(&kept) = set.get(s) {
+        return kept;
+    }
+    let kept: &'static str = Box::leak(s.to_string().into_boxed_str());
+    set.insert(kept);
+    kept
+}
+
+fn same_params(a: &[Param], b: &[Param]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.name == y.name && x.min.to_bits() == y.min.to_bits() && x.max.to_bits() == y.max.to_bits() && x.default.to_bits() == y.default.to_bits() && x.labels == y.labels)
+}
+
+/// A shader's description for the rest of the run: one exactly like it made before is that one, so compiling or
+/// reloading a shader again with the same settings keeps nothing more (each compile used to keep a new copy).
+pub fn intern_desc(id: &str, name: &str, entry: &'static str, params: &[Param]) -> &'static ShaderDesc {
+    let mut map = INTERNED_DESCS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = map.get_or_insert_with(Default::default);
+    let id = intern(id);
+    let kept = map.entry(id).or_default();
+    if let Some(d) = kept.iter().find(|d| d.name == name && d.entry == entry && same_params(d.params, params)) {
+        return d;
+    }
+    let desc: &'static ShaderDesc = Box::leak(Box::new(ShaderDesc { id, name: intern(name), entry, params: Box::leak(params.to_vec().into_boxed_slice()) }));
+    kept.push(desc);
+    desc
+}
+
 /// Adds or replaces a user shader (by id).
 pub fn register_custom(desc: &'static ShaderDesc) {
     let mut list = CUSTOM.write().unwrap();

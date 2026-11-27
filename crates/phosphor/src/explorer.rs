@@ -777,6 +777,16 @@ pub struct UserShader {
     pub patch: Option<Patch>,
     /// A patch that doesn't compile yet (no shader is made until it does).
     pub patch_error: Option<String>,
+    /// A compile on its way (`Engine::compile_custom_async`): what to do when it's in (`poll_compiles`).
+    pending: Option<PendingCompile>,
+}
+
+/// What a compile still on a worker needs once it's in.
+struct PendingCompile {
+    /// The shader's parameters before (what uses it keeps its settings by name: `Composition::remap_params`).
+    old: Option<Vec<&'static str>>,
+    /// Save this source to the effects folder when it compiles (the source that was compiled, not what's typed since).
+    save: Option<String>,
 }
 
 impl UserShader {
@@ -789,7 +799,7 @@ impl UserShader {
                 source = src;
             }
         }
-        UserShader { id: id_for(&slug, &source), patch, patch_error: None, slug, source, error: None, compiled: false }
+        UserShader { id: id_for(&slug, &source), patch, patch_error: None, slug, source, error: None, compiled: false, pending: None }
     }
 }
 
@@ -926,6 +936,9 @@ pub fn load_new_user_shaders(st: &mut State) {
     }
 }
 
+/// Compiles shader `index` on a worker (the Shader Editor after each pause in typing, patches, the saved shaders at
+/// start): what's on screen keeps its last good version meanwhile, and the result comes in through `poll_compiles`
+/// (saved then when `save`). Nothing here waits for the shader compiler.
 fn compile(st: &mut State, index: usize, save: bool) {
     let Some(engine) = st.engine.as_mut() else { return };
     let sh = &mut st.editor.shaders[index];
@@ -933,30 +946,103 @@ fn compile(st: &mut State, index: usize, save: bool) {
     if new_id != sh.id {
         engine.remove_custom(&sh.id);
         sh.id = new_id;
+        sh.pending = None;
     }
-    // Its parameters before, so whatever already uses it keeps its settings by name (`Composition::remap_params`).
-    let old: Option<Vec<&'static str>> = shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id)).map(|d| d.params.iter().map(|p| p.name).collect());
-    match engine.compile_custom(&sh.id, &sh.source) {
-        Ok(_) => {
-            sh.error = None;
-            sh.compiled = true;
-            if let (Some(old), Some(d)) = (old, shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id))) {
-                let new: Vec<(&str, f32)> = d.params.iter().map(|p| (p.name, p.default)).collect();
-                st.comp.remap_params(&sh.id.clone(), &old, &new);
-            }
-            let sh = &mut st.editor.shaders[index];
-            #[cfg(not(target_arch = "wasm32"))]
-            if save && let Some(dir) = effects_dir() {
-                let _ = std::fs::create_dir_all(&dir);
-                let _ = std::fs::write(dir.join(format!("{}.wgsl", sh.slug)), &sh.source);
+    let old = params_of(&sh.id);
+    match engine.compile_custom_async(&sh.id, &sh.source) {
+        Ok(()) => {
+            // (A compile still running keeps the parameters from before it: those are what layers have now.)
+            let pending = sh.pending.get_or_insert(PendingCompile { old, save: None });
+            if save {
+                pending.save = Some(sh.source.clone());
             }
         }
         Err(e) => {
+            // A broken header: the one compiling (older source) would come back as if this one compiled.
+            engine.cancel_custom_compile(&sh.id);
+            sh.pending = None;
             sh.error = Some(e);
         }
     }
+}
+
+/// A user shader's parameter names as registered now.
+fn params_of(id: &str) -> Option<Vec<&'static str>> {
+    shaders::effect(id).or_else(|| shaders::generator(id)).map(|d| d.params.iter().map(|p| p.name).collect())
+}
+
+/// Compiles shader `index` now, on this thread (bench actions that use it straight away).
+fn compile_now(st: &mut State, index: usize) {
+    let Some(engine) = st.engine.as_mut() else { return };
+    let sh = &mut st.editor.shaders[index];
+    let new_id = id_for(&sh.slug, &sh.source);
+    if new_id != sh.id {
+        engine.remove_custom(&sh.id);
+        sh.id = new_id;
+    }
+    let old = params_of(&sh.id);
+    let result = engine.compile_custom(&sh.id, &sh.source).map(|_| ());
+    compiled(st, index, result, PendingCompile { old, save: None });
+}
+
+/// Takes in the user shader compiles that finished on their workers: errors shown, settings kept by name, saved.
+/// Call once a frame.
+pub fn poll_compiles(st: &mut State) {
+    let Some(engine) = st.engine.as_mut() else { return };
+    for done in engine.take_custom_compiled() {
+        let Some(i) = st.editor.shaders.iter().position(|s| s.id == done.id) else { continue };
+        let Some(pending) = st.editor.shaders[i].pending.take() else { continue };
+        compiled(st, i, done.result.map(|_| ()), pending);
+    }
+}
+
+/// A compile of shader `index` is in: its error, or its parameters followed by what uses it, and saved if asked.
+fn compiled(st: &mut State, index: usize, result: Result<(), CompileError>, pending: PendingCompile) {
+    let sh = &mut st.editor.shaders[index];
+    if let Err(e) = result {
+        sh.error = Some(e);
+        return;
+    }
+    sh.error = None;
+    sh.compiled = true;
+    let id = sh.id.clone();
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(source) = pending.save
+        && let Some(dir) = effects_dir()
+    {
+        save_off_thread(dir.join(format!("{}.wgsl", sh.slug)), source);
+    }
     #[cfg(target_arch = "wasm32")]
-    let _ = save;
+    let _ = pending.save;
+    if let (Some(old), Some(d)) = (pending.old, shaders::effect(&id).or_else(|| shaders::generator(&id))) {
+        let new: Vec<(&str, f32)> = d.params.iter().map(|p| (p.name, p.default)).collect();
+        st.comp.remap_params(&id, &old, &new);
+    }
+}
+
+/// Writes a shader file on the saver thread (in the order asked: a later save is never overwritten by an earlier
+/// one), so the editor never waits for the disk.
+#[cfg(not(target_arch = "wasm32"))]
+fn save_off_thread(path: std::path::PathBuf, source: String) {
+    type Job = (std::path::PathBuf, String);
+    static SAVER: std::sync::OnceLock<std::sync::Mutex<std::sync::mpsc::Sender<Job>>> = std::sync::OnceLock::new();
+    let saver = SAVER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        let _ = std::thread::Builder::new().name("shader saver".into()).spawn(move || {
+            for (path, source) in rx {
+                let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| crate::project_files::write_whole(&path, source));
+                if let Err(e) = written {
+                    log::warn!("couldn't save {}: {e}", path.display());
+                }
+            }
+        });
+        std::sync::Mutex::new(tx)
+    });
+    let sent = saver.lock().map(|tx| tx.send((path.clone(), source.clone())).is_ok()).unwrap_or(false);
+    // (No saver thread: written here, as before.)
+    if !sent {
+        let _ = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| crate::project_files::write_whole(&path, source));
+    }
 }
 
 /// Bench `--quick templateN`: compiles template N (not saved to your effects folder) and puts it on the top
@@ -980,7 +1066,7 @@ pub fn bench_patch(st: &mut State) -> Option<String> {
 fn bench_shader(st: &mut State, slug: String, source: String, name: &str) -> Option<String> {
     st.editor.shaders.push(UserShader::new(slug, source));
     let i = st.editor.shaders.len() - 1;
-    compile(st, i, false);
+    compile_now(st, i);
     let sh = &st.editor.shaders[i];
     if let Some(e) = &sh.error {
         return Some(format!("{name}: ERROR {e}"));
@@ -1250,6 +1336,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
         }
         match (&sh.patch_error, &sh.error) {
             (Some(e), _) => ui.colored_label(WARN, format!("{} {e}", icon::RECORD)),
+            _ if sh.pending.is_some() => crate::ui::hint(ui, "compiling…"),
             (None, Some(e)) => ui.colored_label(WARN, format!("{} {e}", icon::RECORD)),
             (None, None) if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
             _ => crate::ui::hint(ui, "not compiled"),
@@ -1288,6 +1375,7 @@ fn code_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>,
         crate::ui::heading(ui, if is_generator { "Generator" } else { "Effect" });
         ui.monospace(&sh.slug);
         match &sh.error {
+            _ if sh.pending.is_some() => crate::ui::hint(ui, "compiling…"),
             Some(_) => ui.colored_label(WARN, format!("{} error", icon::RECORD)),
             None if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
             None => crate::ui::hint(ui, "not compiled"),

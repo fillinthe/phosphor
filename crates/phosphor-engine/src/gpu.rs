@@ -223,14 +223,23 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample", "fs_surface_add", "fs_surface_screen", "fs_surface_mul", "fs_mesh_add", "fs_mesh_screen", "fs_mesh_mul", "fs_surface_lighten", "fs_surface_sub", "fs_mesh_lighten", "fs_mesh_sub", "fs_clear", "fs_mask_cut", "fs_paste", "fs_paste_add", "fs_paste_screen", "fs_paste_mul", "fs_paste_lighten", "fs_paste_sub"];
-        let all = fixed
-            .into_iter()
-            .chain(shaders::all_effect_entries())
-            .chain(shaders::GENERATORS.iter().map(|d| d.entry));
-        for entry in all {
+        for entry in builtin_entries() {
             self.pipeline(entry);
         }
+    }
+
+    /// The module the built-in shaders live in.
+    pub fn builtin_module(&self) -> &wgpu::ShaderModule {
+        &self.module
+    }
+
+    pub fn has_pipeline(&self, entry: &str, format: wgpu::TextureFormat) -> bool {
+        self.pipelines.keys().any(|(e, f)| *e == entry && *f == format)
+    }
+
+    /// A pipeline made elsewhere (ahead, on a worker), unless one is there already.
+    pub fn add_pipeline(&mut self, entry: &'static str, format: wgpu::TextureFormat, pipeline: wgpu::RenderPipeline) {
+        self.pipelines.entry((entry, format)).or_insert(pipeline);
     }
 
     pub fn pipeline(&mut self, entry: &'static str) -> &wgpu::RenderPipeline {
@@ -261,16 +270,29 @@ impl Gpu {
         self.custom_modules.contains_key(entry) || self.pipelines.keys().any(|(e, _)| *e == entry)
     }
 
-    /// Installs a module + pipeline built elsewhere (background shader compilation).
-    pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipeline: wgpu::RenderPipeline) {
+    /// Installs a module and its pipelines (one per picture format) built elsewhere (background shader compilation).
+    pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipelines: Vec<(wgpu::TextureFormat, wgpu::RenderPipeline)>) {
         self.custom_modules.insert(entry, module);
-        self.pipelines.insert((entry, FORMAT), pipeline);
+        for (format, pipeline) in pipelines {
+            self.pipelines.insert((entry, format), pipeline);
+        }
     }
+}
+
+/// Every built-in entry a pass can draw: the fixed passes, every effect's (and its sub-passes'), every generator's.
+pub(crate) fn builtin_entries() -> Vec<&'static str> {
+    let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample", "fs_surface_add", "fs_surface_screen", "fs_surface_mul", "fs_mesh_add", "fs_mesh_screen", "fs_mesh_mul", "fs_surface_lighten", "fs_surface_sub", "fs_mesh_lighten", "fs_mesh_sub", "fs_clear", "fs_mask_cut", "fs_paste", "fs_paste_add", "fs_paste_screen", "fs_paste_mul", "fs_paste_lighten", "fs_paste_sub", "fs_copy_raw"];
+    fixed.into_iter().chain(shaders::all_effect_entries()).chain(shaders::GENERATORS.iter().map(|d| d.entry)).collect()
 }
 
 /// The render pipeline for one fragment entry: which vertex stage, topology and blending it needs.
 /// Free function so a worker thread can build it (every wgpu object here is a thread-safe handle).
 pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+    build_pipeline_as(device, pipeline_layout, module, entry, format, shaders::vertex_entry(entry), shaders::instances(entry).is_some())
+}
+
+/// `build_pipeline` with the vertex stage and instancing given (an imported shader's new version, before it's set).
+pub(crate) fn build_pipeline_as(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str, format: wgpu::TextureFormat, vertex: Option<&'static str>, instanced: bool) -> wgpu::RenderPipeline {
     // Mapping surfaces are real quads blended onto the output; everything else is a
     // fullscreen triangle that overwrites its target.
     let surface = entry.starts_with("fs_surface");
@@ -295,7 +317,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
         layout: Some(pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: Some(if let Some(v) = shaders::vertex_entry(entry) {
+            entry_point: Some(if let Some(v) = vertex {
                 v
             } else if surface {
                 "vs_surface"
@@ -367,7 +389,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
                     Some(wgpu::BlendState { color: additive, alpha: additive })
                 } else if pts {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
-                } else if shaders::instances(entry).is_some() {
+                } else if instanced {
                     // Instanced copies (particles) land over each other, straight alpha like every source.
                     Some(wgpu::BlendState::ALPHA_BLENDING)
                 } else {

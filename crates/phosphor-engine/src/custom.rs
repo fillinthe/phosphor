@@ -51,9 +51,6 @@ pub struct Header {
 /// At most this many `@pass` lines (each one is a buffer).
 pub const MAX_PASSES: usize = 8;
 
-fn leak(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
-}
 
 /// A hash that never changes between runs or Rust versions (FNV-1a, 64-bit), for anything saved: mapping keys in
 /// projects, cache file names. `parts` are kept apart (a separator byte between them). Never `DefaultHasher` for those.
@@ -122,7 +119,7 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
                 }
                 let name = parts[..parts.len() - 3].join(" ");
                 let (lo, hi) = (nums[0].min(nums[1]), nums[0].max(nums[1]));
-                header.params.push(Param::new(leak(name), lo, hi, nums[2].clamp(lo, hi)));
+                header.params.push(Param::new(shaders::intern(&name), lo, hi, nums[2].clamp(lo, hi)));
             }
             _ => {}
         }
@@ -236,13 +233,8 @@ fn validate_inner(full: &str, prelude_lines: u32) -> Result<(), CompileError> {
     Ok(())
 }
 
-pub(crate) fn make_desc(id: &str, header: &Header, entry: &'static str) -> ShaderDesc {
-    ShaderDesc {
-        id: leak(id.to_string()),
-        name: leak(header.name.clone()),
-        entry,
-        params: Box::leak(header.params.clone().into_boxed_slice()),
-    }
+pub(crate) fn make_desc(id: &str, header: &Header, entry: &'static str) -> &'static ShaderDesc {
+    shaders::intern_desc(id, &header.name, entry, &header.params)
 }
 
 /// A starting point for "New effect" / "New generator".

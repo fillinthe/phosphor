@@ -82,10 +82,11 @@ struct LayerResources {
     generator: Option<Target>,
     /// Outgoing source during a transition.
     generator_out: Option<Target>,
+    /// The source drawn at thumbnail size while nothing shows the layer (`quiet`).
+    generator_small: Option<Target>,
     media_out: Option<Media>,
     /// RGB copies of incoming/outgoing (when YUV) and the blended result.
     trans: [Option<Target>; 3],
-    fx: [Option<Target>; 3],
     /// Reduced-size targets for Rutt-Etra, per effect id (two in one chain shared one: the second drew into the
     /// picture it was reading); the scale sets the apparent line width.
     rutt: HashMap<u64, Option<Target>>,
@@ -93,9 +94,6 @@ struct LayerResources {
     cut: Option<Target>,
     /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.
     pts: Option<Target>,
-    /// The effect chain's views after a points render: the canvas size in the mix format (the chain before it
-    /// works on points at their own size and 16-bit float).
-    after_pts: [Option<Target>; 3],
     /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
     history: HashMap<u64, [Option<Target>; 2]>,
     /// Multi-pass shader buffers, per effect id (or `GENERATOR_KEY` for the layer's source).
@@ -113,6 +111,11 @@ struct LayerResources {
     /// A layer with its own frame rate: its last finished picture, and when it was drawn.
     held: Option<Target>,
     held_at: f32,
+    /// Since when nobody has seen it (`quiet`): drawn small, and after a while its full-size source picture goes.
+    quiet_since: Option<f32>,
+    /// Views of textures made elsewhere (zero-copy video, Syphon) and the frame each was last set
+    /// (`media::zero_copy_target`).
+    views: Vec<(wgpu::Texture, wgpu::TextureView, u64)>,
 }
 
 /// A multi-pass shader's buffers: two textures each (read one, write the other), and which is
@@ -124,6 +127,16 @@ struct PassBuffers {
     /// Frames this shader has drawn here (its FRAMEINDEX: ISF counts from when the effect starts, so "capture on the
     /// first frames" works whenever it's added).
     frames: u32,
+}
+
+/// Which of a layer's pictures a source draws in (`Engine::resolve_spec`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SourceSlot {
+    Main,
+    /// The outgoing side of a transition.
+    Outgoing,
+    /// Thumbnail size, while nothing shows the layer (`quiet`).
+    Small,
 }
 
 /// Resource keys for the effect a "Through an effect" transition runs on the incoming / outgoing picture.
@@ -230,6 +243,8 @@ struct Pass {
     bufs: Vec<wgpu::TextureView>,
 }
 
+mod builds;
+pub use builds::{CustomCompiled, ShaderSetup};
 mod cutout;
 mod encode;
 mod external;
@@ -238,7 +253,9 @@ mod fit;
 mod media;
 mod mesh;
 mod passes;
+mod pool;
 mod previews;
+mod quiet;
 mod sample;
 mod timing;
 #[cfg(test)]
@@ -261,9 +278,6 @@ struct OutputExtra {
     ring: Vec<Option<Target>>,
     head: usize,
 }
-
-/// Shaders built at the same time on worker threads (Apple's shader compiler is heavy; more would stutter the show).
-const MAX_COMPILING: usize = 3;
 
 /// Why a preview is asked to draw again this frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -297,6 +311,8 @@ pub struct Engine {
     uniform_buffer: Option<wgpu::Buffer>,
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
+    /// The pictures effect chains ping-pong in, shared by every chain of a size (`pool`).
+    chains: pool::ChainPool,
     capture: Capture,
     /// GPU time per frame (None when the adapter has no timestamps).
     gpu_timer: Option<timing::GpuTimer>,
@@ -350,19 +366,11 @@ pub struct Engine {
     /// Which previews hold a real picture of what's asked for now (not a shader still building, not another tile's
     /// picture after the list moved).
     preview_ready: Vec<bool>,
-    custom_generation: u64,
-    /// Imported shaders waiting to be compiled on first use: entry → WGSL (without prelude).
-    pending_modules: HashMap<&'static str, String>,
     /// Shaders that failed to build, by entry, with the error.
     pub failed_modules: HashMap<&'static str, String>,
-    /// Shaders being compiled on a worker thread right now (drawn blank until they arrive).
-    compiling: HashSet<&'static str>,
-    compiled_tx: std::sync::mpsc::Sender<Compiled>,
-    compiled_rx: std::sync::mpsc::Receiver<Compiled>,
+    /// Shaders being built on worker threads (`builds`).
+    builds: builds::Builds,
 }
-
-/// A background shader build: entry → module + pipeline, or the error.
-type Compiled = (&'static str, Result<(wgpu::ShaderModule, wgpu::RenderPipeline), String>);
 
 impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
@@ -372,7 +380,6 @@ impl Engine {
         // Built-in audio visualizers read the live audio pictures at texture slot 1.
         crate::shaders::set_audio_slots("gen_spectrum", vec![(1, crate::shaders::AudioTexture::Fft)]);
         crate::shaders::set_audio_slots("gen_waveform", vec![(1, crate::shaders::AudioTexture::Wave)]);
-        let compiled = std::sync::mpsc::channel();
         let gpu_timer = timing::GpuTimer::new(&gpu.device, &gpu.queue);
         Self {
             gpu,
@@ -389,6 +396,7 @@ impl Engine {
             uniform_buffer: None,
             uniform_capacity: 0,
             bind_cache: Default::default(),
+            chains: Default::default(),
             capture: Capture::default(),
             gpu_timer,
             plan_images: HashMap::new(),
@@ -422,12 +430,8 @@ impl Engine {
             preview_src_stage: None,
             preview_targets: Vec::new(),
             preview_ready: Vec::new(),
-            custom_generation: 0,
-            pending_modules: HashMap::new(),
             failed_modules: HashMap::new(),
-            compiling: HashSet::new(),
-            compiled_tx: compiled.0,
-            compiled_rx: compiled.1,
+            builds: Default::default(),
         }
     }
 
@@ -439,123 +443,6 @@ impl Engine {
     /// Diagnostics for the bench: is GPU timing on and what has it read.
     pub fn gpu_timing_status(&self) -> String {
         self.gpu_timer.as_ref().map_or_else(|| "off (no timestamp queries on this device)".into(), |t| t.status())
-    }
-
-    /// Registers an already-converted shader (e.g. ISF) that is compiled the first time it is
-    /// drawn. `wgsl` must define `@fragment fn <entry>(in: VOut)` on top of the common prelude.
-    pub fn register_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
-        // Already built (a rescan of the library): keep it, so what's on screen doesn't blink while it rebuilds.
-        if !self.gpu.custom_modules.contains_key(desc.entry) && !self.compiling.contains(desc.entry) {
-            self.pending_modules.insert(desc.entry, wgsl);
-        }
-        crate::shaders::register_custom(desc);
-    }
-
-    /// An imported shader whose file changed: built again from `wgsl` (in the background, like a first use).
-    pub fn replace_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
-        self.gpu.forget_custom(desc.entry);
-        self.failed_modules.remove(desc.entry);
-        self.pending_modules.insert(desc.entry, wgsl);
-        crate::shaders::register_custom(desc);
-    }
-
-    /// Is an imported shader still waiting to be built (it draws blank until then)? Failures are in `failed_modules`.
-    pub fn shader_pending(&self, entry: &str) -> bool {
-        self.pending_modules.contains_key(entry) || self.compiling.contains(entry)
-    }
-
-    /// True if `entry` is ready to draw. Compiles pending shaders within a small per-frame budget
-    /// so browsing a big library never stalls the show.
-    /// Is this shader ready to draw? An imported shader used for the first time is validated and built on a
-    /// worker thread (naga + the Metal compiler can take a good fraction of a second), so the show never
-    /// hitches: the layer draws blank until it arrives.
-    fn ensure_module(&mut self, entry: &'static str) -> bool {
-        if self.failed_modules.contains_key(entry) || self.compiling.contains(entry) {
-            return false;
-        }
-        if !self.pending_modules.contains_key(entry) {
-            return true;
-        }
-        // A few at a time (opening a big effects list asks for dozens at once): the rest wait their turn.
-        if self.compiling.len() >= MAX_COMPILING {
-            return false;
-        }
-        let Some(src) = self.pending_modules.remove(entry) else { return true };
-        self.compiling.insert(entry);
-        let (device, layout) = self.gpu.compile_parts();
-        let tx = self.compiled_tx.clone();
-        let spawned = std::thread::Builder::new().name(format!("shader: {entry}")).spawn(move || {
-            let full = format!("{}\n{src}", crate::shaders::common_source());
-            let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
-            let result = crate::custom::validate(&full, prelude_lines).map_err(|e| e.to_string()).map(|()| {
-                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
-                let pipeline = crate::gpu::build_pipeline(&device, &layout, &module, entry, crate::gpu::FORMAT);
-                (module, pipeline)
-            });
-            let _ = tx.send((entry, result));
-        });
-        if spawned.is_err() {
-            self.compiling.remove(entry);
-            self.failed_modules.insert(entry, "couldn't start the shader compiler thread".into());
-        }
-        false
-    }
-
-    /// Installs shaders the worker threads finished since the last frame.
-    fn collect_compiled(&mut self) {
-        while let Ok((entry, result)) = self.compiled_rx.try_recv() {
-            self.compiling.remove(entry);
-            match result {
-                Ok((module, pipeline)) => self.gpu.install_custom(entry, module, pipeline),
-                Err(e) => {
-                    self.failed_modules.insert(entry, e);
-                }
-            }
-        }
-    }
-
-    /// Compiles a user shader (see `custom`). On success it is registered under `id` and can be
-    /// used like any built-in effect or generator.
-    pub fn compile_custom(&mut self, id: &str, source: &str) -> Result<&'static crate::shaders::ShaderDesc, crate::custom::CompileError> {
-        let header = crate::custom::parse_header(source)?;
-        self.custom_generation += 1;
-        let slug: String = id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-        let entry: &'static str = Box::leak(format!("custom_{slug}_{}", self.custom_generation).into_boxed_str());
-        let (full, prelude_lines) = crate::custom::module_source(source, entry)?;
-        crate::custom::validate(&full, prelude_lines)?;
-        let module = self.gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(entry),
-            source: wgpu::ShaderSource::Wgsl(full.into()),
-        });
-        self.gpu.custom_modules.insert(entry, module);
-        self.gpu.pipeline(entry);
-        let desc: &'static crate::shaders::ShaderDesc = Box::leak(Box::new(crate::custom::make_desc(id, &header, entry)));
-        if let Some(plan) = crate::custom::plan_for(&header) {
-            crate::shaders::set_pass_plan(entry, plan);
-        }
-        // The previous compile of this shader: nothing draws it once the new one is registered, so its module,
-        // pipelines and pass plan go (every compile used to leave them behind).
-        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| *e != entry && e.starts_with("custom_"));
-        crate::shaders::register_custom(desc);
-        if let Some(old) = old {
-            self.forget_custom_entry(old);
-        }
-        Ok(desc)
-    }
-
-    /// A user shader deleted (or renamed): unlisted, and its compiled module and pipelines dropped.
-    pub fn remove_custom(&mut self, id: &str) {
-        let old = crate::shaders::custom_desc(id).map(|d| d.entry).filter(|e| e.starts_with("custom_"));
-        crate::shaders::unregister_custom(id);
-        if let Some(old) = old {
-            self.forget_custom_entry(old);
-        }
-    }
-
-    /// Drops everything kept for a user shader's entry that nothing draws any more (an older compile).
-    fn forget_custom_entry(&mut self, entry: &'static str) {
-        self.gpu.forget_custom(entry);
-        crate::shaders::forget_entry(entry);
     }
 
     /// Asks for previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
@@ -738,6 +625,7 @@ impl Engine {
         // just finer). On graphics cards that can't draw into those it stays 8-bit.
         self.mix_format = if comp.deep_color && crate::gpu::deep_colour() { crate::gpu::DEEP_FORMAT } else { crate::gpu::FORMAT };
         let mix_format = self.mix_format;
+        self.prewarm_for(comp);
         for (i, slot) in self.accum.iter_mut().enumerate() {
             if i < 2 || !comp.groups.is_empty() {
                 Target::ensure_format(slot, &device, "accum", w, h, mix_format);
@@ -814,6 +702,7 @@ impl Engine {
                 if c.enabled && c.in_mix && opacity > 0.001 {
                     self.push_blend(frame, c.fit, opacity, c.blend, None, 0, &mut current, (w, h), time, &mut passes);
                 }
+                self.chains.release(c.id);
             }
             self.comp_accum.retain(|id, _| comp.comp(*id).is_some());
         }
@@ -932,7 +821,11 @@ impl Engine {
                     cu.opacity = 1.0;
                     cu.uv_xform = s.input_xform();
                     passes.push(Pass { entry: "fs_composite", target: cut.clone(), tex0: src, tex1: None, tex2: None, uniforms: cu, mesh: None, bufs: Vec::new() });
-                    match self.apply_effects(s.id, &s.effects, Frame::Rgb { view: cut, w: iw, h: ih }, time, mods, &comp.layers, &mut passes) {
+                    let frame = self.apply_effects(s.id, &s.effects, Frame::Rgb { view: cut, w: iw, h: ih }, time, mods, &comp.layers, &mut passes);
+                    // Its pictures may go back now: the slice's draw below is recorded before any other chain draws
+                    // in them. (The master's chain is never given back mid-frame: every slice still reads it.)
+                    self.chains.release(s.id);
+                    match frame {
                         Frame::Rgb { view, .. } => (view, [1.0, 1.0, 0.0, 0.0]),
                         _ => continue,
                     }
@@ -1056,6 +949,7 @@ impl Engine {
         self.push_samples(&output_view, &mut passes);
 
         self.encode(&passes);
+        self.chains.end_frame(self.frame_index);
         self.read_samples();
         self.finish_cutouts();
         self.sweep_externals();
@@ -1161,13 +1055,26 @@ impl Engine {
             if !layer.enabled {
                 continue;
             }
+            // How much of it shows in the mix: nothing when muted (solo elsewhere, Mix off), faded out, or its side
+            // of the crossfader is down; nor when its group is faded out.
+            let muted = (any_solo && !layer.solo) || !layer.in_mix;
+            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
+            let group_hidden = open_group.and_then(|g| comp.group(g)).is_some_and(|g| !self.group_seen(g, ctx));
+            // Nothing shows it at full size: source and effects at its thumbnail's size, the thumbnail kept live for
+            // cueing (`quiet`). Back in sight, it's drawn at full size that frame.
+            let small = self.out_of_sight(layer, opacity > 0.001 && !group_hidden, ctx);
+            if self.skip_quiet(layer.id, small, opacity, time) {
+                continue;
+            }
+            let thumb_scale = THUMBNAIL_WIDTH as f32 / w as f32;
             // Its own frame rate: between its frames, the picture it drew last (source and effects skipped).
-            let held = (layer.render_fps > 0.0 && layer.transition.is_none())
+            let held = (!small && layer.render_fps > 0.0 && layer.transition.is_none())
                 .then(|| self.layers.get(&layer.id).and_then(|r| r.held.as_ref().filter(|_| time >= r.held_at && time - r.held_at < 1.0 / layer.render_fps)))
                 .flatten()
                 .map(|t| Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height });
-            let frame = if let Some(frame) = held {
-                frame
+            // (`at_thumb`: drawn at the thumbnail's scale, so it's placed on a canvas that size.)
+            let (frame, at_thumb) = if let Some(frame) = held {
+                (frame, false)
             } else {
                 // A generator at a lower render size (then scaled up by the layer's fit).
                 let (gw, gh) = match &layer.source {
@@ -1177,7 +1084,8 @@ impl Engine {
                     }
                     _ => (w, h),
                 };
-                let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, gw, gh, time, mods, passes);
+                let ((gw, gh), slot) = if small { (quiet::scaled((gw, gh), thumb_scale), SourceSlot::Small) } else { ((gw, gh), SourceSlot::Main) };
+                let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, slot, gw, gh, time, mods, passes);
                 // A stopped clip fades out to nothing over its transition.
                 let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
                 let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
@@ -1185,7 +1093,7 @@ impl Engine {
                 };
                 match &layer.transition {
                     Some(t) if t.progress(time) < 1.0 => {
-                        if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, passes) {
+                        if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], SourceSlot::Outgoing, w, h, time, mods, passes) {
                             // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
                             let shader = (t.kind == crate::model::TransitionKind::Shader)
                                 .then(|| crate::shaders::transition(&t.effect))
@@ -1204,6 +1112,9 @@ impl Engine {
                                 out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
                             }
                             frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), passes);
+                            // (Both sides were read into the crossfade's own picture.)
+                            self.chains.release(layer.id ^ TRANSITION_IN);
+                            self.chains.release(layer.id ^ TRANSITION_OUT);
                             }
                         }
                     }
@@ -1222,20 +1133,35 @@ impl Engine {
                 } else if let Some(res) = self.layers.get_mut(&layer.id) {
                     res.feed_pre = None;
                 }
-                let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, layer.chain(), frame, time, mods, &comp.layers, passes) };
-                if layer.render_fps > 0.0 {
+                // The effects at the size it shows at: the thumbnail's while nobody sees it, the canvas's for a picture
+                // much bigger than that (a 4K clip in an HD show). Moved, turned or pinned, it may show bigger: as it is.
+                let generated = small && matches!(layer.source, SourceSpec::Generator(_));
+                let size = if small {
+                    (!generated).then(|| quiet::scaled(frame.size(), thumb_scale))
+                } else if layer.transform.is_identity() && !layer.is_data() {
+                    quiet::chain_size(frame.size(), (w, h), layer.fit)
+                } else {
+                    None
+                };
+                let before = frame.size();
+                let frame = if layer.fx_bypass { frame } else { self.apply_effects_at(layer.id, layer.chain(), frame, size, time, mods, &comp.layers, passes) };
+                let at_thumb = generated || (small && frame.size() != before);
+                if layer.render_fps <= 0.0 {
+                    if let Some(res) = self.layers.get_mut(&layer.id) {
+                        res.held = None;
+                    }
+                } else if !small {
                     let (fw, fh) = frame.size();
                     let res = self.layers.entry(layer.id).or_default();
                     Target::ensure(&mut res.held, &device, "held layer", fw, fh);
                     res.held_at = time;
                     let view = res.held.as_ref().unwrap().view.clone();
                     push_fit_copy(view, &frame, (fw, fh), FitMode::Stretch, (fw, fh), passes);
-                } else if let Some(res) = self.layers.get_mut(&layer.id) {
-                    res.held = None;
                 }
-                frame
+                (frame, at_thumb)
             };
-            self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, passes);
+            let placed_on = if at_thumb { (THUMBNAIL_WIDTH, thumb_h) } else { (w, h) };
+            self.push_thumbnail(layer.id, layer.fit, &frame, placed_on, thumb_h, passes);
             if wanted.contains(&layer.id) {
                 // Points keep their own size and precision (a model's vertices aren't resampled into the canvas).
                 let data = layer.is_data();
@@ -1264,9 +1190,8 @@ impl Engine {
                     push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), passes);
                 }
             }
-            let muted = (any_solo && !layer.solo) || !layer.in_mix;
-            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
             if opacity <= 0.001 {
+                self.chains.release(layer.id);
                 continue;
             }
             let place = transform_uniforms(&layer.transform, (w, h), mods);
@@ -1303,6 +1228,8 @@ impl Engine {
                     self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, passes);
                 }
             }
+            // Everything that reads its picture is recorded: the next chain may draw in its pictures.
+            self.chains.release(layer.id);
             layers_drawn += 1;
         }
         if let Some(g) = open_group.and_then(|id| comp.group(id)) {
@@ -1390,6 +1317,7 @@ impl Engine {
         if g.enabled && g.in_mix && opacity > 0.001 {
             self.push_blend(frame, FitMode::Stretch, opacity, g.blend, None, 0, current, ctx.canvas, ctx.time, passes);
         }
+        self.chains.release(g.id);
     }
 }
 

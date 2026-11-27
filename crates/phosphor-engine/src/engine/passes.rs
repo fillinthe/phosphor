@@ -4,7 +4,7 @@ use super::*;
 
 impl Engine {
     /// Resolves a source spec into a frame, rendering generators into the layer's slot
-    /// (`outgoing` selects the transition slot).
+    /// (`slot`: the layer's own, a transition's outgoing side, or the small one an unseen layer draws in).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve_spec(
         &mut self,
@@ -12,13 +12,14 @@ impl Engine {
         spec: &SourceSpec,
         values: &[f32],
         value_mods: &[crate::model::ParamMod],
-        outgoing: bool,
+        slot: SourceSlot,
         w: u32,
         h: u32,
         time: f32,
         mods: &ModInputs,
         passes: &mut Vec<Pass>,
     ) -> Option<Frame> {
+        let outgoing = slot == SourceSlot::Outgoing;
         match spec {
             SourceSpec::None => None,
             SourceSpec::Generator(id) => {
@@ -34,10 +35,15 @@ impl Engine {
                 let (tex0, tex1, tex2) = self.audio_extra(desc.entry);
                 let device = &self.gpu.device;
                 let res = self.layers.entry(layer_id).or_default();
-                let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
+                // (The small one has its own picture: going in and out of sight never makes a new one.)
+                let target = match slot {
+                    SourceSlot::Main => &mut res.generator,
+                    SourceSlot::Outgoing => &mut res.generator_out,
+                    SourceSlot::Small => &mut res.generator_small,
+                };
                 let format = if shaders::is_points(desc.id) { crate::gpu::DATA_FORMAT } else { crate::gpu::FORMAT };
-                Target::ensure_format(slot, device, "generator", w, h, format);
-                let target = slot.as_ref().unwrap();
+                Target::ensure_format(target, device, "generator", w, h, format);
+                let target = target.as_ref().unwrap();
                 // Built-in generators' Speed: smooth when changed (`SpeedPhase`).
                 let mut params = resolve_params(desc, values, value_mods, mods);
                 if !desc.id.contains(':') {
@@ -353,11 +359,30 @@ impl Engine {
     }
 
     /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_effects<'a>(
         &mut self,
         res_id: u64,
         effects: impl IntoIterator<Item = &'a EffectState>,
         frame: Frame,
+        time: f32,
+        mods: &ModInputs,
+        all_layers: &[LayerState],
+        passes: &mut Vec<Pass>,
+    ) -> Frame {
+        self.apply_effects_at(res_id, effects, frame, None, time, mods, all_layers, passes)
+    }
+
+    /// `apply_effects`, the picture first drawn at `size` when that's smaller than it is (one much bigger than it's
+    /// shown: `quiet::chain_size`; a layer out of sight: thumbnail size), so the effects run on fewer pixels. With no
+    /// effects on, the picture is left as it is.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn apply_effects_at<'a>(
+        &mut self,
+        res_id: u64,
+        effects: impl IntoIterator<Item = &'a EffectState>,
+        frame: Frame,
+        size: Option<(u32, u32)>,
         time: f32,
         mods: &ModInputs,
         all_layers: &[LayerState],
@@ -374,17 +399,17 @@ impl Engine {
             return frame;
         }
         let (mut w, mut h) = frame.size();
+        let shrink = size.filter(|s| s.0 < w && s.1 < h);
+        if let Some(s) = shrink {
+            (w, h) = s;
+        }
         // What comes out: the input's size, or the canvas once a points render has drawn.
         let mut out = (w, h);
         let canvas = self.canvas;
-        let device = &self.gpu.device;
-        let res = self.layers.entry(res_id).or_default();
         // Points stay 16-bit float through the chain.
         let mut format = if chain.iter().any(|c| shaders::is_points(c.0.id)) { crate::gpu::DATA_FORMAT } else { self.mix_format };
-        for slot in &mut res.fx {
-            Target::ensure_format(slot, device, "fx", w, h, format);
-        }
-        let mut views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+        // Borrowed from the pool until the caller has used the result (`ChainPool::release`).
+        let mut views = self.chains.lease(&self.gpu.device, res_id, (w, h), format, self.frame_index);
         let mut base = Uniforms::with_params(&[]);
         base.resolution = [w as f32, h as f32];
         base.time = time;
@@ -392,9 +417,10 @@ impl Engine {
         // Ping-pong across three views, never writing the one being read or the one holding
         // the chain's dry input.
         let mut input_idx: Option<usize> = None;
-        let mut input = match frame {
-            Frame::Rgb { view, .. } => view,
-            other => {
+        // A YUV / compressed picture first becomes RGB (at the size the chain runs at: one pass either way).
+        let mut input = match (frame, shrink) {
+            (Frame::Rgb { view, .. }, None) => view,
+            (other, _) => {
                 let (tex0, tex2, yuv) = other.bind();
                 passes.push(Pass {
                     entry: "fs_to_rgb",
@@ -499,7 +525,7 @@ impl Engine {
                         Target::ensure(slot, &self.gpu.device, "rutt", rw, rh);
                         u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
                         slot.as_ref().unwrap().view.clone()
-                    } else if entry == "fx_trails" || entry == "fx_slitscan" || entry == "fx_flow_keep" || entry == "fx_pts_particles" {
+                    } else if super::quiet::HISTORY_ENTRIES.contains(&entry) {
                         // History effects write one slot while reading the other.
                         let res = self.layers.entry(res_id).or_default();
                         let slots = res.history.entry(fx_id).or_default();
@@ -551,11 +577,7 @@ impl Engine {
                     if rendered && ((w, h) != canvas || format != self.mix_format) {
                         // From here on the chain works on a picture: the render's, at the canvas size.
                         (w, h, format) = (canvas.0, canvas.1, self.mix_format);
-                        let res = self.layers.entry(res_id).or_default();
-                        for slot in &mut res.after_pts {
-                            Target::ensure_format(slot, &self.gpu.device, "fx after points", w, h, format);
-                        }
-                        views = res.after_pts.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+                        views = self.chains.lease(&self.gpu.device, res_id, (w, h), format, self.frame_index);
                         base.resolution = [w as f32, h as f32];
                     }
                 }
