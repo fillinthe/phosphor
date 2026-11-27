@@ -102,6 +102,8 @@ impl Engine {
                 PreviewItem::Effect(fx) => {
                     let mut out = None;
                     for _ in 0..warm {
+                        // (Each run starts from the source again: the last one's pictures can be drawn over.)
+                        self.chains.release(rid);
                         out = Some(self.apply_effects(rid, std::slice::from_ref(fx), Frame::Rgb { view: src_view.clone(), w: pw, h: ph }, time, mods, layers, passes));
                     }
                     out
@@ -117,6 +119,7 @@ impl Engine {
             let Some(Frame::Rgb { view, .. }) = frame else { continue };
             Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", pw, ph);
             copy(self.preview_targets[i].as_ref().unwrap().view.clone(), view, (pw, ph), passes);
+            self.chains.release(rid);
             self.preview_ready[i] = true;
         }
     }

@@ -85,7 +85,6 @@ struct LayerResources {
     media_out: Option<Media>,
     /// RGB copies of incoming/outgoing (when YUV) and the blended result.
     trans: [Option<Target>; 3],
-    fx: [Option<Target>; 3],
     /// Reduced-size targets for Rutt-Etra, per effect id (two in one chain shared one: the second drew into the
     /// picture it was reading); the scale sets the apparent line width.
     rutt: HashMap<u64, Option<Target>>,
@@ -93,9 +92,6 @@ struct LayerResources {
     cut: Option<Target>,
     /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.
     pts: Option<Target>,
-    /// The effect chain's views after a points render: the canvas size in the mix format (the chain before it
-    /// works on points at their own size and 16-bit float).
-    after_pts: [Option<Target>; 3],
     /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
     history: HashMap<u64, [Option<Target>; 2]>,
     /// Multi-pass shader buffers, per effect id (or `GENERATOR_KEY` for the layer's source).
@@ -238,6 +234,7 @@ mod fit;
 mod media;
 mod mesh;
 mod passes;
+mod pool;
 mod previews;
 mod sample;
 mod timing;
@@ -297,6 +294,8 @@ pub struct Engine {
     uniform_buffer: Option<wgpu::Buffer>,
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
+    /// The pictures effect chains ping-pong in, shared by every chain of a size (`pool`).
+    chains: pool::ChainPool,
     capture: Capture,
     /// GPU time per frame (None when the adapter has no timestamps).
     gpu_timer: Option<timing::GpuTimer>,
@@ -388,6 +387,7 @@ impl Engine {
             uniform_buffer: None,
             uniform_capacity: 0,
             bind_cache: Default::default(),
+            chains: Default::default(),
             capture: Capture::default(),
             gpu_timer,
             plan_images: HashMap::new(),
@@ -813,6 +813,7 @@ impl Engine {
                 if c.enabled && c.in_mix && opacity > 0.001 {
                     self.push_blend(frame, c.fit, opacity, c.blend, None, 0, &mut current, (w, h), time, &mut passes);
                 }
+                self.chains.release(c.id);
             }
             self.comp_accum.retain(|id, _| comp.comp(*id).is_some());
         }
@@ -930,7 +931,11 @@ impl Engine {
                     cu.opacity = 1.0;
                     cu.uv_xform = s.input_xform();
                     passes.push(Pass { entry: "fs_composite", target: cut.clone(), tex0: src, tex1: None, tex2: None, uniforms: cu, mesh: None, bufs: Vec::new() });
-                    match self.apply_effects(s.id, &s.effects, Frame::Rgb { view: cut, w: iw, h: ih }, time, mods, &comp.layers, &mut passes) {
+                    let frame = self.apply_effects(s.id, &s.effects, Frame::Rgb { view: cut, w: iw, h: ih }, time, mods, &comp.layers, &mut passes);
+                    // Its pictures may go back now: the slice's draw below is recorded before any other chain draws
+                    // in them. (The master's chain is never given back mid-frame: every slice still reads it.)
+                    self.chains.release(s.id);
+                    match frame {
                         Frame::Rgb { view, .. } => (view, [1.0, 1.0, 0.0, 0.0]),
                         _ => continue,
                     }
@@ -1054,6 +1059,7 @@ impl Engine {
         self.push_samples(&output_view, &mut passes);
 
         self.encode(&passes);
+        self.chains.end_frame(self.frame_index);
         self.read_samples();
         self.finish_cutouts();
         self.sweep_externals();
@@ -1202,6 +1208,9 @@ impl Engine {
                                 out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
                             }
                             frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), passes);
+                            // (Both sides were read into the crossfade's own picture.)
+                            self.chains.release(layer.id ^ TRANSITION_IN);
+                            self.chains.release(layer.id ^ TRANSITION_OUT);
                             }
                         }
                     }
@@ -1265,6 +1274,7 @@ impl Engine {
             let muted = (any_solo && !layer.solo) || !layer.in_mix;
             let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
             if opacity <= 0.001 {
+                self.chains.release(layer.id);
                 continue;
             }
             let place = transform_uniforms(&layer.transform, (w, h), mods);
@@ -1301,6 +1311,8 @@ impl Engine {
                     self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, passes);
                 }
             }
+            // Everything that reads its picture is recorded: the next chain may draw in its pictures.
+            self.chains.release(layer.id);
             layers_drawn += 1;
         }
         if let Some(g) = open_group.and_then(|id| comp.group(id)) {
@@ -1388,6 +1400,7 @@ impl Engine {
         if g.enabled && g.in_mix && opacity > 0.001 {
             self.push_blend(frame, FitMode::Stretch, opacity, g.blend, None, 0, current, ctx.canvas, ctx.time, passes);
         }
+        self.chains.release(g.id);
     }
 }
 

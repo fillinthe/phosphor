@@ -1322,3 +1322,36 @@ fn two_rutt_etras_in_a_chain_dont_share_a_picture() {
     engine.render(&comp, 0.0, &ModInputs::default());
     assert_eq!(engine.layers[&1].rutt.len(), 1, "removed: freed");
 }
+
+/// Layers' effect chains draw in one shared set of pictures (one after the other), and each layer still shows its
+/// own result: red and blue inverted (cyan and yellow), added together = white; a slice with effects reading the
+/// master's chain after it keeps the master's picture (the master's set is never lent out mid-frame).
+#[test]
+fn effect_chains_share_their_pictures_and_keep_their_own_results() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    for (id, rgb) in [(1, [1.0, 0.0, 0.0]), (2, [0.0, 0.0, 1.0])] {
+        let mut l = LayerState { id, source: SourceSpec::Generator("solid".into()), generator_values: rgb.to_vec(), ..Default::default() };
+        l.effects.push(comp.new_effect("invert").unwrap());
+        if id == 2 {
+            l.blend = crate::BlendMode::Add;
+        }
+        comp.layers.push(l);
+    }
+    let px = middle(&mut engine, &comp);
+    assert!(px[0] > 250 && px[1] > 250 && px[2] > 250, "cyan + yellow = white: {px:?}");
+    assert_eq!(engine.chains.set_count(), 1, "two chains of one size, one after the other: one set");
+    // Master effects (invert: black), then an output whose one slice runs its own effects on the master.
+    let master_fx = comp.new_effect("invert").unwrap();
+    comp.master_effects.push(master_fx);
+    let mut out = crate::model::OutputConfig { id: 50, enabled: true, ..Default::default() };
+    out.mapping.enabled = true;
+    let mut slice = crate::mapping::Surface { id: 60, ..Default::default() };
+    slice.effects.push(comp.new_effect("invert").unwrap());
+    out.mapping.surfaces.push(slice);
+    comp.outputs.push(out);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output_of(50).expect("output 50");
+    let i = ((h / 2 * w + w / 2) * 4) as usize;
+    assert!(px[i] > 250 && px[i + 1] > 250 && px[i + 2] > 250, "white, inverted by the master, inverted by the slice: {:?}", &px[i..i + 4]);
+}

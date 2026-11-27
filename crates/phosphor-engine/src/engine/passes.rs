@@ -376,14 +376,10 @@ impl Engine {
         // What comes out: the input's size, or the canvas once a points render has drawn.
         let mut out = (w, h);
         let canvas = self.canvas;
-        let device = &self.gpu.device;
-        let res = self.layers.entry(res_id).or_default();
         // Points stay 16-bit float through the chain.
         let mut format = if chain.iter().any(|c| shaders::is_points(c.0.id)) { crate::gpu::DATA_FORMAT } else { self.mix_format };
-        for slot in &mut res.fx {
-            Target::ensure_format(slot, device, "fx", w, h, format);
-        }
-        let mut views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+        // Borrowed from the pool until the caller has used the result (`ChainPool::release`).
+        let mut views = self.chains.lease(&self.gpu.device, res_id, (w, h), format, self.frame_index);
         let mut base = Uniforms::with_params(&[]);
         base.resolution = [w as f32, h as f32];
         base.time = time;
@@ -550,11 +546,7 @@ impl Engine {
                     if rendered && ((w, h) != canvas || format != self.mix_format) {
                         // From here on the chain works on a picture: the render's, at the canvas size.
                         (w, h, format) = (canvas.0, canvas.1, self.mix_format);
-                        let res = self.layers.entry(res_id).or_default();
-                        for slot in &mut res.after_pts {
-                            Target::ensure_format(slot, &self.gpu.device, "fx after points", w, h, format);
-                        }
-                        views = res.after_pts.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+                        views = self.chains.lease(&self.gpu.device, res_id, (w, h), format, self.frame_index);
                         base.resolution = [w as f32, h as f32];
                     }
                 }
