@@ -27,7 +27,7 @@ impl PhosphorApp {
         st.comp.ensure_outputs();
         st.selected = s.selected.or(st.selected);
         for (layer, t) in &s.video_positions {
-            st.media.seek(*layer, *t);
+            st.core.lock().media.seek(*layer, *t);
         }
         {
             let mut map = st.output.lock().unwrap();
@@ -71,7 +71,7 @@ impl PhosphorApp {
             audio_device: st.audio.current().map(str::to_string),
             streaming: st.stream.running(),
             selected: st.selected,
-            video_positions: st.media.positions(),
+            video_positions: st.core.lock().media.positions(),
         }
     }
 

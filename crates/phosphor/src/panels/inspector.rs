@@ -60,12 +60,12 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         });
     } else {
         let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
-        let info = st.media.video_info(sel);
-        let position = st.media.position(sel);
-        let has_sound = st.media.has_sound(sel);
+        let info = st.core.lock().media.video_info(sel);
+        let position = st.core.lock().media.position(sel);
+        let has_sound = st.core.lock().media.has_sound(sel);
         let bpm = st.comp.bpm;
         let canvas = st.comp.layer(sel).map_or((st.comp.width, st.comp.height), |l| st.comp.layer_canvas(l));
-        let st_chapters = st.media.chapters(sel);
+        let st_chapters = st.core.lock().media.chapters(sel);
         let inherited = st.comp.inherited_effects(sel);
         let numbers = if matches!(st.comp.layer(sel).map(|l| &l.source), Some(SourceSpec::Text(_))) { number_choices(&st.comp) } else { Vec::new() };
         let favorite = st.comp.layer(sel).is_some_and(|l| super::clips::is_favorite(st, &l.source));
@@ -180,7 +180,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(target_arch = "wasm32")]
         let _ = match_beat;
         if let Some(t) = seek_to {
-            st.media.scrub(sel, t);
+            st.core.lock().media.scrub(sel, t);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if text_file {
@@ -190,7 +190,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             super::clips::favorite_file(st, &source, None);
         }
         if let Some(path) = reload {
-            st.media.reload(&st.comp, &path);
+            st.core.lock().media.reload(&st.comp, &path);
             st.thumbs.forget(&path);
         }
         if let Some(q) = quick {

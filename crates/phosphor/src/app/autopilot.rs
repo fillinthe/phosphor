@@ -31,7 +31,7 @@ impl State {
         let mut clear: Vec<u64> = Vec::new();
         self.run_collections(now, beats);
         for layer in self.comp.layers.iter().filter(|l| l.autopilot != phosphor_engine::Autopilot::Off && l.collection.is_none()) {
-            let passes = self.media.passes(layer.id);
+            let passes = self.core.lock().media.passes(layer.id);
             let run = self.autopilot.entry(layer.id).or_default();
             if run.clip != layer.active_clip {
                 *run = AutoRun { clip: layer.active_clip, file: None, launched: None, started_beats: beats, passes };
@@ -61,7 +61,7 @@ impl State {
                 fire.push((layer.id, slot));
             }
             // Wait for the new clip (or, if the same one is picked again, a fresh count).
-            *run = AutoRun { clip: layer.active_clip, file: None, launched: None, started_beats: beats, passes: self.media.passes(layer.id) };
+            *run = AutoRun { clip: layer.active_clip, file: None, launched: None, started_beats: beats, passes: self.core.lock().media.passes(layer.id) };
         }
         for (layer, slot) in fire {
             self.comp.trigger_clip(layer, slot, now as f32);
@@ -87,7 +87,7 @@ impl State {
         for layer in self.comp.layers.iter().filter(|l| l.collection.is_some() && l.enabled) {
             let Some(name) = layer.collection.as_deref() else { continue };
             let file = source_file(layer).map(str::to_string);
-            let passes = self.media.passes(layer.id);
+            let passes = self.core.lock().media.passes(layer.id);
             let run = self.autopilot.entry(layer.id).or_default();
             // You put something else on this layer (a clip, a file): it stops following the collection.
             if run.launched.is_some() && file != run.launched {

@@ -37,7 +37,7 @@ pub(crate) fn modulator_windows(ctx: &egui::Context, st: &mut State) {
 
 fn modulator_window(ui: &mut egui::Ui, st: &mut State, id: u64) {
     let Some(i) = st.comp.modulators.iter().position(|m| m.id == id) else { return };
-    let cycle = st.mod_phases.cycle_of(id);
+    let cycle = st.core.lock().mod_phases.cycle_of(id);
     let value = st.mod_inputs.shared.iter().find(|(m, _)| *m == id).map_or(0.0, |x| x.1);
     let mut scrub = None;
     let m = &mut st.comp.modulators[i];
@@ -72,7 +72,7 @@ fn modulator_window(ui: &mut egui::Ui, st: &mut State, id: u64) {
     ui.separator();
     followed_by(ui, &mut st.comp, id);
     if let Some(at) = scrub {
-        st.mod_phases.set_cycle(id, at);
+        st.core.lock().mod_phases.set_cycle(id, at);
     }
 }
 

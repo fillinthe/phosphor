@@ -456,13 +456,14 @@ impl crate::app::State {
                 self.clock.bpm = bpm;
                 self.clock.set_beats(now, beats);
             }
-            for (layer, t) in link.drifted(&self.media.positions(), show) {
-                self.media.seek(layer, t);
+            let mut core = self.core.lock();
+            for (layer, t) in link.drifted(&core.media.positions(), show) {
+                core.media.seek(layer, t);
             }
             return show;
         }
         if self.net.followers.load(std::sync::atomic::Ordering::Relaxed) > 0 {
-            let positions = self.media.positions();
+            let positions = self.core.lock().media.positions();
             self.leader.publish(&self.net.follow, &self.comp, now, self.clock.beats(now), self.clock.bpm, &positions);
         }
         now

@@ -438,7 +438,7 @@ fn effects_line<'a>(ids: impl Iterator<Item = &'a str>) -> String {
 fn movies_line(st: &State) -> String {
     let (mut card, mut cpu) = (0, 0);
     for l in &st.comp.layers {
-        match st.media.video_info(l.id) {
+        match st.core.lock().media.video_info(l.id) {
             Some(i) if i.contains("hardware decode") => card += 1,
             Some(i) if i.contains("software decode") => cpu += 1,
             _ => {}
@@ -464,7 +464,7 @@ pub fn snapshot_text(st: &mut State) -> String {
     out.push_str(&diagnostics(st));
     out.push_str(&format!("\n== Settings ==\nRender rate: {:?} · canvas {}×{} · {} bpm\n", st.render_rate, st.comp.width, st.comp.height, st.comp.bpm));
     out.push_str("\n== Layers (top first) ==\n");
-    let shares = st.media.cpu_shares();
+    let shares = st.core.lock().media.cpu_shares();
     for l in st.comp.layers.iter().rev() {
         let source = match &l.source {
             SourceSpec::None => "empty".to_string(),
@@ -478,7 +478,7 @@ pub fn snapshot_text(st: &mut State) -> String {
         let effects: Vec<&str> = l.effects.iter().map(|e| e.effect.as_str()).collect();
         let effects = if effects.is_empty() { String::new() } else { format!(" · effects: {}", effects.join(", ")) };
         out.push_str(&format!("{} · {} · {} · opacity {:.2} · {:?}{effects}\n", l.name, if l.enabled { "on" } else { "off" }, source, l.opacity, l.blend));
-        if let Some(info) = st.media.video_info(l.id) {
+        if let Some(info) = st.core.lock().media.video_info(l.id) {
             let share = shares.get(&l.id).map(|c| format!(" · {:.0}% of a core", c * 100.0)).unwrap_or_default();
             out.push_str(&format!("    {info}{share}\n"));
         }

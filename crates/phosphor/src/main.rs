@@ -77,6 +77,8 @@ mod presets;
 #[cfg(not(target_arch = "wasm32"))]
 mod recovery;
 mod remote;
+#[cfg(not(target_arch = "wasm32"))]
+mod render_thread;
 mod screens;
 #[cfg(not(target_arch = "wasm32"))]
 mod screen_watch;

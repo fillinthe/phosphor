@@ -13,7 +13,8 @@ pub struct Backgrounds {
 impl State {
     /// Starts loading any output's new background picture, and hands finished ones to the engine. Every frame.
     pub(crate) fn sync_backgrounds(&mut self) {
-        let Some(engine) = self.engine.as_mut() else { return };
+        let mut core = self.core.lock();
+        let Some(engine) = core.engine.as_mut() else { return };
         let bg = &mut self.backgrounds;
         let (tx, rx) = bg.done.get_or_insert_with(std::sync::mpsc::channel);
         for (id, path, img) in rx.try_iter() {

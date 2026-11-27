@@ -60,7 +60,9 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
     let mut strips = egui::Rect::NOTHING;
     let mut keys = None;
     {
-        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_selected, also_clips, media, .. } = st;
+        // (Each layer's media problem, read once: the players are shared with the render thread.)
+        let media_errors = st.core.lock().media.errors.clone();
+        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_selected, also_clips, .. } = st;
         let ctx = ui.ctx().clone();
         let mut cx = CellCtx { thumbs, clip_cells, preview_wants, preview_keys, preview_textures, also_clips, ctx };
         let sel_is_layer = selected.is_some_and(|s| comp.layers.iter().any(|l| l.id == s));
@@ -125,7 +127,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     }
                     let layer = &mut comp.layers[idx];
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
-                    let err = media.errors.get(&layer.id).cloned();
+                    let err = media_errors.get(&layer.id).cloned();
                     let is_selected = *selected == Some(layer.id) || also_selected.contains(&layer.id);
                     let dimmed = any_solo && !layer.solo;
                     let indent = 10.0 * (band.is_some() as u8 + parent.is_some() as u8) as f32;

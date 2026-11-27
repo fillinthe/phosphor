@@ -65,9 +65,13 @@ impl Stats {
 
     /// Records one frame; returns a fresh snapshot once per second.
     pub fn record(&mut self, now: f64, render_secs: f64, passes: usize, audio_level: f64, gpu_ms: f64) -> Option<Snapshot> {
+        self.record_at(web_time::Instant::now(), now, render_secs, passes, audio_level, gpu_ms)
+    }
+
+    /// Records one frame drawn at `t` (the render thread's frames are counted later, on the interface's side).
+    pub fn record_at(&mut self, t: web_time::Instant, now: f64, render_secs: f64, passes: usize, audio_level: f64, gpu_ms: f64) -> Option<Snapshot> {
         self.frames += 1;
         self.render_total += render_secs;
-        let t = web_time::Instant::now();
         if let Some(last) = self.last_frame {
             let gap = t.duration_since(last).as_secs_f64();
             self.worst = self.worst.max(gap);

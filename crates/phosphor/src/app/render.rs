@@ -1,6 +1,7 @@
 //! Per-frame rendering: media, engine, outputs (Syphon, NDI, stream, network), effect fades.
 
 use super::*;
+use super::render_core::RenderCore;
 
 /// Who a captured program frame is for (bits of its tag): only they get a copy when it comes back.
 const TO_STREAM: u64 = 1;
@@ -21,6 +22,10 @@ impl State {
 
 impl PhosphorApp {
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
+    ///
+    /// With the render thread on (`crate::render_thread`), that thread plays the movies, draws the frame and shows the
+    /// output windows; this publishes what it draws from (the project now, the beat, the sound heard) and, once per
+    /// frame the thread drew, does the interface's share: previews, thumbnails, readbacks, recordings, NDI, DMX.
     pub(crate) fn render(&mut self, now: f64) {
         #[cfg(target_os = "macos")]
         crate::menu_test::RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -40,33 +45,140 @@ impl PhosphorApp {
         let show = self.state.follow_frame(now);
         #[cfg(target_arch = "wasm32")]
         let show = now;
+        #[cfg(not(target_arch = "wasm32"))]
+        let beside = self.render_thread.as_ref().is_some_and(crate::render_thread::RenderThread::running);
+        #[cfg(target_arch = "wasm32")]
+        let beside = false;
+        let heard = {
+            let State { clip_page, comp, core, audio, mod_inputs, clock, net, net_audio, notice, models, #[cfg(not(target_arch = "wasm32"))] tracker, #[cfg(not(target_arch = "wasm32"))] milkdrop, #[cfg(not(target_arch = "wasm32"))] gdrop, .. } = &mut self.state;
+            #[cfg(target_arch = "wasm32")]
+            let _ = clip_page;
+            let mut held = core.lock();
+            let RenderCore { engine, media, mod_phases, .. } = &mut *held;
+            let Some(engine) = engine.as_mut() else { return };
+            // (The render thread plays the movies itself, with the project it's given.)
+            if !beside {
+                media.sync(comp, engine);
+                #[cfg(not(target_arch = "wasm32"))]
+                media.preload_clips(comp, *clip_page, crate::panels::CLIP_PAGE_SIZE);
+                media.update_video(comp, engine, now);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            milkdrop.update(comp, engine, audio, now, &mut media.errors);
+            #[cfg(not(target_arch = "wasm32"))]
+            gdrop.update(comp, engine, audio);
+            for (id, e) in models.update(comp, engine) {
+                media.errors.insert(id, e);
+            }
+
+            net_audio.clear();
+            net.take_audio(net_audio);
+            if !net_audio.is_empty() {
+                audio.push_external(net_audio);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use crate::media::video::sound;
+                // Nothing chosen to listen to, but a clip with sound is playing: listen to the clips, so the beat
+                // and React work without anyone touching the Audio panel.
+                if audio.current().is_none() && !audio.is_open() && !audio.is_clips() && media.any_sound() {
+                    audio.use_clips();
+                    *notice = Some("Listening to the clips' sound for the beat (Audio panel to change)".into());
+                }
+                sound::set_tap(audio.is_clips());
+                if audio.is_clips() {
+                    let mix = sound::take_tap();
+                    audio.push_clips(&mix, sound::stats().0);
+                }
+            }
+            let an = audio.update();
+            // Sound band modulators: up at once, down smoothly.
+            for m in comp.modulators.iter_mut() {
+                if let Some([lo, hi]) = m.band {
+                    let v = crate::audio::band_level(audio.bins(), lo, hi);
+                    m.value = if v > m.value { v } else { m.value + (v - m.value) * 0.15 };
+                }
+            }
+            if phosphor_engine::shaders::any_audio_slots() && audio.is_open_or_clips() {
+                engine.set_audio(&audio.waveform(), audio.bins());
+            }
+            if an.beat {
+                clock.on_audio_beat(now, an.bpm, an.confidence);
+                if an.confidence >= 0.5 {
+                    clock.on_audio_downbeat(now, an.low);
+                }
+            }
+            let beat_phase = clock.phase(now);
+            *mod_inputs = ModInputs {
+                beats: clock.beats(now) as f32,
+                audio_beat: an.beat_env,
+                beat_phase,
+                time: show as f32,
+                audio_level: an.level,
+                audio_low: an.low,
+                audio_mid: an.mid,
+                audio_high: an.high,
+                shared: if beside { mod_inputs.shared } else { Default::default() },
+            };
+            // Data loopers keep what their knob does (while recording), then shared modulators (and their chains),
+            // once per frame, before anything reads them.
+            for m in comp.modulators.iter_mut().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
+                m.looper.record(mod_inputs.beats, m.value);
+            }
+            // What video tracking found lands in its Hand modulators before they're read.
+            #[cfg(not(target_arch = "wasm32"))]
+            tracker.apply(comp);
+            // (Beside the render thread, that thread works them out for each frame it draws.)
+            if !beside {
+                mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs, mod_phases);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            let heard = crate::render_thread::Heard { level: an.level, low: an.low, mid: an.mid, high: an.high, beat: an.beat_env };
+            #[cfg(target_arch = "wasm32")]
+            let heard = ();
+            heard
+        };
+        // Beside the render thread: what it draws from next, then the interface's share once per frame it drew.
+        #[cfg(not(target_arch = "wasm32"))]
+        let drawn = if beside {
+            self.publish_frame(now, show, heard);
+            match self.take_thread_frames() {
+                Some(t) => t,
+                None => {
+                    // No new frame to read back or show: what the panels asked for is asked again (they ask every
+                    // frame), not piled up.
+                    self.state.preview_wants.clear();
+                    self.state.monitor_wants.clear();
+                    self.state.monitor_held.clear();
+                    return;
+                }
+            }
+        } else {
+            Vec::new()
+        };
+        #[cfg(target_arch = "wasm32")]
+        let _ = heard;
         let State {
-            clip_page,
             comp,
-            engine,
+            core,
             render_state,
             texture,
             texture_generation,
             layer_textures,
-            media,
             stats,
             output,
-            audio,
             mod_inputs,
-            mod_phases,
             stream,
             offline,
             recorders,
             clock,
             net,
-            net_audio,
             preview_wants,
             explorer,
             preview_keys,
             preview_textures,
             preview_stills,
             selected,
-            notice,
             monitor_wants,
             monitor_held,
             snapshot_source,
@@ -74,8 +186,6 @@ impl PhosphorApp {
             project_picture,
             monitor_textures,
             output_textures,
-            #[cfg(target_os = "macos")]
-            syphon,
             #[cfg(target_os = "macos")]
             vcam,
             #[cfg(any(target_os = "macos", windows))]
@@ -99,84 +209,15 @@ impl PhosphorApp {
             led_scan,
             #[cfg(not(target_arch = "wasm32"))]
             led_identify,
-            #[cfg(not(target_arch = "wasm32"))]
-            milkdrop,
-            #[cfg(not(target_arch = "wasm32"))]
-            gdrop,
-            models,
             ..
         } = &mut self.state;
+        let mut held = core.lock();
+        #[cfg(target_os = "macos")]
+        let RenderCore { engine, media, syphon, .. } = &mut *held;
+        #[cfg(not(target_os = "macos"))]
+        let RenderCore { engine, media, .. } = &mut *held;
         let Some(engine) = engine.as_mut() else { return };
-        media.sync(comp, engine);
-        #[cfg(not(target_arch = "wasm32"))]
-        media.preload_clips(comp, *clip_page, crate::panels::CLIP_PAGE_SIZE);
-        media.update_video(comp, engine, now);
-        #[cfg(not(target_arch = "wasm32"))]
-        milkdrop.update(comp, engine, audio, now, &mut media.errors);
-        #[cfg(not(target_arch = "wasm32"))]
-        gdrop.update(comp, engine, audio);
-        for (id, e) in models.update(comp, engine) {
-            media.errors.insert(id, e);
-        }
 
-        net_audio.clear();
-        net.take_audio(net_audio);
-        if !net_audio.is_empty() {
-            audio.push_external(net_audio);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use crate::media::video::sound;
-            // Nothing chosen to listen to, but a clip with sound is playing: listen to the clips, so the beat
-            // and React work without anyone touching the Audio panel.
-            if audio.current().is_none() && !audio.is_open() && !audio.is_clips() && media.any_sound() {
-                audio.use_clips();
-                *notice = Some("Listening to the clips' sound for the beat (Audio panel to change)".into());
-            }
-            sound::set_tap(audio.is_clips());
-            if audio.is_clips() {
-                let mix = sound::take_tap();
-                audio.push_clips(&mix, sound::stats().0);
-            }
-        }
-        let an = audio.update();
-        // Sound band modulators: up at once, down smoothly.
-        for m in comp.modulators.iter_mut() {
-            if let Some([lo, hi]) = m.band {
-                let v = crate::audio::band_level(audio.bins(), lo, hi);
-                m.value = if v > m.value { v } else { m.value + (v - m.value) * 0.15 };
-            }
-        }
-        if phosphor_engine::shaders::any_audio_slots() && audio.is_open_or_clips() {
-            engine.set_audio(&audio.waveform(), audio.bins());
-        }
-        if an.beat {
-            clock.on_audio_beat(now, an.bpm, an.confidence);
-            if an.confidence >= 0.5 {
-                clock.on_audio_downbeat(now, an.low);
-            }
-        }
-        let beat_phase = clock.phase(now);
-        *mod_inputs = ModInputs {
-            beats: clock.beats(now) as f32,
-            audio_beat: an.beat_env,
-            beat_phase,
-            time: show as f32,
-            audio_level: an.level,
-            audio_low: an.low,
-            audio_mid: an.mid,
-            audio_high: an.high,
-            shared: Default::default(),
-        };
-        // Data loopers keep what their knob does (while recording), then shared modulators (and their chains), once
-        // per frame, before anything reads them.
-        for m in comp.modulators.iter_mut().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
-            m.looper.record(mod_inputs.beats, m.value);
-        }
-        // What video tracking found lands in its Hand modulators before they're read.
-        #[cfg(not(target_arch = "wasm32"))]
-        tracker.apply(comp);
-        mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs, mod_phases);
         let wants = std::mem::take(preview_wants);
         // (The Effects panel can pin the tiles to one layer or the mix: `ExplorerState::preview_on`.)
         let source = explorer.preview_on.or(*selected).filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
@@ -361,7 +402,12 @@ impl PhosphorApp {
             ffgl.run(engine, show, clock.bpm, (beats.rem_euclid(4.0) / 4.0) as f32);
         }
         let t0 = web_time::Instant::now();
-        let info = engine.render(comp, show as f32, mod_inputs);
+        // (Beside the render thread, it drew the frame: what's below reads that one.)
+        let info = (!beside).then(|| engine.render(comp, show as f32, mod_inputs));
+        #[cfg(not(target_arch = "wasm32"))]
+        if info.is_some() {
+            crate::present::note_engine();
+        }
         #[cfg(target_os = "macos")]
         ffgl.take_jobs(engine);
         #[cfg(not(target_arch = "wasm32"))]
@@ -381,6 +427,8 @@ impl PhosphorApp {
                 r.repeat_last();
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut picture_to_save = None;
         for f in engine.take_monitor_reads() {
             match f.tag as u8 {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -394,10 +442,11 @@ impl PhosphorApp {
                     }
                 }
                 crate::panels::SNAPSHOT_KEY => *snapshot_ready = Some((f.width, f.height, f.rgba)),
+                // (Written once the core is let go: a file write must never hold the render thread up.)
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::panels::PROJECT_PICTURE_KEY => {
                     if let Some(project) = project_picture.take() {
-                        crate::project_files::save_picture(&project, f.width, f.height, f.rgba);
+                        picture_to_save = Some((project, f.width, f.height, f.rgba));
                     }
                 }
                 crate::scopes::MONITOR_KEY => {
@@ -429,20 +478,10 @@ impl PhosphorApp {
         for f in engine.poll_thumbnails() {
             net.push_thumb(f.tag, f.width, f.height, f.rgba);
         }
+        // (Beside the render thread, it publishes each frame it draws.)
         #[cfg(target_os = "macos")]
-        {
-            let mut frames: Vec<(u64, String, &wgpu::Texture)> = Vec::new();
-            if comp.syphon
-                && let Some(out) = engine.output()
-            {
-                frames.push((crate::syphon::PROGRAM, String::new(), &out.texture));
-            }
-            for o in comp.outputs.iter().filter(|o| o.syphon && o.enabled) {
-                if let Some(t) = engine.output_texture(o.id) {
-                    frames.push((o.id, o.name.clone(), &t.texture));
-                }
-            }
-            syphon.publish(engine.device(), &frames);
+        if !beside {
+            publish_syphon(syphon, Some(engine), comp);
         }
 
         // Rendering offline: a frame goes in once every movie has its picture (else the same moment renders again).
@@ -649,6 +688,7 @@ impl PhosphorApp {
                 e.aspect = ow as f32 / oh.max(1) as f32;
                 e.name = o.name.clone();
                 e.number = i + 1;
+                e.thread_presents = beside;
                 if !o.enabled {
                     e.open = false;
                 }
@@ -659,11 +699,29 @@ impl PhosphorApp {
         if let Some(rs) = render_state {
             stats.watch_gpu_memory(now, || rs.device.generate_allocator_report().map(|r| (r.total_reserved_bytes, r.total_allocated_bytes)));
         }
-        if let Some(snapshot) = stats.record(now, render_secs, info.passes, mod_inputs.audio_level as f64, engine.gpu_ms().unwrap_or(0.0) as f64)
-            && let Some(run) = &mut self.bench
-        {
-            println!("{}", snapshot.to_json());
-            run.samples.push(snapshot);
+        // The frames drawn: this one, or the ones the render thread drew since the last time here.
+        let mut snapshots = Vec::new();
+        match info {
+            Some(info) => snapshots.extend(stats.record(now, render_secs, info.passes, mod_inputs.audio_level as f64, engine.gpu_ms().unwrap_or(0.0) as f64)),
+            #[cfg(not(target_arch = "wasm32"))]
+            None => {
+                for t in drawn {
+                    snapshots.extend(stats.record_at(t.at, t.now, t.render_secs, t.passes, mod_inputs.audio_level as f64, t.gpu_ms));
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            None => {}
+        }
+        drop(held);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((project, w, h, rgba)) = picture_to_save {
+            crate::project_files::save_picture(&project, w, h, rgba);
+        }
+        if let Some(run) = &mut self.bench {
+            for snapshot in snapshots {
+                println!("{}", snapshot.to_json());
+                run.samples.push(snapshot);
+            }
         }
     }
 
@@ -721,4 +779,23 @@ mod handout_tests {
         let last = two.take();
         assert_eq!(last.as_ptr(), at, "the last gets the original");
     }
+}
+
+/// Syphon out: the program and each output that has it on, from the frame just drawn (the render thread's, or this
+/// thread's without it).
+#[cfg(target_os = "macos")]
+pub(crate) fn publish_syphon(syphon: &mut crate::syphon::Syphon, engine: Option<&phosphor_engine::Engine>, comp: &Composition) {
+    let Some(engine) = engine else { return };
+    let mut frames: Vec<(u64, String, &wgpu::Texture)> = Vec::new();
+    if comp.syphon
+        && let Some(out) = engine.output()
+    {
+        frames.push((crate::syphon::PROGRAM, String::new(), &out.texture));
+    }
+    for o in comp.outputs.iter().filter(|o| o.syphon && o.enabled) {
+        if let Some(t) = engine.output_texture(o.id) {
+            frames.push((o.id, o.name.clone(), &t.texture));
+        }
+    }
+    syphon.publish(engine.device(), &frames);
 }

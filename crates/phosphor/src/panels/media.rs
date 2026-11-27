@@ -548,7 +548,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
             }
             MediaAct::Reload(i) => {
                 if let Some(item) = st.comp.media_bin.get(i).cloned() {
-                    st.media.reload(&st.comp, &item.path);
+                    st.core.lock().media.reload(&st.comp, &item.path);
                     st.thumbs.forget(&item.path);
                 }
             }

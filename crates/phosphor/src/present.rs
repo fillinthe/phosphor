@@ -7,7 +7,9 @@
 //! The loop is held to the render rate by the paced window (and `ui`'s sleep). Off by default.
 //! `PHOSPHOR_PRESENT=free` turns it on for a run (benches).
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use eframe::egui::ViewportId;
 use eframe::wgpu::PresentMode;
@@ -20,6 +22,7 @@ const CONTROL: u64 = u64::MAX;
 /// Tells the graphics layer to ask here for each window's present mode (once, before the first window opens).
 pub fn install() {
     let _ = eframe::egui_wgpu::winit::PRESENT_MODE_FOR.set(mode_for);
+    let _ = eframe::egui_wgpu::winit::PRESENTED.set(note);
     if std::env::var("PHOSPHOR_PRESENT").is_ok_and(|v| v == "free") {
         ON.store(true, Ordering::Relaxed);
     }
@@ -31,6 +34,55 @@ pub fn set(on: bool, pacing: Option<ViewportId>) {
         ON.store(on, Ordering::Relaxed);
     }
     PACING.store(pacing.map_or(CONTROL, |v| v.0.value()), Ordering::Relaxed);
+}
+
+/// Bench: when each window showed a new frame, by viewport id (`start_log` / `take_log`). Off (nothing kept) otherwise.
+static LOGGING: AtomicBool = AtomicBool::new(false);
+static LOG: Mutex<Option<(web_time::Instant, HashMap<u64, Vec<f64>>)>> = Mutex::new(None);
+
+/// Starts keeping present times (the bench, once the show has settled).
+pub fn start_log() {
+    *LOG.lock().unwrap_or_else(PoisonError::into_inner) = Some((web_time::Instant::now(), HashMap::new()));
+    LOGGING.store(true, Ordering::Release);
+}
+
+/// A window presented a frame (egui's painter, or the render thread for the outputs it presents).
+pub fn note(id: ViewportId) {
+    note_key(id.0.value());
+}
+
+fn note_key(key: u64) {
+    if !LOGGING.load(Ordering::Acquire) {
+        return;
+    }
+    if let Some((start, times)) = LOG.lock().unwrap_or_else(PoisonError::into_inner).as_mut() {
+        times.entry(key).or_default().push(start.elapsed().as_secs_f64());
+    }
+}
+
+/// The key `take_log` gives the engine's frames under (each frame drawn, wherever it was drawn).
+pub const ENGINE_FRAMES: u64 = 1;
+
+/// The engine drew a frame (bench timing, as `note`).
+pub fn note_engine() {
+    note_key(ENGINE_FRAMES);
+}
+
+/// The present times kept since `start_log` (seconds), by viewport id value; stops keeping them.
+pub fn take_log() -> HashMap<u64, Vec<f64>> {
+    LOGGING.store(false, Ordering::Release);
+    LOG.lock().unwrap_or_else(PoisonError::into_inner).take().map(|(_, t)| t).unwrap_or_default()
+}
+
+/// Gaps between frames (ms): (median, 99th percentile, longest, count). None with fewer than two frames.
+pub fn gaps(times: &[f64]) -> Option<(f64, f64, f64, usize)> {
+    let mut gaps: Vec<f64> = times.windows(2).map(|w| (w[1] - w[0]) * 1000.0).collect();
+    if gaps.is_empty() {
+        return None;
+    }
+    gaps.sort_by(f64::total_cmp);
+    let at = |q: f64| gaps[((gaps.len() - 1) as f64 * q).round() as usize];
+    Some((at(0.5), at(0.99), gaps[gaps.len() - 1], gaps.len()))
 }
 
 fn mode_for(id: ViewportId) -> Option<PresentMode> {
@@ -75,5 +127,18 @@ mod tests {
         assert_eq!(choose(true, first, ViewportId::ROOT), Some(PresentMode::AutoNoVsync));
         // No output open: Phosphor's own window paces.
         assert_eq!(choose(true, None, ViewportId::ROOT), Some(PresentMode::AutoVsync));
+    }
+
+    #[test]
+    fn frame_gaps_give_median_tail_and_longest() {
+        assert_eq!(gaps(&[1.0]), None, "one frame has no gap");
+        // 100 frames 1/60 s apart, then one 200 ms hole.
+        let mut t: Vec<f64> = (0..100).map(|i| i as f64 / 60.0).collect();
+        t.push(t[99] + 0.2);
+        let (p50, p99, max, n) = gaps(&t).unwrap();
+        assert_eq!(n, 100);
+        assert!((p50 - 1000.0 / 60.0).abs() < 1e-6, "{p50}");
+        assert!((max - 200.0).abs() < 1e-6, "{max}");
+        assert!(p99 < 20.0, "one hole in a hundred gaps is past the 99th percentile's reach: {p99}");
     }
 }

@@ -9,6 +9,11 @@ const WAY_BACK_SECS: f64 = 8.0;
 /// Seconds a bare key in an output window waits for its second press.
 const TWICE_SECS: f64 = 0.8;
 
+/// The viewport of output `id`'s window (`PhosphorApp::output_window`).
+pub(crate) fn output_viewport(id: u64) -> egui::ViewportId {
+    egui::ViewportId::from_hash_of(("phosphor_output", id))
+}
+
 /// A bare key typed in an output window (F = fill the screen / back to a window, E = mapping handles, Esc = back
 /// to a window / close) acts only when pressed twice in a row within `TWICE_SECS`: the output is on the
 /// projector, and one stray key (the window took the focus after a click) used to drop it off its screen or put
@@ -76,7 +81,7 @@ impl PhosphorApp {
             if over && !out.over_controls {
                 log::info!(target: "phosphor::action", "output \"{}\" covers the screen Phosphor's own window is on", out.name);
                 out.way_back_until = now + WAY_BACK_SECS;
-                ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of(("phosphor_output", *id)), egui::ViewportCommand::Focus);
+                ctx.send_viewport_cmd_to(output_viewport(*id), egui::ViewportCommand::Focus);
             }
             out.over_controls = over;
             // (Twice, as in the output itself.)
@@ -220,7 +225,9 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let first = self.state.comp.outputs.iter().find(|o| open.iter().any(|(id, _)| *id == o.id));
-            crate::present::set(self.state.screens_dont_wait, first.map(|o| egui::ViewportId::from_hash_of(("phosphor_output", o.id))));
+            // (Outputs the render thread presents don't pace this thread: Phosphor's own window does then.)
+            let thread = self.render_thread.as_ref().is_some_and(crate::render_thread::RenderThread::running);
+            crate::present::set(self.state.screens_dont_wait, first.filter(|_| !thread).map(|o| output_viewport(o.id)));
         }
         #[cfg(not(target_arch = "wasm32"))]
         for (oid, name) in open {
@@ -260,7 +267,7 @@ impl PhosphorApp {
     }
 
     pub(crate) fn output_window(&self, ctx: &egui::Context, oid: u64, name: &str) {
-        let id = egui::ViewportId::from_hash_of(("phosphor_output", oid));
+        let id = output_viewport(oid);
         let shared = self.state.output.clone();
         let title = format!("Phosphor · {name}");
         ctx.show_viewport_deferred(
@@ -407,7 +414,11 @@ impl PhosphorApp {
                     ctx.set_cursor_icon(egui::CursorIcon::None);
                 }
                 // Over Phosphor's own window: the way back, for a few seconds and whenever the pointer moves.
-                if over_controls && ctx.input(|i| i.time < out.way_back_until || i.pointer.is_moving()) {
+                let way_back = over_controls && ctx.input(|i| i.time < out.way_back_until || i.pointer.is_moving());
+                // (The pointer over a window the render thread presents: the interface draws it while it's there.)
+                let hovered = ctx.input(|i| i.pointer.has_pointer());
+                let mut menu_open = false;
+                if way_back {
                     if ctx.input(|i| i.pointer.is_moving()) {
                         out.way_back_until = ctx.input(|i| i.time) + 3.0;
                     }
@@ -431,6 +442,7 @@ impl PhosphorApp {
                     let mut go: Option<crate::screens::Display> = None;
                     let mut back = false;
                     drag.right_menu(|ui| {
+                        menu_open = true;
                         crate::ui::heading(ui, "Fullscreen on");
                         for d in crate::screens::displays() {
                             let here = out.display == Some(d.id) && fullscreen;
@@ -451,7 +463,7 @@ impl PhosphorApp {
                     if back {
                         uncover(out);
                     }
-                    if !fullscreen {
+                    if !fullscreen && (!out.thread_presents || hovered) {
                         ui.painter().text(
                             rect.left_bottom() + egui::vec2(12.0, -12.0),
                             egui::Align2::LEFT_BOTTOM,
@@ -461,7 +473,8 @@ impl PhosphorApp {
                         );
                     }
                 }
-                if ctx.input(|i| i.time) < out.identify_until {
+                let identifying = ctx.input(|i| i.time) < out.identify_until;
+                if identifying {
                     let c = rect.center();
                     ui.painter().rect_filled(rect, 0.0, Color32::from_black_alpha(140));
                     ui.painter().text(c, egui::Align2::CENTER_CENTER, out.number.to_string(), egui::FontId::proportional(rect.height() * 0.45), theme::accent());
@@ -483,6 +496,16 @@ impl PhosphorApp {
                         }
                         ui.label(egui::RichText::new(&format!("Mapping edit: drag corners · {} undo · E twice hides handles · F twice = fullscreen", crate::menu::shortcut_of(crate::menu::Action::Undo))).size(13.0).color(crate::theme::over_picture(160)));
                     });
+                }
+                // The render thread shows this window's picture on its own cadence while nothing of the interface is
+                // on it (handles, Identify, the way back, a menu, the pointer over a window); the interface draws it
+                // otherwise, as it always has.
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let needs_ui = out.edit_mapping || identifying || way_back || menu_open || (hovered && !fullscreen);
+                    if let Some(s) = eframe::egui_wgpu::winit::shared_surface(id) {
+                        s.set_app_presents(out.thread_presents && !needs_ui);
+                    }
                 }
             },
         );

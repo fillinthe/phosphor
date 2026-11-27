@@ -14,6 +14,52 @@ impl PhosphorApp {
             return;
         }
         let started = *run.started.get_or_insert(now);
+        // `--open-outputs`: every output's window, once the project is final.
+        if run.rebuilt && std::mem::take(&mut run.cfg.open_outputs) {
+            self.state.comp.ensure_outputs();
+            let mut map = self.state.output.lock().unwrap();
+            for o in self.state.comp.outputs.iter().filter(|o| o.enabled) {
+                map.entry(o.id).or_default().open = true;
+            }
+            run.tile_outputs = true;
+        }
+        // Half a second later (the windows exist): side by side, small, so none covers another (a covered window
+        // isn't shown at all on macOS, and would time nothing).
+        if run.tile_outputs && now - started >= 0.5 {
+            run.tile_outputs = false;
+            let open: Vec<u64> = self.state.comp.outputs.iter().filter(|o| o.enabled).map(|o| o.id).collect();
+            for (i, id) in open.into_iter().enumerate() {
+                let v = super::outputs::output_viewport(id);
+                ctx.send_viewport_cmd_to(v, egui::ViewportCommand::InnerSize(egui::vec2(400.0, 225.0)));
+                ctx.send_viewport_cmd_to(v, egui::ViewportCommand::OuterPosition(egui::pos2(40.0 + i as f32 * 420.0, 60.0)));
+            }
+        }
+        // Output frame times from a second in (the show has settled); `--ui-stall` stops this thread from then on,
+        // every so often, the way a heavy panel or a slow call would.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if !run.timing_outputs && now - started >= 1.0 {
+                crate::present::start_log();
+                (run.timing_outputs, run.stalled_at, run.flipped_at) = (true, now, now);
+            }
+            if let Some(every) = run.cfg.flip_render_thread
+                && run.timing_outputs
+                && now - run.flipped_at >= every
+                && now - started < run.cfg.seconds
+            {
+                run.flipped_at = now;
+                self.state.render_thread = !self.state.render_thread;
+                println!("RENDER_THREAD_FLIP on={} at={:.1}", self.state.render_thread, now - started);
+            }
+            if let Some((ms, every)) = run.cfg.ui_stall
+                && run.timing_outputs
+                && now - run.stalled_at >= every
+                && now - started < run.cfg.seconds
+            {
+                run.stalled_at = now;
+                std::thread::sleep(std::time::Duration::from_secs_f64(ms / 1000.0));
+            }
+        }
         // --window: macOS may restore the window to its last (full) size, so set it explicitly once.
         if let Some((w, h)) = run.cfg.window.take() {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
@@ -85,6 +131,8 @@ impl PhosphorApp {
         };
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
+        #[cfg(not(target_arch = "wasm32"))]
+        print_output_frames(&self.state, self.render_thread.as_ref().is_some_and(crate::render_thread::RenderThread::running), run.cfg.ui_stall);
         // Undo steps made during the run: only what the run itself did (a quick action) may count; a project
         // playing by itself must make none, or Undo fills with noise and real edits fall off the end.
         println!("UNDO_STEPS {}", self.state.history.steps());
@@ -141,7 +189,7 @@ impl PhosphorApp {
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
                 web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
-                self.state.media.positions()
+                self.state.core.lock().media.positions()
             );
         }
         if self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed) > 0 {
@@ -151,7 +199,7 @@ impl PhosphorApp {
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
                 web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
-                self.state.media.positions()
+                self.state.core.lock().media.positions()
             );
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -180,7 +228,7 @@ impl PhosphorApp {
             let vals: Vec<String> = self.state.comp.modulators.iter().map(|m| format!("{}={:.2}", m.name, self.state.mod_inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1))).collect();
             println!("MODULATORS {}", vals.join(" "));
         }
-        if let Some(e) = &self.state.engine {
+        if let Some(e) = &self.state.core.lock().engine {
             println!("GPU timing: {}", e.gpu_timing_status());
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -195,8 +243,8 @@ impl PhosphorApp {
         let causes: Vec<String> = ctx.repaint_causes().iter().map(|c| c.to_string()).collect();
         println!("UI_FPS {:.1} repaint causes: {}", self.ui_frames as f64 / run.cfg.seconds.max(1.0), causes.join(" | "));
         println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
-        println!("LOOPS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.loop_in, l.loop_out, l.playing, (l.rate * 100.0).round() / 100.0, self.state.media.position(l.id).map(|p| (p.0 * 100.0).round() / 100.0))).collect::<Vec<_>>());
-        for (layer, e) in &self.state.media.errors {
+        println!("LOOPS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.loop_in, l.loop_out, l.playing, (l.rate * 100.0).round() / 100.0, self.state.core.lock().media.position(l.id).map(|p| (p.0 * 100.0).round() / 100.0))).collect::<Vec<_>>());
+        for (layer, e) in &self.state.core.lock().media.errors {
             println!("LAYER_ERROR {layer}: {e}");
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -228,7 +276,7 @@ impl PhosphorApp {
         if let Ok(bpm) = std::env::var("PHOSPHOR_BENCH_BPM").map(|v| v.parse::<f64>().unwrap_or(0.0))
             && bpm > 0.0
             && let Some(l) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some())
-            && let Some((pos, _)) = self.state.media.position(l.id)
+            && let Some((pos, _)) = self.state.core.lock().media.position(l.id)
         {
             let clip_phase = (pos * bpm / 60.0).rem_euclid(4.0);
             let clock_phase = self.state.clock.beats(now).rem_euclid(4.0);
@@ -249,7 +297,7 @@ impl PhosphorApp {
             println!("SOUND output {rate} Hz, {played} sample frames played");
         }
         for l in &self.state.comp.layers {
-            if let Some(info) = self.state.media.video_info(l.id) {
+            if let Some(info) = self.state.core.lock().media.video_info(l.id) {
                 println!("VIDEO {} ({:?}): {info}", l.name, l.direction);
             }
         }
@@ -272,7 +320,8 @@ impl PhosphorApp {
             r.stop_and_wait();
             println!("RECORDED {}", r.settings.file_path);
         }
-        if let (Some(path), Some(engine)) = (&run.cfg.snapshot, &self.state.engine)
+        let core = self.state.core.lock();
+        if let (Some(path), Some(engine)) = (&run.cfg.snapshot, &core.engine)
             && let Some((w, h, pixels)) = engine.read_output()
         {
             match image::save_buffer(path, &pixels, w, h, image::ColorType::Rgba8) {
@@ -293,6 +342,7 @@ impl PhosphorApp {
         let showing = self.state.output.lock().map_or(0, |m| m.values().filter(|o| o.open).count());
         let (asking, layers, blackout) = (crate::ui::asking(ctx, "show_guard"), self.state.comp.layers.len(), self.state.comp.blackout_on);
         println!("BENCH_STATE title=\"{}\" asking={asking} layers={layers} outputs_open={showing} blackout={blackout}", self.title);
+        drop(core);
         self.bench = None;
         // (The bench's own end needs no question, even with `PHOSPHOR_BENCH_ASK`.)
         self.quit_confirmed = true;
@@ -1307,5 +1357,27 @@ impl PhosphorApp {
             self.state.quick(q, now);
             println!("QUICK {name}: {}", self.state.comp.layers.iter().map(|l| format!("{} [{}]", l.name, l.effects.iter().map(|f| f.effect.as_str()).collect::<Vec<_>>().join("+"))).collect::<Vec<_>>().join(", "));
         }
+    }
+
+}
+
+/// OUTPUT_FRAMES lines: gaps between the engine's frames and between each output window's presents (median, 99th
+/// percentile, longest, in ms) since a second into the run, with the render thread on or off.
+#[cfg(not(target_arch = "wasm32"))]
+fn print_output_frames(st: &State, thread: bool, stall: Option<(f64, f64)>) {
+    let log = crate::present::take_log();
+    let thread = if thread { "on" } else { "off" };
+    let stall = stall.map_or("none".to_string(), |(ms, every)| format!("{ms}ms@{every}s"));
+    let line = |what: &str, times: Option<&Vec<f64>>| match times.and_then(|t| crate::present::gaps(t)) {
+        Some((p50, p99, max, n)) => println!("OUTPUT_FRAMES thread={thread} stall={stall} {what}: frames={} p50_ms={p50:.2} p99_ms={p99:.2} max_ms={max:.2}", n + 1),
+        None => println!("OUTPUT_FRAMES thread={thread} stall={stall} {what}: no frames"),
+    };
+    line("engine", log.get(&crate::present::ENGINE_FRAMES));
+    // Movie frames put on layers in the whole run: what kept playing while the interface stood still.
+    println!("OUTPUT_FRAMES thread={thread} stall={stall} movie frames shown: {}", st.core.lock().media.flow.movies);
+    let mut open: Vec<(u64, String)> = st.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
+    open.sort();
+    for (id, name) in open {
+        line(&format!("output {name:?}"), log.get(&super::outputs::output_viewport(id).0.value()));
     }
 }

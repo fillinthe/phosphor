@@ -21,8 +21,10 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let feeds = feed_choices(&st.comp);
     let clipboard_len = st.fx_clipboard.len();
     // What each layer's movie is doing (read before the layers are borrowed for editing).
-    let media: HashMap<u64, (Option<String>, Option<(f64, f64)>, bool)> =
-        st.comp.layers.iter().map(|l| (l.id, (st.media.video_info(l.id), st.media.position(l.id), st.media.has_sound(l.id)))).collect();
+    let media: HashMap<u64, (Option<String>, Option<(f64, f64)>, bool)> = {
+        let core = st.core.lock();
+        st.comp.layers.iter().map(|l| (l.id, (core.media.video_info(l.id), core.media.position(l.id), core.media.has_sound(l.id)))).collect()
+    };
     let comp_inherited: HashMap<u64, Vec<(String, String, bool)>> = st.comp.layers.iter().map(|l| (l.id, st.comp.inherited_effects(l.id))).collect();
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let numbers = super::inspector::number_choices(&st.comp);
@@ -34,7 +36,9 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let mut seeks: Vec<(u64, f64)> = Vec::new();
     let mut quick: Vec<(u64, crate::app::Quick)> = Vec::new();
     let height = ui.available_height();
-    let State { comp, selected, layer_textures, media: manager, .. } = st;
+    // (Each layer's media problem, read once: the players are shared with the render thread.)
+    let media_errors = st.core.lock().media.errors.clone();
+    let State { comp, selected, layer_textures, .. } = st;
     let bpm = comp.bpm;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
@@ -43,7 +47,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                 let is_sel = *selected == Some(id);
                 let muted = any_solo && !layer.solo;
                 let thumb = layer_textures.get(&id).map(|(t, _)| *t);
-                let err = manager.errors.get(&id).cloned();
+                let err = media_errors.get(&id).cloned();
                 ui.allocate_ui_with_layout(egui::vec2(col_w, height - 8.0), egui::Layout::top_down(egui::Align::Min), |ui| {
                     card_frame(ui, is_sel).show(ui, |ui| {
                         ui.set_width(col_w - 14.0);
@@ -104,7 +108,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     });
     let now = ui.ctx().input(|i| i.time);
     for (id, t) in seeks {
-        st.media.scrub(id, t);
+        st.core.lock().media.scrub(id, t);
     }
     for (id, q) in quick {
         st.quick_on(q, Some(id), now);

@@ -81,7 +81,8 @@ impl State {
     /// so at once when there's no such picture.
     pub(crate) fn read_back(&mut self, source: ReadSource, what: ReadFor) {
         let tag = self.readbacks.add(what.clone());
-        if !self.engine.as_mut().is_some_and(|e| e.request_read(source, tag)) {
+        let asked = self.core.lock().engine.as_mut().is_some_and(|e| e.request_read(source, tag));
+        if !asked {
             self.readbacks.waiting.retain(|(t, _, _)| *t != tag);
             if let Some(said) = failed(&what) {
                 self.notice = Some(said);
@@ -96,7 +97,7 @@ impl PhosphorApp {
         if self.state.readbacks.waiting.is_empty() {
             return;
         }
-        let frames = self.state.engine.as_mut().map(|e| e.take_reads()).unwrap_or_default();
+        let frames = self.state.core.lock().engine.as_mut().map(|e| e.take_reads()).unwrap_or_default();
         let (back, late) = self.state.readbacks.collect(frames);
         for what in late {
             if let Some(said) = failed(&what) {
