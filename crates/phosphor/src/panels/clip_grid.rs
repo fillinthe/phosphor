@@ -18,11 +18,28 @@ pub(crate) struct Grid {
     pub selected_clip: Option<(u64, usize)>,
     pub held_id: egui::Id,
     pub pressed: bool,
-    /// Which columns have a clip in them on some layer (the others' headers have nothing to trigger).
-    pub filled: Vec<bool>,
     /// The open comp has layers (none: the column buttons have nothing to trigger and are grayed out).
     pub has_layers: bool,
+    /// Which columns are playing (a clip of theirs is live on some layer): only their headers are lit.
+    pub live: Vec<bool>,
 }
+
+/// Which of the first `cols` columns have a clip playing on some layer of the open comp.
+pub(crate) fn live_columns(comp: &phosphor_engine::Composition, cols: usize) -> Vec<bool> {
+    let mut live = vec![false; cols];
+    for l in comp.layers.iter().filter(|l| comp.in_open_comp(l)) {
+        if let Some(c) = l.active_clip.and_then(|a| l.clips.iter().position(|k| k.id == a && !k.is_empty()))
+            && let Some(x) = live.get_mut(c)
+        {
+            *x = true;
+        }
+    }
+    live
+}
+
+/// Temp-data keys: whether the first playing column's header was in sight last frame, and a request to scroll to it.
+const LIVE_IN_SIGHT: &str = "phosphor_clip_live_in_sight";
+const SCROLL_TO_LIVE: &str = "phosphor_clip_scroll_live";
 
 impl Grid {
     /// Also hands back a `RowOut` with any flash / piano release that happened this frame.
@@ -51,8 +68,8 @@ impl Grid {
             selected_clip: st.selected_clip,
             held_id,
             pressed,
-            filled: (0..cols).map(|c| st.comp.layers.iter().any(|l| l.clips.get(c).is_some_and(|k| !k.is_empty()))).collect(),
             has_layers: st.comp.layers.iter().any(|l| st.comp.in_open_comp(l)),
+            live: live_columns(&st.comp, cols),
         };
         (grid, out)
     }
@@ -196,7 +213,16 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command(ui, label(icon::PLUS, "Column")).clicked() {
             st.comp.clip_columns += 1;
         }
-        help(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
+        // The column that's playing is out of sight (scrolled away, another bank): one click brings it back.
+        let in_sight = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new(LIVE_IN_SIGHT))).unwrap_or(true);
+        if let Some(c) = live_columns(&st.comp, st.comp.clip_columns.max(1)).iter().position(|x| *x)
+            && !in_sight
+            && crate::ui::small_command(ui, label(icon::PLAY, &format!("Playing: column {}", c + 1))).on_hover_text("The column that's playing is out of sight: click to scroll to it").clicked()
+        {
+            st.clip_page = c / CLIP_PAGE_SIZE;
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SCROLL_TO_LIVE), true));
+        }
+        help(ui, &format!("Keys 1–{CLIP_PAGE_SIZE} trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell"));
     });
 }
 
@@ -216,23 +242,38 @@ pub(crate) fn column_headers(ui: &mut egui::Ui, grid: &Grid, head_w: f32, out: &
         }
         mapped_badge(ui, &stop, &all);
         stop.right_menu(|ui| learn_items(ui, &all));
+        let scroll = ui.ctx().data_mut(|d| d.remove_temp::<bool>(egui::Id::new(SCROLL_TO_LIVE))).unwrap_or(false);
+        let mut in_sight = true;
+        let first_live = grid.live.iter().position(|x| *x);
         for c in 0..grid.cols {
             let keyed = c / CLIP_PAGE_SIZE == grid.bank;
-            let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
-            // Triggers are actions: solid buttons (the columns on the number keys in full color); a column with no
-            // clip in it has nothing to trigger, so its header stays plain.
-            let head = if keyed && grid.filled.get(c).copied().unwrap_or(false) {
-                action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(grid.cell.x, CONTROL_H))
+            let live = grid.live.get(c).copied().unwrap_or(false);
+            let mut tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
+            if live {
+                tip = format!("Playing now. {tip}");
+            }
+            // Only the column that's playing is lit (Go): the rest are plain, so the live one reads at a glance. The
+            // columns on the number keys say their key.
+            let text = if keyed { format!("{} {}", icon::PLAY, c + 1) } else { format!("{}", c + 1) };
+            let head = if live {
+                action_button_sized(ui, Act::Go, text, egui::vec2(grid.cell.x, CONTROL_H))
             } else {
-                command_sized(ui, format!("{} {}", icon::PLAY, c + 1), egui::vec2(grid.cell.x, CONTROL_H))
+                command_sized(ui, text, egui::vec2(grid.cell.x, CONTROL_H))
             }
             .on_hover_text(tip);
+            if Some(c) == first_live {
+                in_sight = ui.clip_rect().contains_rect(head.rect);
+                if scroll {
+                    head.scroll_to_me(Some(egui::Align::Center));
+                }
+            }
             if head.clicked() {
                 out.triggers.push(Trigger::Column(c));
             }
             mapped_badge(ui, &head, &ControlTarget::TriggerColumn(c));
             head.right_menu(|ui| learn_items(ui, &ControlTarget::TriggerColumn(c)));
         }
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(LIVE_IN_SIGHT), in_sight));
     });
 }
 
@@ -285,7 +326,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                         } else {
                             k.source.label().chars().take(16).collect()
                         };
-                        p.with_clip_rect(thumb_rect).text(thumb_rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
+                        p.with_clip_rect(thumb_rect).text(thumb_rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), crate::theme::ON_PICTURE);
                     }
                 }
                 // Its file isn't there right now (the drive unplugged): said on the picture.
@@ -298,7 +339,10 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                 if name.chars().count() > 14 {
                     name = format!("{}…", name.chars().take(13).collect::<String>());
                 }
-                p.text(egui::pos2(rect.left() + 3.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(10.5), Color32::LIGHT_GRAY);
+                // The name on a dark band (readable at any brightness, over any picture).
+                let band = egui::Rect::from_min_max(egui::pos2(rect.left(), thumb_rect.bottom().min(rect.bottom() - 15.0)), rect.right_bottom());
+                p.rect_filled(band, egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 }, crate::theme::PICTURE_BG);
+                p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(10.5), crate::theme::ON_PICTURE);
                 let badge = match k.trigger {
                     TriggerMode::Normal => None,
                     TriggerMode::Toggle => Some("T"),
@@ -321,13 +365,23 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
             // Files from the Finder land here (and fill the row to the right).
             Stroke::new(2.5, crate::theme::MAPPED)
         } else if active {
-            Stroke::new(2.0, accent())
-        } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() || resp.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| takes(&d)) {
-            Stroke::new(1.0, accent().gamma_multiply(0.7))
+            Stroke::new(2.5, accent())
+        } else if resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() || resp.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| takes(&d)) {
+            // Something carried over it lands here.
+            Stroke::new(1.5, accent().gamma_multiply(0.7))
+        } else if resp.hovered() {
+            // Under the pointer: a quiet frame, never the accent (that's the playing clip's).
+            Stroke::new(1.0, crate::theme::faint())
         } else {
             ui.visuals().widgets.noninteractive.bg_stroke
         };
         p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
+        // Playing: a filled tag with the play mark in its top-left corner, so the live clip reads at a glance.
+        if active {
+            let tag = egui::Rect::from_min_size(rect.left_top() + egui::vec2(5.0, 3.0), egui::vec2(16.0, 14.0));
+            p.rect_filled(tag, 3.0, accent());
+            p.text(tag.center(), egui::Align2::CENTER_CENTER, icon::PLAY, egui::FontId::proportional(10.0), crate::theme::PICTURE_BG);
+        }
         // What kind of clip it is: a stripe down its left edge in that kind's color.
         if let Some(h) = clip.and_then(|k| crate::theme::Hue::of_source(&k.source)) {
             let stripe = egui::Rect::from_min_max(rect.left_top() + egui::vec2(1.0, 4.0), egui::pos2(rect.left() + 4.0, rect.bottom() - 4.0));
@@ -489,4 +543,23 @@ fn hash_text(style: &phosphor_engine::TextStyle) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     crate::app::stills::hash_debug(style, &mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use phosphor_engine::{Composition, SourceSpec};
+
+    /// Only the column whose clip is live on some layer is lit; nothing playing, nothing lit.
+    #[test]
+    fn only_the_playing_column_is_live() {
+        let mut comp = Composition::default();
+        let id = comp.add_layer().id;
+        let gens = (0..4).map(|i| (format!("g{i}"), SourceSpec::Generator("plasma".into()))).collect();
+        comp.place_clips(id, 0, gens);
+        assert_eq!(super::live_columns(&comp, 4), vec![false; 4]);
+        let l = comp.layer_mut(id).unwrap();
+        l.active_clip = Some(l.clips[2].id);
+        assert_eq!(super::live_columns(&comp, 4), vec![false, false, true, false]);
+        assert_eq!(super::live_columns(&comp, 2), vec![false, false], "past the grid's columns: nothing to light");
+    }
 }
