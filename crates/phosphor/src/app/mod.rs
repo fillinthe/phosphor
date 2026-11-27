@@ -1375,6 +1375,24 @@ impl eframe::App for PhosphorApp {
     /// shot can show the menu it opens.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let Some(run) = self.bench.as_mut() else { return };
+        // (Scripted input is for the main window, apart from keys meant for an output window: each window has its own.)
+        let main = raw.viewport_id == egui::ViewportId::ROOT;
+        if let Some(k) = run.cfg.keys.first().cloned()
+            && k.to_output != main
+            && ctx.input(|i| i.time) >= k.at
+        {
+            if let Some((x, y)) = k.pointer {
+                raw.events.push(egui::Event::PointerMoved(egui::pos2(x, y)));
+            }
+            for pressed in [true, false] {
+                raw.events.push(egui::Event::Key { key: k.key, physical_key: None, pressed, repeat: false, modifiers: k.modifiers });
+            }
+            run.cfg.keys.remove(0);
+            println!("KEY {}", k.text);
+        }
+        if !main {
+            return;
+        }
         bench_drag(run, ctx, raw);
         // `--clicks`: the next one whose time has come (one a frame).
         if let Some((at, when)) = run.cfg.clicks.first().cloned()
@@ -1387,19 +1405,6 @@ impl eframe::App for PhosphorApp {
             }
             run.cfg.clicks.remove(0);
             println!("CLICK {at}@{when}");
-        }
-        // `--keys`: the next one whose time has come (one a frame), as a real press and release.
-        if let Some(k) = run.cfg.keys.first().cloned()
-            && ctx.input(|i| i.time) >= k.at
-        {
-            if let Some((x, y)) = k.pointer {
-                raw.events.push(egui::Event::PointerMoved(egui::pos2(x, y)));
-            }
-            for pressed in [true, false] {
-                raw.events.push(egui::Event::Key { key: k.key, physical_key: None, pressed, repeat: false, modifiers: k.modifiers });
-            }
-            run.cfg.keys.remove(0);
-            println!("KEY {}", k.text);
         }
         let Some(at) = run.cfg.right_click.clone() else { return };
         // "x,y@3": at 3 seconds instead of 1 (tiles and thumbnails settle first).

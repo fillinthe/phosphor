@@ -13,6 +13,9 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         crate::mcp::note_session_port(None);
         theme::apply(&cc.egui_ctx);
+        // Quitting is Phosphor's own (File › Quit, the menu bar), so it asks while outputs show (`guard`). egui's
+        // built-in Cmd/Ctrl+Q closes whichever window has the keys: an output window, with no question.
+        cc.egui_ctx.options_mut(|o| o.quit_shortcuts.clear());
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };
         // (i) icons unless you chose words (the brightness menu): the room goes to the controls.

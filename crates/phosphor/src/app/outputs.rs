@@ -292,6 +292,11 @@ impl PhosphorApp {
                         _ => escape = true,
                     }
                 }
+                // Quit typed here is the app's Quit, asked first while outputs show (`guard`); egui's own quit key
+                // closed just this window, dark, with no question (it's switched off in `init`).
+                if ctx.input_mut(|i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Q))) {
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
+                }
                 // Undo / Redo typed here (the main window's shortcuts don't see this window's keys; on the Mac the
                 // menu bar takes them first, so they never arrive twice). Ctrl+Y = Redo too.
                 out.pointer_down = ctx.input(|i| i.pointer.any_down());

@@ -64,8 +64,9 @@ pub struct BenchConfig {
     pub drag: Option<(String, String)>,
     /// `--clicks "x,y@secs;x,y@secs"`: real left-clicks in order, each at its time (open a menu, then click in it).
     pub clicks: Vec<(String, f64)>,
-    /// `--keys "cmd+n@3;delete@4>600,420"`: real key presses in order, each at its time (`cmd`, `shift`, `alt` joined
-    /// with `+`; egui's key names), the pointer moved to `>x,y` first when given. Show-ending keys only ask when
+    /// `--keys "cmd+n@3;delete@4>600,420;cmd+q@5>out"`: real key presses in order, each at its time (`cmd`, `shift`,
+    /// `alt` joined with `+`; egui's key names), the pointer moved to `>x,y` first when given; `>out` = typed into an
+    /// output window instead of the main one. Show-ending keys only ask when
     /// `PHOSPHOR_BENCH_ASK=1` (a bench does them at once otherwise).
     pub keys: Vec<BenchKey>,
     pub stream2: Option<String>,
@@ -107,13 +108,17 @@ pub struct BenchKey {
     pub modifiers: eframe::egui::Modifiers,
     pub at: f64,
     pub pointer: Option<(f32, f32)>,
+    /// Typed into an output window (the first one open), not the main window.
+    pub to_output: bool,
 }
 
 impl BenchKey {
     /// "cmd+shift+z@2.5>100,200": None when the key's name isn't one egui knows.
     pub fn parse(spec: &str) -> Option<Self> {
         let spec = spec.trim();
-        let (rest, pointer) = spec.split_once('>').map_or((spec, None), |(k, p)| (k, p.split_once(',').and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)))));
+        let (rest, place) = spec.split_once('>').map_or((spec, None), |(k, p)| (k, Some(p.trim())));
+        let to_output = place == Some("out");
+        let pointer = place.and_then(|p| p.split_once(',')).and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)));
         let (combo, at) = rest.split_once('@').map_or((rest, 1.0), |(k, t)| (k, t.trim().parse().unwrap_or(1.0)));
         let mut modifiers = eframe::egui::Modifiers::NONE;
         let mut key = None;
@@ -129,7 +134,7 @@ impl BenchKey {
                 _ => key = eframe::egui::Key::from_name(&capitalized(part)),
             }
         }
-        Some(Self { text: spec.to_string(), key: key?, modifiers, at, pointer })
+        Some(Self { text: spec.to_string(), key: key?, modifiers, at, pointer, to_output })
     }
 }
 
@@ -355,5 +360,8 @@ mod tests {
         let k = super::BenchKey::parse("cmd+shift+z").unwrap();
         assert_eq!((k.key, k.modifiers.shift, k.at), (Key::Z, true, 1.0));
         assert!(super::BenchKey::parse("cmd+nokey@2").is_none());
+        let k = super::BenchKey::parse("cmd+q@5>out").unwrap();
+        assert_eq!((k.key, k.to_output, k.pointer), (Key::Q, true, None));
+        assert!(!super::BenchKey::parse("cmd+q@5>10,20").unwrap().to_output);
     }
 }
