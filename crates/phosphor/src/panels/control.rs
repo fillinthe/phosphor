@@ -213,7 +213,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, format!("{} messages", control.recent.len()));
         });
         if control.recent.is_empty() {
-            crate::ui::empty_note(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
+            crate::ui::empty_note(ui, "Nothing yet: move a knob, press a pad, or send OSC to this computer.");
             return;
         }
         let now = web_time::Instant::now();
@@ -532,7 +532,7 @@ fn ai_assistants(ui: &mut egui::Ui) {
             let config = serde_json::json!({ "mcpServers": { "phosphor": { "command": exe, "args": ["--mcp"] } } });
             ui.ctx().copy_text(serde_json::to_string_pretty(&config).unwrap_or_default());
         }
-    help(ui, "An AI assistant can list Phosphor's controls, set them and look at the output (while the Session is on). It talks to Phosphor over OSC on this Mac, like TouchOSC.");
+    help(ui, "An AI assistant can list Phosphor's controls, set them and look at the output (while the Session is on). It talks to Phosphor over OSC on this computer, like TouchOSC.");
     });
 }
 

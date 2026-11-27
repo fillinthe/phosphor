@@ -137,13 +137,13 @@ fn sound_device(ui: &mut egui::Ui) {
     let key = egui::Id::new("sound_out_devices");
     crate::ui::field(ui, "Plays on", |ui| {
         let current = sound::output_device();
-        let r = crate::ui::dropdown(ui, "sound_out_device", 220.0).selected_text(current.clone().unwrap_or_else(|| "The Mac's default output".into())).show_ui(ui, |ui| {
+        let r = crate::ui::dropdown(ui, "sound_out_device", 220.0).selected_text(current.clone().unwrap_or_else(|| "This computer's default output".into())).show_ui(ui, |ui| {
             let devices: Vec<String> = ui.ctx().data_mut(|d| d.get_temp(key)).unwrap_or_else(|| {
                 let list = sound::output_devices();
                 ui.ctx().data_mut(|d| d.insert_temp(key, list.clone()));
                 list
             });
-            if crate::ui::pick_item(ui, current.is_none(), "The Mac's default output").clicked() {
+            if crate::ui::pick_item(ui, current.is_none(), "This computer's default output").clicked() {
                 sound::set_output_device(None);
             }
             for name in devices {

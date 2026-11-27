@@ -497,7 +497,7 @@ impl PhosphorApp {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("tosc");
                         st.notice = Some(match std::fs::write(&p, crate::tosc::export(&st.comp)) {
-                            Ok(()) => format!("TouchOSC layout saved: {} (open it in TouchOSC, then add a UDP connection to this Mac)", p.display()),
+                            Ok(()) => format!("TouchOSC layout saved: {} (open it in TouchOSC, then add a UDP connection to this computer)", p.display()),
                             Err(e) => format!("Couldn't save the TouchOSC layout: {e}"),
                         });
                     }

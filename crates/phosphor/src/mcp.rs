@@ -144,7 +144,7 @@ fn tools() -> Value {
 }
 
 fn call(name: &str, args: &Value, link: &impl Fn() -> Option<Link>) -> Result<Value, String> {
-    let link = link().ok_or("Phosphor isn't open (or hasn't been opened yet on this Mac). Open it, then try again.")?;
+    let link = link().ok_or("Phosphor isn't open (or hasn't been opened yet on this computer). Open it, then try again.")?;
     // Only the Session wrote the link: OSC hasn't been on yet.
     if name != "look" && link.query_port == 0 {
         return Err("Turn on OSC in Phosphor (the MIDI / OSC panel), then try again.".into());

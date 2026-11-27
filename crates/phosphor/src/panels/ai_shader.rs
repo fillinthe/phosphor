@@ -123,7 +123,14 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
                 });
             }
             None => {
-                help(ui, "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain.");
+                help(
+                    ui,
+                    if cfg!(target_os = "macos") {
+                        "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain."
+                    } else {
+                        "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this computer, in Phosphor's settings folder."
+                    },
+                );
                 ui.horizontal(|ui| {
                     crate::ui::password_field(ui, &mut a.new_key, "sk-ant-…", 300.0);
                     if crate::ui::command_if(ui, !a.new_key.trim().is_empty(), "Save key").clicked() {

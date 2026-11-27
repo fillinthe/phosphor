@@ -291,7 +291,7 @@ impl Ndi {
         }
         self.running = None;
         let Some(lib) = lib() else {
-            self.error = Some("NDI isn't installed on this Mac".into());
+            self.error = Some("NDI isn't installed on this computer".into());
             return;
         };
         // Room for sound blocks between pictures.
@@ -451,7 +451,7 @@ pub struct NdiReceiver {
 
 impl NdiReceiver {
     pub fn connect(source: &str) -> Result<Self, String> {
-        let r = lib().ok_or("NDI isn't installed on this Mac (free NDI Tools from ndi.video)")?.recv.as_ref().ok_or("this NDI runtime can't receive")?;
+        let r = lib().ok_or("NDI isn't installed on this computer (free NDI Tools from ndi.video)")?.recv.as_ref().ok_or("this NDI runtime can't receive")?;
         let latest = Arc::new(std::sync::Mutex::new(None));
         let stop = Arc::new(AtomicBool::new(false));
         let (latest2, stop2, name) = (latest.clone(), stop.clone(), CString::new(source).map_err(|_| "bad source name")?);

@@ -218,7 +218,7 @@ fn tools(ui: &mut egui::Ui, st: &mut State) {
                     ui.close();
                 }
                 if crate::ui::command(ui, label(icon::USER_PLUS, "Follow an account…"))
-                    .on_hover_text("An X or Instagram account's newest clips, kept on this Mac")
+                    .on_hover_text("An X or Instagram account's newest clips, kept on this computer")
                     .clicked()
                 {
                     st.media_view.follow_open = true;

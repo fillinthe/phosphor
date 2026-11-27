@@ -131,7 +131,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             }
             ui.label(RichText::new("OSC out").small().color(crate::theme::weak()));
             crate::ui::text_field(ui, &mut st.comp.surface.osc_host, "IP, e.g. 192.168.1.20", Some(110.0))
-                .on_hover_text("Widgets with a Send OSC address send their values here (another app on this Mac: 127.0.0.1). Empty = off.");
+                .on_hover_text("Widgets with a Send OSC address send their values here (another app on this computer: 127.0.0.1). Empty = off.");
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(crate::theme::weak()));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));

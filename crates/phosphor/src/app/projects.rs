@@ -265,7 +265,7 @@ impl PhosphorApp {
                     }
                     ui.add_space(10.0);
                     crate::ui::hint(ui, "PROJECTS");
-                    let places = [(Source::Recent, format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE), counts[0]), (Source::ThisMac, format!("{} This Mac & drives", icon::HARD_DRIVES), counts[1]), (Source::Account, format!("{} Your account", icon::CLOUD), counts[2])];
+                    let places = [(Source::Recent, format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE), counts[0]), (Source::ThisMac, format!("{} This computer & drives", icon::HARD_DRIVES), counts[1]), (Source::Account, format!("{} Your account", icon::CLOUD), counts[2])];
                     for (s, name, n) in places {
                         if crate::ui::list_row(ui, source == s, &name, &n.to_string(), false).clicked() {
                             ui_state.source = Some(s);
@@ -282,7 +282,7 @@ impl PhosphorApp {
                 crate::ui::toolbar(ui, |ui| {
                     let title = match source {
                         Source::Recent => "Recent",
-                        Source::ThisMac => "On this Mac and its drives",
+                        Source::ThisMac => "On this computer and its drives",
                         Source::Account => "In your account",
                     };
                     ui.label(RichText::new(title).size(16.0).strong());
@@ -293,7 +293,7 @@ impl PhosphorApp {
                 crate::ui::toolbar(ui, |ui| {
                     crate::ui::text_field(ui, &mut ui_state.query, &format!("{} Search", icon::MAGNIFYING_GLASS), Some(220.0));
                     crate::ui::segmented(ui, &mut ui_state.sort, &[(Sort::Newest, "Newest".into()), (Sort::Name, "Name".into())], |_, _, _| {});
-                    if source == Source::ThisMac && !busy && crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Look again")).on_hover_text("Search this Mac and its drives again").clicked() {
+                    if source == Source::ThisMac && !busy && crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Look again")).on_hover_text("Search this computer and its drives again").clicked() {
                         search_again = true;
                     }
                 });
@@ -315,7 +315,7 @@ impl PhosphorApp {
                             (_, false) => "No project matches.",
                             (Source::Recent, _) => "Nothing opened yet. Projects you open show here.",
                             (Source::ThisMac, _) if busy => "Looking…",
-                            (Source::ThisMac, _) => "No projects found on this Mac or its drives.",
+                            (Source::ThisMac, _) => "No projects found on this computer or its drives.",
                             (Source::Account, _) if crate::account::Account::web() => "Nothing saved in your account yet (File › Save).",
                             (Source::Account, _) => "Nothing saved in your account yet (File › Save to Account).",
                         };

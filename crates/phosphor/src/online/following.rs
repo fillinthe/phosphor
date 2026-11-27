@@ -161,7 +161,7 @@ pub fn keep(files: Vec<PathBuf>, library: PathBuf, ctx: Option<eframe::egui::Con
             }
         }
         if let Ok(mut d) = done.lock() {
-            *d = Some(problem.unwrap_or_else(|| format!("Kept {copied} in {} (it's under This Mac in Media)", library.display())));
+            *d = Some(problem.unwrap_or_else(|| format!("Kept {copied} in {} (it's under This computer in Media)", library.display())));
         }
         if let Some(c) = ctx {
             c.request_repaint();

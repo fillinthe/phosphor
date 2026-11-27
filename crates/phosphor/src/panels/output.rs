@@ -57,7 +57,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     });
     crate::ui::field(ui, "Render at", |ui| {
         crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
-        crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
+        crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz display, 60 fps halves the work and heat.");
     });
     #[cfg(not(target_arch = "wasm32"))]
     crate::ui::field(ui, "Screens", |ui| {
@@ -173,7 +173,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(any(target_os = "macos", windows))]
         {
             let mut at_login = crate::login_item::is_enabled();
-            if crate::ui::toggle(ui, &mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
+            if crate::ui::toggle(ui, &mut at_login, "Start Phosphor at login (installations)").on_hover_text("Phosphor opens by itself when you log in to this computer; with the option below, the show comes up on its screens by itself").changed() {
                 st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| crate::ui::notice::failure(format!("Couldn't change the login item: {e}"))));
             }
         }

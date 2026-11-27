@@ -501,7 +501,7 @@ pub(crate) fn follow_box(ui: &mut egui::Ui, view: &mut MediaView) -> Option<crat
     use crate::online::following::{Account, Feed, Site, handle};
     let mut out = None;
     egui::Frame::group(ui.style()).show(ui, |ui| {
-        crate::ui::heading_help(ui, label(icon::PLUS, "Follow an account"), "Its newest clips come into Media and stay on this Mac (X: animated GIFs, and videos if you switch them on; Instagram: videos). Refresh brings in new posts.");
+        crate::ui::heading_help(ui, label(icon::PLUS, "Follow an account"), "Its newest clips come into Media and stay on this computer (X: animated GIFs, and videos if you switch them on; Instagram: videos). Refresh brings in new posts.");
         let r = crate::ui::text_field(ui, &mut view.follow_text, "@name or a link to the account", Some(ui.available_width().min(320.0)));
         let typed = handle(&view.follow_text);
         if let Some((Some(site), _)) = &typed {
@@ -607,7 +607,7 @@ pub(crate) fn load_more(ui: &mut egui::Ui, view: &MediaView) -> bool {
     let running = view.refresh.as_ref().and_then(|p| p.lock().ok().map(|p| p.running)).unwrap_or(false);
     let n = view.following.per_account;
     crate::ui::command_if(ui, !running, label(icon::ARROW_DOWN, &format!("Load {n} more")))
-        .on_hover_text("Bring in the next older clips from this account (kept on this Mac)")
+        .on_hover_text("Bring in the next older clips from this account (kept on this computer)")
         .clicked()
 }
 

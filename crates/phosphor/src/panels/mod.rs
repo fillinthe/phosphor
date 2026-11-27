@@ -442,9 +442,9 @@ pub(crate) fn cpu_chip(ui: &mut egui::Ui, share: Option<f32>) {
     let pct = (share * 100.0).round() as u32;
     let text = RichText::new(format!("CPU {pct:>3}%")).small().monospace().color(cpu_color(share));
     let tip = if share >= 0.3 {
-        format!("Decoding this movie takes {pct}% of one CPU core (this Mac has {} cores). Hap plays on the graphics card instead: Media › right-click the file › Convert… › Hap", cores())
+        format!("Decoding this movie takes {pct}% of one CPU core (this computer has {} cores). Hap plays on the graphics card instead: Media › right-click the file › Convert… › Hap", cores())
     } else {
-        format!("Decoding this movie takes {pct}% of one CPU core (this Mac has {} cores)", cores())
+        format!("Decoding this movie takes {pct}% of one CPU core (this computer has {} cores)", cores())
     };
     ui.add_sized([62.0, crate::ui::CONTROL_H], egui::Label::new(text).selectable(false)).on_hover_text(tip);
 }

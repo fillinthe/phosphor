@@ -322,12 +322,12 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             let mut always = st.follow_at_launch == addr;
             crate::ui::toolbar(ui, |ui| {
                 if crate::ui::toggle(ui, &mut always, "Every time Phosphor starts (a player)")
-                    .on_hover_text("This Mac becomes a player: it follows this leader at launch. With \"Start Phosphor when this Mac logs in\" and \"Open outputs on their screens\" (Output panel) it needs no one to set it up after a restart")
+                    .on_hover_text("This computer becomes a player: it follows this leader at launch. With \"Start Phosphor at login\" and \"Open outputs on their screens\" (Output panel) it needs no one to set it up after a restart")
                     .changed()
                 {
                     st.follow_at_launch = if always { addr } else { String::new() };
                 }
-                help(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
+                help(ui, "This computer plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
             });
         }
         None => {
@@ -352,7 +352,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
                     st.selected = Some(layer);
                     st.launch_source(layer, source, Vec::new(), addr.trim().to_string(), now);
                 }
-                help(ui, "On the leading Mac, start its Session below. Then type its address here (and its password to control, if it has one): both play the same show in sync, each on its own projectors.");
+                help(ui, "On the leading computer, start its Session below. Then type its address here (and its password to control, if it has one): both play the same show in sync, each on its own projectors.");
             });
             ui.ctx().data_mut(|d| d.insert_temp(key, addr));
         }

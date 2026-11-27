@@ -8,15 +8,15 @@ const LAYOUT_PATH: &str = "/Phosphor.tosc";
 
 pub(crate) fn phone_section(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
-        crate::ui::heading_help(ui, format!("{} Phone or tablet", icon::DEVICE_MOBILE), "TouchOSC (or any OSC app) on the same Wi-Fi sends to this Mac and gets the values back. Three steps: point the app here, put the layout on it, move a control.");
+        crate::ui::heading_help(ui, format!("{} Phone or tablet", icon::DEVICE_MOBILE), "TouchOSC (or any OSC app) on the same Wi-Fi sends to this computer and gets the values back. Three steps: point the app here, put the layout on it, move a control.");
     });
-    let ip = st.control.local_ip.clone().unwrap_or_else(|| "this Mac's address".to_string());
+    let ip = st.control.local_ip.clone().unwrap_or_else(|| "this computer's address".to_string());
     // 1. Where to point the app.
     crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("1").strong().color(accent()));
         ui.label("In the app's OSC connection:");
         ui.monospace(format!("host {ip}"));
-        if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy this Mac's address").clicked() {
+        if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy this computer's address").clicked() {
             ui.ctx().copy_text(ip.clone());
         }
         ui.monospace(format!("send to port {}", st.control.osc_port));
@@ -71,7 +71,7 @@ fn layout_menu(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::field_menu(ui, label(icon::QR_CODE, "Get it on the phone"), |ui| {
         ui.set_min_width(260.0);
         if !st.net.running() {
-            help(ui, "The phone downloads the layout from this Mac over the session (the Session panel's web server).");
+            help(ui, "The phone downloads the layout from this computer over the session (the Session panel's web server).");
             if crate::ui::command(ui, label(icon::PLAY, "Start the session")).clicked()
                 && let Err(e) = st.net.start()
             {
