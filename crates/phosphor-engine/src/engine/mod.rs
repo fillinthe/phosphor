@@ -113,6 +113,9 @@ struct LayerResources {
     held_at: f32,
     /// Since when nobody has seen it (`quiet`): drawn small, and after a while its full-size source picture goes.
     quiet_since: Option<f32>,
+    /// Views of textures made elsewhere (zero-copy video, Syphon) and the frame each was last set
+    /// (`media::zero_copy_target`).
+    views: Vec<(wgpu::Texture, wgpu::TextureView, u64)>,
 }
 
 /// A multi-pass shader's buffers: two textures each (read one, write the other), and which is

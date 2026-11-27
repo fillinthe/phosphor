@@ -197,6 +197,9 @@ pub fn servers() -> Vec<ServerInfo> {
 /// A connection to one Syphon source, giving its newest frame as a wgpu texture.
 pub struct SyphonClient {
     client: Retained<AnyObject>,
+    /// The last frame's Metal texture (its address) and our wrapper of it: Syphon hands the same texture back while
+    /// the source's surface stays the same, and the same wrapper keeps the engine's view and bind groups.
+    last: std::cell::RefCell<Option<(usize, wgpu::Texture)>>,
 }
 
 impl SyphonClient {
@@ -221,7 +224,7 @@ impl SyphonClient {
             let alloc: objc2::rc::Allocated<AnyObject> = msg_send![class, alloc];
             msg_send![alloc, initWithServerDescription: &*desc, device: &**raw_device, options: std::ptr::null::<AnyObject>(), newFrameHandler: std::ptr::null::<AnyObject>()]
         };
-        client.map(|client| Self { client }).ok_or_else(|| format!("{label}: couldn't connect"))
+        client.map(|client| Self { client, last: Default::default() }).ok_or_else(|| format!("{label}: couldn't connect"))
     }
 
     /// The newest frame if one arrived since the last call, as a texture the engine can sample.
@@ -235,6 +238,13 @@ impl SyphonClient {
             msg_send![&*self.client, newFrameImage]
         };
         let tex = tex?;
+        // (Our wrapper holds the old texture, so its address can't be another texture's yet.)
+        let address = Retained::as_ptr(&tex) as *const () as usize;
+        if let Some((kept, wrapper)) = self.last.borrow().as_ref()
+            && *kept == address
+        {
+            return Some(wrapper.clone());
+        }
         let (w, h) = (tex.width() as u32, tex.height() as u32);
         let format = match tex.pixelFormat() {
             objc2_metal::MTLPixelFormat::RGBA8Unorm => wgpu::TextureFormat::Rgba8Unorm,
@@ -256,6 +266,8 @@ impl SyphonClient {
             view_formats: &[],
         };
         // SAFETY: the hal texture matches `desc`.
-        Some(unsafe { device.create_texture_from_hal::<wgpu::hal::api::Metal>(hal, &desc, wgpu::TextureUses::RESOURCE) })
+        let texture = unsafe { device.create_texture_from_hal::<wgpu::hal::api::Metal>(hal, &desc, wgpu::TextureUses::RESOURCE) };
+        *self.last.borrow_mut() = Some((address, texture.clone()));
+        Some(texture)
     }
 }

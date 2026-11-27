@@ -87,23 +87,20 @@ impl Engine {
     /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware
     /// video: the decoder's own memory). The caller keeps the memory alive while frames are in flight.
     pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture, full_range: bool) {
-        let target = |texture: wgpu::Texture| {
-            let size = texture.size();
-            let view = texture.create_view(&Default::default());
-            Target { texture, view, width: size.width, height: size.height }
-        };
+        let frame = self.frame_index;
         let res = self.layers.entry(layer).or_default();
+        let (luma, chroma) = (zero_copy_target(&mut res.views, luma, frame), zero_copy_target(&mut res.views, chroma, frame));
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
-        *slot = Some(Media::Nv12 { luma: target(luma), chroma: target(chroma), full_range });
+        *slot = Some(Media::Nv12 { luma, chroma, full_range });
     }
 
     /// A zero-copy 4:4:4-with-alpha frame (one Rgba16Unorm texture of A, Y, Cb, Cr; ProRes 4444) for a layer.
     pub fn set_layer_ayuv_texture(&mut self, layer: u64, outgoing: bool, texture: wgpu::Texture) {
-        let size = texture.size();
-        let view = texture.create_view(&Default::default());
+        let frame = self.frame_index;
         let res = self.layers.entry(layer).or_default();
+        let target = zero_copy_target(&mut res.views, texture, frame);
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
-        *slot = Some(Media::Ayuv(Target { texture, view, width: size.width, height: size.height }));
+        *slot = Some(Media::Ayuv(target));
     }
 
     /// The GPU can sample block-compressed (BC/DXT) textures: Hap movies skip CPU decoding.
@@ -170,10 +167,9 @@ impl Engine {
     /// Uses a GPU texture another app (or the system) produced as a layer's picture, with no copy:
     /// Syphon input. It must be sampleable on this device.
     pub fn set_layer_texture(&mut self, layer: u64, texture: wgpu::Texture) {
-        let size = texture.size();
-        let view = texture.create_view(&Default::default());
-        let target = Target { texture, view, width: size.width, height: size.height };
-        self.layers.entry(layer).or_default().media = Some(Media::Rgba(target));
+        let frame = self.frame_index;
+        let res = self.layers.entry(layer).or_default();
+        res.media = Some(Media::Rgba(zero_copy_target(&mut res.views, texture, frame)));
     }
 
     /// Uploads one NV12 (420 bi-planar, video range) video frame for a layer.
@@ -227,6 +223,36 @@ impl Engine {
         if let Some(res) = self.layers.get_mut(&layer) {
             res.media = None;
             res.media_out = None;
+            res.views.clear();
         }
     }
+}
+
+/// Views kept per layer for textures made elsewhere: two planes a frame for a decoder ring of a dozen frames (the
+/// app keeps that many wrappers too). One unused for `ZERO_COPY_FRAMES` goes (it holds the decoder's memory).
+const ZERO_COPY_VIEWS: usize = 24;
+const ZERO_COPY_FRAMES: u64 = 120;
+
+/// A texture someone else made (a zero-copy video plane, a Syphon frame) with its view: the same texture shown again
+/// gets the view it had, so the passes reading it find their bind groups (a new view each time was a new group).
+fn zero_copy_target(views: &mut Vec<(wgpu::Texture, wgpu::TextureView, u64)>, texture: wgpu::Texture, frame: u64) -> Target {
+    let size = texture.size();
+    views.retain(|(_, _, used)| frame.saturating_sub(*used) <= ZERO_COPY_FRAMES);
+    let view = match views.iter_mut().find(|(t, _, _)| *t == texture) {
+        Some((_, view, used)) => {
+            *used = frame;
+            view.clone()
+        }
+        None => {
+            let view = texture.create_view(&Default::default());
+            if views.len() >= ZERO_COPY_VIEWS
+                && let Some(oldest) = views.iter().enumerate().min_by_key(|(_, v)| v.2).map(|(i, _)| i)
+            {
+                views.swap_remove(oldest);
+            }
+            views.push((texture.clone(), view.clone(), frame));
+            view
+        }
+    };
+    Target { texture, view, width: size.width, height: size.height }
 }

@@ -5,31 +5,42 @@ use super::*;
 /// Textures in a bind group: tex0, tex1, tex2 and the multi-pass buffers.
 pub(super) const BIND_TEXTURES: usize = 3 + crate::shaders::MAX_BUFFERS;
 
+/// Frames a bind group is kept after its last use. Zero-copy video comes in a ring of a few decoder pictures, each
+/// with its own view: a group kept only to the next frame was made again for every new video frame.
+const KEEP_BIND_FRAMES: u64 = 16;
+
 /// Bind groups by the views they bind (tex0, tex1, tex2, buf0..): most passes bind the same textures every
-/// frame, so the group is made once. Groups unused for a frame are dropped (they keep their textures alive).
+/// frame, so the group is made once. Groups unused for `KEEP_BIND_FRAMES` are dropped (they keep their textures
+/// alive).
 #[derive(Default)]
 pub(super) struct BindCache {
-    current: HashMap<[wgpu::TextureView; BIND_TEXTURES], wgpu::BindGroup>,
-    previous: HashMap<[wgpu::TextureView; BIND_TEXTURES], wgpu::BindGroup>,
+    groups: HashMap<[wgpu::TextureView; BIND_TEXTURES], (wgpu::BindGroup, u64)>,
+    frame: u64,
+    /// Groups made so far (tests: how often the cache missed).
+    pub(super) made: u64,
 }
 
 impl BindCache {
-    /// Starts a frame: what wasn't used last frame goes.
+    /// Starts a frame: what wasn't used for a while goes.
     fn next_frame(&mut self) {
-        self.previous = std::mem::take(&mut self.current);
+        self.frame += 1;
+        let frame = self.frame;
+        self.groups.retain(|_, (_, used)| frame - *used <= KEEP_BIND_FRAMES);
     }
 
     fn clear(&mut self) {
-        self.current.clear();
-        self.previous.clear();
+        self.groups.clear();
     }
 
     fn get(&mut self, key: [wgpu::TextureView; BIND_TEXTURES], make: impl FnOnce(&[wgpu::TextureView; BIND_TEXTURES]) -> wgpu::BindGroup) -> wgpu::BindGroup {
-        if let Some(g) = self.current.get(&key) {
+        let frame = self.frame;
+        if let Some((g, used)) = self.groups.get_mut(&key) {
+            *used = frame;
             return g.clone();
         }
-        let g = self.previous.remove(&key).unwrap_or_else(|| make(&key));
-        self.current.insert(key, g.clone());
+        let g = make(&key);
+        self.made += 1;
+        self.groups.insert(key, (g.clone(), frame));
         g
     }
 }

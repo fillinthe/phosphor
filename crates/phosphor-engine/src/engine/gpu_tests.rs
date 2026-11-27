@@ -1430,3 +1430,35 @@ fn an_unseen_layer_is_drawn_now_and_then() {
     engine.render(&comp, 5.1, &ModInputs::default());
     assert!(engine.layers[&1].generator.is_some());
 }
+
+/// Zero-copy video comes as a ring of decoder pictures: each one shown again reuses its view and the bind groups
+/// that read it (a new view every frame made new groups every frame).
+#[test]
+fn zero_copy_frames_reuse_their_bind_groups() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 16, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Movie { name: "v".into(), path: Some("v.mov".into()) }, ..Default::default() });
+    let plane = |engine: &Engine, w: u32, h: u32, format: wgpu::TextureFormat| {
+        engine.device().create_texture(&wgpu::TextureDescriptor {
+            label: Some("decoder plane"),
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        })
+    };
+    // A ring of four decoder pictures, as the app hands them over (the same texture each time one comes round).
+    let ring: Vec<_> = (0..4).map(|_| (plane(&engine, 32, 16, wgpu::TextureFormat::R8Unorm), plane(&engine, 16, 8, wgpu::TextureFormat::Rg8Unorm))).collect();
+    let mut made = Vec::new();
+    for f in 0..12 {
+        let (l, c) = ring[f % 4].clone();
+        engine.set_layer_nv12_textures(1, false, l, c, false);
+        let before = engine.bind_cache.made;
+        engine.render(&comp, f as f32 / 60.0, &ModInputs::default());
+        made.push(engine.bind_cache.made - before);
+    }
+    assert!(made[4..].iter().all(|n| *n == 0), "round the ring again: no new bind groups ({made:?})");
+}
