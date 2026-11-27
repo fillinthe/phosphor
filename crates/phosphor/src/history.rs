@@ -4,18 +4,61 @@
 use phosphor_engine::Composition;
 
 const LIMIT: usize = 100;
+/// ...and at most this many bytes of them (each step's project as compact JSON, about what it takes in memory). A big
+/// show's 100 steps were 100 whole copies of it: 80 MB of JSON for an 800 KB show, more in memory. At least one step
+/// is always kept.
+const BYTES_LIMIT: usize = 48 << 20;
 /// Seconds an edit has to be still before it becomes an undo step.
 const SETTLE: f64 = 0.4;
 
 #[derive(Default)]
 pub struct History {
-    undo: Vec<Composition>,
-    redo: Vec<Composition>,
+    undo: Vec<Step>,
+    redo: Vec<Step>,
     /// The project as of the last undo step.
     committed: Option<Composition>,
     changed_at: Option<f64>,
     /// When the project was last compared with `committed`.
     checked_at: f64,
+}
+
+/// One undo / redo step: the project then, and its size (`BYTES_LIMIT`).
+struct Step {
+    comp: Composition,
+    bytes: usize,
+}
+
+impl Step {
+    fn new(comp: Composition) -> Self {
+        let bytes = json_bytes(&comp);
+        Self { comp, bytes }
+    }
+}
+
+/// How long `comp` is as compact JSON, counted without writing it (half a millisecond for an 800 KB show; once per
+/// step, never per frame).
+fn json_bytes(comp: &Composition) -> usize {
+    struct Count(usize);
+    impl std::io::Write for Count {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0 += b.len();
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut n = Count(0);
+    serde_json::to_writer(&mut n, comp).map_or(0, |()| n.0)
+}
+
+/// Pushes `step` and drops the oldest past `LIMIT` steps or `BYTES_LIMIT` bytes (never the newest).
+fn push_capped(stack: &mut Vec<Step>, step: Step) {
+    stack.push(step);
+    let mut total: usize = stack.iter().map(|s| s.bytes).sum();
+    while stack.len() > 1 && (stack.len() > LIMIT || total > BYTES_LIMIT) {
+        total -= stack.remove(0).bytes;
+    }
 }
 
 /// Where two saved projects differ, as paths ("layers.0.opacity: 1.0 -> 0.5"), at most a handful.
@@ -243,10 +286,7 @@ impl History {
             differences("", &a, &b, &mut out);
             println!("UNDO_STEP {}", out.join(" | "));
         }
-        self.undo.push(prev);
-        if self.undo.len() > LIMIT {
-            self.undo.remove(0);
-        }
+        push_capped(&mut self.undo, Step::new(prev));
         self.redo.clear();
         self.changed_at = None;
     }
@@ -266,12 +306,12 @@ impl History {
         // moves by itself would be a Cmd-Z that does nothing.
         let mut target = self.unsettled(current);
         while target.is_none() {
-            let mut step = self.undo.pop()?;
+            let mut step = self.undo.pop()?.comp;
             keep_live(current, &mut step);
             target = (step != *current).then_some(step);
         }
         let target = target?;
-        self.redo.push(current.clone());
+        push_capped(&mut self.redo, Step::new(current.clone()));
         self.committed = Some(target.clone());
         self.changed_at = None;
         Some(target)
@@ -280,12 +320,12 @@ impl History {
     pub fn redo(&mut self, current: &Composition) -> Option<Composition> {
         let mut target = None;
         while target.is_none() {
-            let mut step = self.redo.pop()?;
+            let mut step = self.redo.pop()?.comp;
             keep_live(current, &mut step);
             target = (step != *current).then_some(step);
         }
         let target = target?;
-        self.undo.push(current.clone());
+        push_capped(&mut self.undo, Step::new(current.clone()));
         self.committed = Some(target.clone());
         self.changed_at = None;
         Some(target)
@@ -326,6 +366,33 @@ pub fn keep_imports(now: &Composition, restored: &mut Composition) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A big show keeps fewer steps (within `BYTES_LIMIT`), a small one all `LIMIT`; Undo still steps back in order.
+    #[test]
+    fn undo_steps_are_kept_within_a_size() {
+        let mut big = Composition::default();
+        big.notes = "x".repeat(3 << 20);
+        let mut h = History::default();
+        h.track(&big, 0.0, false);
+        for k in 1..=40 {
+            big.master_fade = k as f32 / 100.0;
+            h.track(&big, k as f64, false);
+            h.track(&big, k as f64 + 0.5, false);
+        }
+        let kept: usize = h.undo.iter().map(|s| s.bytes).sum();
+        // (Each step is the 3 MB of notes and the rest of the project.)
+        assert!(kept <= BYTES_LIMIT && (10..16).contains(&h.steps()), "{} steps, {kept} bytes", h.steps());
+        assert_eq!(h.undo(&big).map(|c| c.master_fade), Some(0.39));
+        let mut small = Composition::default();
+        let mut h = History::default();
+        h.track(&small, 0.0, false);
+        for k in 1..=150 {
+            small.master_fade = k as f32 / 1000.0;
+            h.track(&small, k as f64, false);
+            h.track(&small, k as f64 + 0.5, false);
+        }
+        assert_eq!(h.steps(), LIMIT);
+    }
 
     #[test]
     fn undo_keeps_imported_media() {
@@ -547,3 +614,4 @@ mod tests {
         assert_eq!(fwd.master_fade, 0.3);
     }
 }
+
