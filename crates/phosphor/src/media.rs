@@ -28,6 +28,8 @@ pub mod durations;
 pub mod rhythm;
 pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod still_size;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod video;
 
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "exr", "hdr", "tga", "qoi", "psd", "heic", "heif", "svg"];
@@ -378,11 +380,14 @@ impl MediaManager {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         // Decode off the UI thread so big images never hitch playback.
+                        // Made no bigger than the show can use (and the card can hold) on that thread too: the upload
+                        // that follows is on this one.
+                        let max_side = still_size::longest_side((comp.width, comp.height), engine.device().limits().max_texture_dimension_2d);
                         let (tx, _) = self.decoded.get_or_insert_with(std::sync::mpsc::channel);
                         let tx = tx.clone();
                         let (id, spec, path) = (layer.id, layer.source.clone(), path.clone());
                         std::thread::spawn(move || {
-                            let result = decode_still(&path).map(|i| i.to_rgba8()).map_err(|e| format!("Couldn't open {}: {e}", file_name(&path)));
+                            let result = decode_still(&path).map(|i| still_size::fit(i, max_side).to_rgba8()).map_err(|e| format!("Couldn't open {}: {e}", file_name(&path)));
                             let _ = tx.send((id, spec, result));
                         });
                     }

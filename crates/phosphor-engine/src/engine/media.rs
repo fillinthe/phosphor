@@ -15,6 +15,12 @@ impl Engine {
     }
 
     pub(super) fn upload_rgba_slot(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, rgba: &[u8]) {
+        // A picture the card can't hold, or with fewer bytes than its size says, is a wgpu validation error (the app
+        // stopped there): skipped, what's on the layer stays. The app makes stills fit first (`media::still_size`).
+        let max = self.gpu.device.limits().max_texture_dimension_2d;
+        if width == 0 || height == 0 || width > max || height > max || rgba.len() < width as usize * height as usize * 4 {
+            return;
+        }
         let res = self.layers.entry(layer).or_default();
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
         let reuse = matches!(slot, Some(Media::Rgba(t)) if t.width == width && t.height == height);
