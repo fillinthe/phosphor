@@ -164,7 +164,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             S,
             I(A::AddLayer, "Add Layer", Some((true, Key::N))),
             I(A::DuplicateLayer, "Duplicate Layer", Some((false, Key::D))),
-            I(A::DeleteLayer, "Delete Layer", None),
+            I(A::DeleteLayer, "Delete Layer", Some((false, Key::Backspace))),
             I(A::Group, "Group with the Layer Below", Some((false, Key::G))),
             I(A::Ungroup, "Ungroup", Some((true, Key::G))),
             S,
@@ -248,6 +248,7 @@ pub fn shortcut_text(s: Shortcut) -> String {
     let key = match key {
         Key::Equals => "+".to_string(),
         Key::Enter => "Return".to_string(),
+        Key::Backspace => "Backspace".to_string(),
         k => k.symbol_or_name().to_string(),
     };
     if cfg!(target_os = "macos") {
@@ -280,8 +281,8 @@ pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
         for (_, entries) in MENUS {
             for e in entries.iter() {
                 let I(action, _, Some((s, key))) = e else { continue };
-                // Zoom keys are egui's own; text fields keep their own undo.
-                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo)) || (designer && matches!(action, A::DuplicateLayer)) {
+                // Zoom keys are egui's own; text fields keep their own undo and Cmd+Backspace (delete to the line's start).
+                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo | A::DeleteLayer)) || (designer && matches!(action, A::DuplicateLayer)) {
                     continue;
                 }
                 let mods = if shift { egui::Modifiers::COMMAND | egui::Modifiers::SHIFT } else { egui::Modifiers::COMMAND };
@@ -304,6 +305,8 @@ pub mod native {
 
     use super::{Action, Entry, MENUS};
 
+    /// (No Backspace: the menu bar would take Cmd+Backspace from every text field. Delete Layer's shortcut is read
+    /// from the window instead, `pressed`.)
     fn code(key: egui::Key) -> Option<Code> {
         use eframe::egui::Key as K;
         Some(match key {

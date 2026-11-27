@@ -56,6 +56,9 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let mut acts = StackActs::default();
     let adding = ui.input(|i| i.modifiers.shift || i.modifiers.command);
+    // Where the layer strips are (Delete / Space act on the selected layer only with the pointer over them).
+    let mut strips = egui::Rect::NOTHING;
+    let mut keys = None;
     {
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_selected, also_clips, media, .. } = st;
         let ctx = ui.ctx().clone();
@@ -126,7 +129,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     let is_selected = *selected == Some(layer.id) || also_selected.contains(&layer.id);
                     let dimmed = any_solo && !layer.solo;
                     let indent = 10.0 * (band.is_some() as u8 + parent.is_some() as u8) as f32;
-                    ui.horizontal(|ui| {
+                    let row = ui.horizontal(|ui| {
                         let strip = Strip { thumb, aspect, is_selected, dimmed, err: err.as_deref(), feeds: &feeds, others: &others, indent, size: egui::vec2(strip_w, grid.cell.y) };
                         let o = layer_strip(ui, layer, &strip, &mut out);
                         if o.select {
@@ -162,6 +165,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                         }
                         super::clip_grid::clip_cells(ui, &grid, &mut cx, layer, idx, &mut out);
                     });
+                    strips = strips.union(egui::Rect::from_min_size(row.response.rect.min, egui::vec2(strip_w + indent, row.response.rect.height())));
                 }
             }
             if comp.layers.is_empty() {
@@ -170,8 +174,10 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
             ui.add_space(6.0);
             master_strip(ui, comp, *selected == Some(MASTER_ID), &mut acts, selected);
             crate::ui::carry_scroll(ui);
+            keys = super::layers::layer_list_keys(ui, strips.intersect(ui.clip_rect()), *selected);
         });
     }
+    super::layers::apply_layer_keys(st, keys);
     apply_row_out(ui, st, out, now);
     apply_stack_acts(st, acts, now);
 }

@@ -181,7 +181,9 @@ impl PhosphorApp {
         });
     }
 
-    /// Keyboard shortcuts that act on the selected layer (ignored while typing in a field).
+    /// Number keys trigger the lit bank's columns (ignored while typing in a field). Delete and Space for the selected
+    /// layer act only with the pointer over a list of layers (`panels::layer_list_keys`), or as Edit › Delete Layer
+    /// (Cmd+Backspace): bare, from anywhere, they took a layer off the show by a slip of the hand.
     pub(crate) fn shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.memory(|m| m.focused().is_some()) || panels::designer_owns_keys(ctx) {
             return;
@@ -199,13 +201,6 @@ impl PhosphorApp {
             let now = ctx.input(|i| i.time);
             let col = col + self.state.clip_page * panels::CLIP_PAGE_SIZE;
             self.state.trigger(Trigger::Column(col), now);
-        }
-        // ⌘D (duplicate) lives in the Edit menu.
-        let (delete, toggle) = ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.key_pressed(egui::Key::Space)));
-        if delete {
-            panels::remove_layer(&mut self.state, sel);
-        } else if toggle && let Some(l) = self.state.comp.layer_mut(sel) {
-            l.enabled = !l.enabled;
         }
     }
 }

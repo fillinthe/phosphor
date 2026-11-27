@@ -286,7 +286,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let mut remove_many: Vec<u32> = Vec::new();
     let mut duplicate_many: Vec<u32> = Vec::new();
     if bg.hovered() && !ui.ctx().egui_wants_keyboard_input() {
-        let (del, dup, all) = ui.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.modifiers.command && i.key_pressed(egui::Key::D), i.modifiers.command && i.key_pressed(egui::Key::A)));
+        // (Delete / Backspace taken here, so nothing else that listens for them acts on the same press.)
+        let del = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) | i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace));
+        let (dup, all) = ui.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::D), i.modifiers.command && i.key_pressed(egui::Key::A)));
         if del {
             remove_many = selected.iter().copied().filter(|n| graph.removable(*n)).collect();
         }
