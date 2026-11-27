@@ -127,7 +127,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             }
             crate::ui::toolbar(ui, |ui| {
                 crate::ui::heading(ui, format!("{} {}", icon::PROJECTOR_SCREEN, o.name));
-                toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
+                super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
             });
             let mut acts = Vec::new();
             super::slice_tree::slice_rows(ui, &mut o.mapping, selected_surface, &mut acts);
@@ -740,7 +740,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         }
     });
     ui.separator();
-    crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
+    super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
     crate::ui::toggle(ui, &mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
     crate::ui::toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern");
     crate::ui::toggle(ui, &mut vs.snap, "Snap to grid");
@@ -897,18 +897,20 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                 crate::ui::toggle_mapped(ui, &mut m.enabled, "ON", ControlTarget::MaskEnabled(m.id));
+                // (Its help rides in its name row, never a row of its own.)
+                help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
                 crate::ui::text_field(ui, &mut m.name, "", Some(f32::INFINITY));
             });
-            help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
             mask_settings(ui, m);
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
         } else {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
+                help(ui, &format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
                 crate::ui::text_field(ui, &mut o.name, "", Some(f32::INFINITY));
             });
-            toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
+            super::mapping::mapping_switch(ui, &mut o.mapping.enabled);
             super::program_picker(ui, o, &comps);
             crate::ui::field(ui, "Size", |ui| {
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));
@@ -918,8 +920,6 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             color_grade_editor(ui, o.id, &mut o.color);
             #[cfg(not(target_arch = "wasm32"))]
             super::projector::projector_settings(ui, o, projectors);
-            ui.separator();
-            help(ui, &format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
         }
     });
     if let Some((sid, a)) = fx_action {

@@ -152,7 +152,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
     );
     let following = following_root();
     add(
-        Some("THIS MAC"),
+        Some("This computer"),
         format!("{} Added files", icon::FILES),
         count(&|m| m.folder.is_empty()).to_string(),
         false,
@@ -217,7 +217,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         add(
-            Some("ONLINE"),
+            Some("Online"),
             format!("{} Search libraries", icon::GLOBE),
             String::new(),
             false,
@@ -270,7 +270,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
         let n = count(&|m| st.comp.in_collection(m, c));
         add(
             if std::mem::take(&mut first) {
-                Some("COLLECTIONS")
+                Some("Collections")
             } else {
                 None
             },
@@ -281,7 +281,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
         );
     }
     add(
-        if first { Some("COLLECTIONS") } else { None },
+        if first { Some("Collections") } else { None },
         format!("{} New collection", icon::PLUS),
         String::new(),
         false,
@@ -325,42 +325,30 @@ pub(crate) fn source_list(ui: &mut egui::Ui, st: &State, entries: &[Entry]) -> O
         .auto_shrink(false)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
-            // Headings fold: a click on THIS MAC / ONLINE / COLLECTIONS hides its rows (kept between runs). A folded
-            // part still shows the row that's picked, so you can see where you are.
-            let folded_id = egui::Id::new("phosphor_media_sources_folded");
-            let mut folded: Vec<String> = ui.ctx().data_mut(|d| d.get_persisted(folded_id)).unwrap_or_default();
-            let mut hide = false;
-            for (k, e) in entries.iter().enumerate() {
-                if let Some(h) = e.heading {
-                    ui.add_space(8.0);
-                    hide = folded.iter().any(|f| f == h);
-                    let rows = entries[k..].iter().enumerate().take_while(|(j, x)| *j == 0 || x.heading.is_none()).count();
-                    let caret = if hide { icon::CARET_RIGHT } else { icon::CARET_DOWN };
-                    let words = if hide { format!("{caret} {h}  ({rows})") } else { format!("{caret} {h}") };
-                    let r = ui
-                        .add(egui::Label::new(RichText::new(words).small().color(ui.visuals().weak_text_color())).selectable(false).sense(egui::Sense::click()))
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(if hide { "Show these again" } else { "Fold these away to save room" });
-                    if r.clicked() {
-                        if hide {
-                            folded.retain(|f| f != h);
-                        } else {
-                            folded.push(h.to_string());
-                        }
-                        hide = !hide;
-                        ui.ctx().data_mut(|d| d.insert_persisted(folded_id, folded.clone()));
-                    }
-                }
-                if hide && !e.picked(&st.media_view) {
-                    continue;
-                }
-                let r =
-                    crate::ui::list_row(ui, e.picked(&st.media_view), &e.label, &e.right, e.badge);
+            // Each heading (This computer / Online / Collections) is a kit subsection that folds (egui keeps it open
+            // or shut between runs). A folded part still shows the row that's picked, so you can see where you are.
+            let mut row = |ui: &mut egui::Ui, e: &Entry| {
+                let r = crate::ui::list_row(ui, e.picked(&st.media_view), &e.label, &e.right, e.badge);
                 if r.clicked() {
                     act = Some(entry_act(&e.pick));
                 }
                 if let Some(a) = entry_menu(&r, e, st) {
                     act = Some(a);
+                }
+            };
+            let mut k = 0;
+            while k < entries.len() {
+                let len = entries[k..].iter().enumerate().take_while(|(j, x)| *j == 0 || x.heading.is_none()).count();
+                let group = &entries[k..k + len];
+                k += len;
+                let Some(h) = group[0].heading else {
+                    group.iter().for_each(|e| row(ui, e));
+                    continue;
+                };
+                ui.add_space(6.0);
+                let open = crate::ui::subsection(ui, ("media_sources", h), h, true, |ui| group.iter().for_each(|e| row(ui, e))).body_returned.is_some();
+                if !open {
+                    group.iter().filter(|e| e.picked(&st.media_view)).for_each(|e| row(ui, e));
                 }
             }
         });

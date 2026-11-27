@@ -4,6 +4,12 @@ use super::*;
 
 /// One draggable point on the mapping canvas. Returns its response; `delta` gets the drag in
 /// output units (0..1).
+/// An output's mapping switch, the same words and tip everywhere (Mapping, the Studio's tree and properties, the
+/// output's menu): on = the output shows only its slices; off = the whole picture, unmapped.
+pub(crate) fn mapping_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
+    crate::ui::toggle(ui, on, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("On: this output shows only its slices. Off: the whole picture, unmapped")
+}
+
 pub(crate) fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::Rect, color: Color32, square: bool, delta: &mut [f32; 2]) -> egui::Response {
     let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(18.0, 18.0)), id, Sense::click_and_drag());
     if r.dragged() {
@@ -646,7 +652,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                         ui.close();
                     }
                     crate::ui::toggle(ui, &mut o.enabled, "Output on");
-                    crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
+                    mapping_switch(ui, &mut o.mapping.enabled);
                     if count > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Remove output")).clicked() {
                         todo.push(Do::Remove(id));
                         ui.close();
@@ -723,8 +729,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(MASK_COLOR, format!("{} Only the inside of the mask \"{}\" shows on this output: outside it is black. Move or delete the mask (orange) to change that.", icon::WARNING, m.name));
         }
         crate::ui::toolbar(ui, |ui| {
-            toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
-                .on_hover_text("When on, this output shows only its surfaces");
+            mapping_switch(ui, &mut o.mapping.enabled);
             super::output::grid_toggle(ui, &mut o.grid);
             toggle(ui, &mut o.mapping.test_pattern, label(icon::CHECKERBOARD, "Slice test pattern"));
             if crate::ui::command(ui, label(icon::PLUS, "Surface")).clicked() {

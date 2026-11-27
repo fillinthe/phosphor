@@ -173,7 +173,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     let shared: Vec<(u64, String)> = if signal_only { Vec::new() } else { ui.ctx().data(|d| d.get_temp(egui::Id::new(MODULATORS))).unwrap_or_default() };
     let linked = m.map_or(0, |m| m.link);
     if !shared.is_empty() {
-        ui.label(RichText::new("SHARED MODULATORS").small().color(crate::theme::weak()));
+        ui.label(RichText::new("Shared modulators").small().color(crate::theme::weak()));
         ui.horizontal_wrapped(|ui| {
             for (id, name) in &shared {
                 if crate::ui::pick_item(ui, linked == *id, format!("{} {name}", icon::LINK)).on_hover_text("Follow this modulator (set it up in the Modulators panel)").clicked() {
