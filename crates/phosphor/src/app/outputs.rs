@@ -486,6 +486,8 @@ impl State {
         let got = if step < 0 { self.history.undo(&self.comp) } else { self.history.redo(&self.comp) };
         if let Some(mut c) = got {
             crate::history::keep_imports(&self.comp, &mut c);
+            // What the step was, in words ("Layer 2 opacity"): the edit goes from the older project to the newer.
+            let what = if step < 0 { crate::history::describe(&c, &self.comp) } else { crate::history::describe(&self.comp, &c) };
             self.comp = c;
             self.comp.ensure_outputs();
             // What was selected may not be in this step (a layer made after it, a clip slot since removed):
@@ -506,7 +508,8 @@ impl State {
                 self.selected_surface = None;
             }
             self.pending_triggers.clear();
-            self.notice = Some(if step < 0 { "Undone".into() } else { "Redone".into() });
+            let done = if step < 0 { "Undone" } else { "Redone" };
+            self.notice = Some(what.map_or_else(|| done.to_string(), |w| format!("{done}: {w}")));
         } else {
             self.notice = Some(if step < 0 { "Nothing to undo".into() } else { "Nothing to redo".into() });
         }

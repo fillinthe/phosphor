@@ -45,6 +45,73 @@ fn differences(path: &str, a: &serde_json::Value, b: &serde_json::Value, out: &m
     }
 }
 
+/// A snake_case field as words ("master_fade" → "master fade").
+fn words(key: &str) -> String {
+    key.replace('_', " ")
+}
+
+/// What one difference path is about, as words: the named thing it's in and the field ("layers.1.opacity" →
+/// "Layer 2 opacity", "outputs.0.mapping.surfaces.3.corners" → "Output 1 mapping", "master_fade" → "master fade").
+fn subject(root: &serde_json::Value, path: &str) -> String {
+    let segs: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
+    let mut at = root;
+    for (k, seg) in segs.iter().enumerate() {
+        let next = match seg.parse::<usize>() {
+            Ok(i) => at.get(i),
+            Err(_) => at.get(*seg),
+        };
+        let Some(next) = next else { break };
+        // An item with a name in a list: the subject is that name and the field under it.
+        if seg.parse::<usize>().is_ok()
+            && let Some(name) = next.get("name").and_then(|n| n.as_str()).filter(|n| !n.is_empty())
+        {
+            return match segs.get(k + 1) {
+                Some(field) if field.parse::<usize>().is_err() => format!("{name} {}", words(field)),
+                _ => name.to_string(),
+            };
+        }
+        at = next;
+    }
+    segs.first().map_or_else(String::new, |s| words(s))
+}
+
+/// What changed from `older` to `newer`, in words for the Undo / Redo notice: a thing added or deleted ("adding
+/// layer \"Lights\"") or the first changed setting ("Layer 2 opacity", "and 2 more"). None when nothing reads.
+pub fn describe(older: &Composition, newer: &Composition) -> Option<String> {
+    let (Ok(a), Ok(b)) = (serde_json::to_value(older), serde_json::to_value(newer)) else { return None };
+    // Something added or deleted: an item with an id in a top-level list on one side only.
+    if let (Some(x), Some(y)) = (a.as_object(), b.as_object()) {
+        for (key, list) in x {
+            let (Some(old), Some(new)) = (list.as_array(), y.get(key).and_then(|l| l.as_array())) else { continue };
+            let ids = |l: &Vec<serde_json::Value>| l.iter().filter_map(|v| v.get("id").and_then(|i| i.as_u64())).collect::<Vec<_>>();
+            let (old_ids, new_ids) = (ids(old), ids(new));
+            let one = words(key.trim_end_matches('s'));
+            let name = |v: &serde_json::Value| v.get("name").and_then(|n| n.as_str()).filter(|n| !n.is_empty()).map_or(String::new(), |n| format!(" \"{n}\""));
+            if let Some(v) = new.iter().find(|v| v.get("id").and_then(|i| i.as_u64()).is_some_and(|i| !old_ids.contains(&i))) {
+                return Some(format!("adding {one}{}", name(v)));
+            }
+            if let Some(v) = old.iter().find(|v| v.get("id").and_then(|i| i.as_u64()).is_some_and(|i| !new_ids.contains(&i))) {
+                return Some(format!("deleting {one}{}", name(v)));
+            }
+        }
+    }
+    let mut paths = Vec::new();
+    differences("", &a, &b, &mut paths);
+    let mut subjects: Vec<String> = Vec::new();
+    for p in paths {
+        let path = p.split(": ").next().unwrap_or("");
+        let s = subject(&b, path);
+        if !s.is_empty() && !subjects.contains(&s) {
+            subjects.push(s);
+        }
+    }
+    let first = subjects.first()?.clone();
+    Some(match subjects.len() {
+        1 => first,
+        n => format!("{first} and {} more", n - 1),
+    })
+}
+
 /// Whether launching a clip (or putting anything else on a layer) is an undo step. Off by default (owner,
 /// 2026-11-16): what plays on the layers is the show, not an edit, and Undo leaves it alone; settings, effects and
 /// values are what it steps through. The brightness menu's "Undo includes clip launches" turns it on.
@@ -587,5 +654,23 @@ mod tests {
         h.redo(&back).unwrap();
         h.start_over(&Composition::default());
         assert!(!h.edit_pending());
+    }
+
+    /// The Undo notice names what it took back.
+    #[test]
+    fn steps_are_named() {
+        let mut older = Composition::default();
+        let id = older.add_layer().id;
+        older.layer_mut(id).unwrap().name = "Lights".into();
+        let mut newer = older.clone();
+        newer.layer_mut(id).unwrap().opacity = 0.3;
+        assert_eq!(describe(&older, &newer).as_deref(), Some("Lights opacity"));
+        newer.master_fade = 0.5;
+        assert_eq!(describe(&older, &newer).as_deref(), Some("Lights opacity and 1 more"));
+        let mut added = older.clone();
+        added.add_layer().name = "Haze".into();
+        assert_eq!(describe(&older, &added).as_deref(), Some("adding layer \"Haze\""));
+        assert_eq!(describe(&added, &older).as_deref(), Some("deleting layer \"Haze\""));
+        assert_eq!(describe(&older, &older), None);
     }
 }
