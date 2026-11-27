@@ -905,7 +905,7 @@ fn id_for(slug: &str, source: &str) -> String {
 
 /// Compiles every saved user shader once the engine exists.
 pub fn load_user_shaders(st: &mut State) {
-    if st.editor.loaded || st.engine.is_none() {
+    if st.editor.loaded || st.core.lock().engine.is_none() {
         return;
     }
     st.editor.loaded = true;
@@ -916,7 +916,7 @@ pub fn load_user_shaders(st: &mut State) {
 /// Compiles the saved user shaders that aren't loaded yet (all of them at start; later, ones a packed show brought).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_new_user_shaders(st: &mut State) {
-    if st.engine.is_none() {
+    if st.core.lock().engine.is_none() {
         return;
     }
     for dir in effects_dir().into_iter().chain(crate::show::shader_dir("effects")) {
@@ -940,7 +940,8 @@ pub fn load_new_user_shaders(st: &mut State) {
 /// start): what's on screen keeps its last good version meanwhile, and the result comes in through `poll_compiles`
 /// (saved then when `save`). Nothing here waits for the shader compiler.
 fn compile(st: &mut State, index: usize, save: bool) {
-    let Some(engine) = st.engine.as_mut() else { return };
+    let mut core = st.core.lock();
+    let Some(engine) = core.engine.as_mut() else { return };
     let sh = &mut st.editor.shaders[index];
     let new_id = id_for(&sh.slug, &sh.source);
     if new_id != sh.id {
@@ -973,7 +974,8 @@ fn params_of(id: &str) -> Option<Vec<&'static str>> {
 
 /// Compiles shader `index` now, on this thread (bench actions that use it straight away).
 fn compile_now(st: &mut State, index: usize) {
-    let Some(engine) = st.engine.as_mut() else { return };
+    let mut core = st.core.lock();
+    let Some(engine) = core.engine.as_mut() else { return };
     let sh = &mut st.editor.shaders[index];
     let new_id = id_for(&sh.slug, &sh.source);
     if new_id != sh.id {
@@ -982,14 +984,15 @@ fn compile_now(st: &mut State, index: usize) {
     }
     let old = params_of(&sh.id);
     let result = engine.compile_custom(&sh.id, &sh.source).map(|_| ());
+    drop(core);
     compiled(st, index, result, PendingCompile { old, save: None });
 }
 
 /// Takes in the user shader compiles that finished on their workers: errors shown, settings kept by name, saved.
 /// Call once a frame.
 pub fn poll_compiles(st: &mut State) {
-    let Some(engine) = st.engine.as_mut() else { return };
-    for done in engine.take_custom_compiled() {
+    let done = st.core.lock().engine.as_mut().map(|e| e.take_custom_compiled()).unwrap_or_default();
+    for done in done {
         let Some(i) = st.editor.shaders.iter().position(|s| s.id == done.id) else { continue };
         let Some(pending) = st.editor.shaders[i].pending.take() else { continue };
         compiled(st, i, done.result.map(|_| ()), pending);
@@ -1286,7 +1289,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(i) = delete {
         let sh = st.editor.shaders.remove(i);
-        match st.engine.as_mut() {
+        match st.core.lock().engine.as_mut() {
             Some(engine) => engine.remove_custom(&sh.id),
             None => shaders::unregister_custom(&sh.id),
         }

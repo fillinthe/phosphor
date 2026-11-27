@@ -81,7 +81,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let n = st.comp.modulators.len();
     // What follows each one (its "followed by" line).
     let followers: Vec<Vec<String>> = st.comp.modulators.iter().map(|m| st.comp.modulator_followers(m.id)).collect();
-    let cycles: Vec<Option<f32>> = st.comp.modulators.iter().map(|m| st.mod_phases.cycle_of(m.id)).collect();
+    let cycles: Vec<Option<f32>> = st.comp.modulators.iter().map(|m| st.core.lock().mod_phases.cycle_of(m.id)).collect();
     crate::ui::column_scroll(ui).show(ui, |ui| {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
@@ -194,7 +194,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         st.comp.modulators.swap(a, b);
     }
     if let Some((id, at)) = scrub {
-        st.mod_phases.set_cycle(id, at);
+        st.core.lock().mod_phases.set_cycle(id, at);
     }
     if let Some(id) = open_window {
         super::open_modulator_window(st, id);

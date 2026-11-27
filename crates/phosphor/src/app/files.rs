@@ -569,7 +569,7 @@ impl PhosphorApp {
             if !media::is_picture(&name) {
                 continue;
             }
-            let tx = self.state.media.dropped_sender();
+            let tx = self.state.core.lock().media.dropped_sender();
             let file = file.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let data = file.bytes_async().await;

@@ -39,7 +39,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
                 // The fade time stays this project's (not the saved look's).
                 let secs = st.comp.launch.look_fade;
                 comp.launch.look_fade = secs;
-                if let Some(e) = st.engine.as_mut() {
+                if let Some(e) = st.core.lock().engine.as_mut() {
                     e.fade_in_next(secs);
                 }
                 st.load_composition(comp);

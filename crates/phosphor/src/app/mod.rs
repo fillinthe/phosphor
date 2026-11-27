@@ -21,7 +21,7 @@ use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
 use crate::clock::Clock;
 use crate::control::ControlHub;
-use crate::media::{self, MediaManager};
+use crate::media;
 use crate::net::NetSession;
 use crate::panels::{self, Tab, Viewer};
 use crate::presets::PresetStore;
@@ -44,6 +44,9 @@ mod bench_run;
 mod cues;
 pub(crate) use cues::format_tc;
 mod controls;
+pub(crate) mod render_core;
+#[cfg(not(target_arch = "wasm32"))]
+mod render_switch;
 mod files;
 mod frame;
 mod guard;
@@ -71,6 +74,8 @@ mod recovery;
 mod readbacks;
 pub(crate) use readbacks::ReadFor;
 mod render;
+#[cfg(target_os = "macos")]
+pub(crate) use render::publish_syphon;
 mod settings;
 mod areas;
 mod panel_browser;
@@ -125,6 +130,7 @@ const KEY_LOCK: &str = "lock";
 const KEY_PANELS_LOCKED: &str = "panels_locked";
 const KEY_RENDER_RATE: &str = "render_rate";
 const KEY_SCREENS_DONT_WAIT: &str = "screens_dont_wait";
+const KEY_RENDER_THREAD: &str = "render_thread";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
@@ -208,6 +214,9 @@ pub struct OutputShared {
     pub armed: Option<(egui::Key, f64)>,
     /// Words for the main window's notice ("Press F again…"), taken by the app each frame (never shown on the output).
     pub said: Option<String>,
+    /// The render thread is drawing the outputs (set by the app each frame): this window hands its surface over
+    /// while nothing of the interface needs to be drawn on it.
+    pub thread_presents: bool,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next
@@ -223,7 +232,8 @@ pub enum Trigger {
 /// borrowed mutably at once.
 pub struct State {
     pub comp: Composition,
-    pub engine: Option<Engine>,
+    /// The engine, the media players, Syphon out and the modulators' phases, shared with the render thread.
+    pub core: render_core::Core,
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
@@ -325,7 +335,6 @@ pub struct State {
     texture_generation: u64,
     /// Per-layer thumbnail textures, keyed by layer id, with the size they were registered at.
     pub layer_textures: HashMap<u64, (egui::TextureId, (u32, u32))>,
-    pub media: MediaManager,
     pub stats: Stats,
     pub selected: Option<u64>,
     /// More layers selected with Shift / Cmd-click: edits to the selected layer go to these too (`run_multi_edit`).
@@ -411,6 +420,10 @@ pub struct State {
     pub render_pacer: crate::pacing::FramePacer,
     /// Output windows don't wait for each other's screens (`present`; Output panel).
     pub screens_dont_wait: bool,
+    /// Draw and show the outputs on a thread of their own (Output panel › Render thread; `crate::render_thread`).
+    pub render_thread: bool,
+    /// Why the render thread isn't running although asked for (this graphics setup, or it failed this run).
+    pub render_thread_note: Option<String>,
     pub require_password: bool,
     /// When someone last changed something from the web, and who (the web control badge).
     pub web_activity: Option<(f64, String)>,
@@ -549,8 +562,6 @@ pub struct State {
     pub recent: Vec<String>,
     pub history: crate::history::History,
     pub export: ExportUi,
-    #[cfg(target_os = "macos")]
-    pub syphon: crate::syphon::Syphon,
     #[cfg(any(target_os = "macos", windows))]
     pub ndi: crate::ndi::Ndi,
     /// Phosphor as a camera in other apps (macOS camera extension).
@@ -566,8 +577,6 @@ pub struct State {
     pub clip_page: usize,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
-    /// Shared modulators' running phases (speed changes never jump).
-    pub mod_phases: phosphor_engine::ModPhases,
 }
 
 impl State {
@@ -898,16 +907,18 @@ impl State {
             }
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
-                if let Some((_, dur)) = self.media.position(layer) {
-                    self.media.scrub(layer, v as f64 * dur);
+                let mut core = self.core.lock();
+                if let Some((_, dur)) = core.media.position(layer) {
+                    core.media.scrub(layer, v as f64 * dur);
                 }
             }
             crate::control::Deferred::Jump(id, forward) => {
-                if let (Some((pos, dur)), Some(l)) = (self.media.position(id), self.comp.layers.iter().find(|l| l.id == id)) {
+                let position = self.core.lock().media.position(id);
+                if let (Some((pos, dur)), Some(l)) = (position, self.comp.layers.iter().find(|l| l.id == id)) {
                     let step = l.jump_secs(Some(dur), self.comp.bpm);
                     // (A plain jump, not a scrub: a scrub holds the movie still for a moment, and a jump button
                     // pressed on the beat must land on the beat.)
-                    self.media.seek(id, if forward { pos + step } else { pos - step });
+                    self.core.lock().media.seek(id, if forward { pos + step } else { pos - step });
                 }
             }
         }
@@ -1297,6 +1308,11 @@ pub struct PhosphorApp {
     last_ui: (web_time::Instant, f64),
     /// Paces rendering while the window is hidden (60 fps).
     hidden_pacer: crate::pacing::FramePacer,
+    /// The render thread, while it's on (`render_switch`), and how many frames it had drawn when `render` last
+    /// took them.
+    #[cfg(not(target_arch = "wasm32"))]
+    render_thread: Option<crate::render_thread::RenderThread>,
+    seen_frames: u64,
     /// UI passes so far (the bench reports UI fps next to engine fps).
     ui_frames: u64,
     /// The first-launch card is showing.
@@ -1473,6 +1489,8 @@ impl eframe::App for PhosphorApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn on_exit(&mut self) {
+        // The render thread first: it lets go of the output windows before they close.
+        self.render_thread = None;
         // Recordings still going: let FFmpeg finish their files (an unfinished .mp4 doesn't play).
         #[cfg(not(target_arch = "wasm32"))]
         for r in std::iter::once(&mut self.state.stream).chain(self.state.recorders.iter_mut()).filter(|r| r.busy()) {

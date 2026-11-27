@@ -33,7 +33,7 @@ impl PhosphorApp {
         self.state.updater.in_show = self.state.output.lock().is_ok_and(|m| m.values().any(|o| o.open));
         self.state.updater.tick(&ctx, now);
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(engine) = self.state.engine.as_mut() {
+        if let Some(engine) = self.state.core.lock().engine.as_mut() {
             self.state.isf.poll(engine);
         }
         crate::explorer::load_user_shaders(&mut self.state);
@@ -144,7 +144,7 @@ impl PhosphorApp {
         let cpu_id = egui::Id::new(crate::panels::CPU_LAYERS);
         let due = ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, f32>>)>(cpu_id)).is_none_or(|(t, _)| now - t > 1.0);
         if due {
-            let shares = self.state.media.cpu_shares();
+            let shares = self.state.core.lock().media.cpu_shares();
             // And what to know about each movie that's playing (the card's warning sign, File info), from the
             // same once-a-second look: dropped frames, a heavy decode, a file on a network share.
             #[cfg(not(target_arch = "wasm32"))]
@@ -161,7 +161,7 @@ impl PhosphorApp {
                     .iter()
                     .filter_map(|l| {
                         let path = phosphor_engine::file_of(&l.source)?;
-                        let mut f = self.state.media.health_facts(l.id)?;
+                        let mut f = self.state.core.lock().media.health_facts(l.id)?;
                         (f.cpu, f.place, f.canvas) = (shares.get(&l.id).copied(), health::place_of(path), canvas);
                         // Frames over the last few seconds, not since the movie started: a rough first second
                         // left the warning up for minutes. And "slow backwards" only while it plays that way.
@@ -325,6 +325,8 @@ impl PhosphorApp {
                 self.state.preview_wants.push((format!("bench:{i}"), phosphor_engine::PreviewItem::Effect(fx), true));
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.sync_render_thread(&ctx);
         let due = match &self.state.offline {
             Some(o) => o.now() <= wall,
             None => self.state.render_due(now),

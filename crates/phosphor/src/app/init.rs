@@ -175,12 +175,11 @@ impl PhosphorApp {
                 multi_before: None,
                 selected_surface: None,
                 comp,
-                engine,
+                core: super::render_core::Core::new(engine),
                 render_state,
                 texture: None,
                 texture_generation: 0,
                 layer_textures: HashMap::new(),
-                media: MediaManager::default(),
                 stats: Stats::new(now),
                 output: Arc::new(Mutex::new(std::collections::HashMap::new())),
                 output_textures: HashMap::new(),
@@ -225,6 +224,8 @@ impl PhosphorApp {
                 render_rate: stored(KEY_RENDER_RATE).and_then(|t| layout::from_text(&t)).unwrap_or_default(),
                 render_pacer: Default::default(),
                 screens_dont_wait: stored(KEY_SCREENS_DONT_WAIT).is_some_and(|v| v == "1"),
+                render_thread: stored(KEY_RENDER_THREAD).is_some_and(|v| v == "1"),
+                render_thread_note: None,
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 web_activity: None,
                 web_log: Vec::new(),
@@ -321,8 +322,6 @@ impl PhosphorApp {
                 recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 history: Default::default(),
                 export: Default::default(),
-                #[cfg(target_os = "macos")]
-                syphon: Default::default(),
                 #[cfg(any(target_os = "macos", windows))]
                 ndi: Default::default(),
                 #[cfg(target_os = "macos")]
@@ -401,7 +400,6 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 file_info: None,
                 mod_inputs: ModInputs::default(),
-                mod_phases: Default::default(),
             },
             dock,
             workspace: Some(area),
@@ -422,6 +420,9 @@ impl PhosphorApp {
             layout_draft: None,
             last_ui: (web_time::Instant::now(), 0.0),
             hidden_pacer: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            render_thread: None,
+            seen_frames: 0,
             ui_frames: 0,
             welcome_open: false,
             #[cfg(not(target_arch = "wasm32"))]

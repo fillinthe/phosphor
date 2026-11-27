@@ -50,7 +50,9 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let feeds = feed_choices(&st.comp);
     let others = other_comps(&st.comp);
-    let State { comp, selected, also_selected, media, layer_textures, .. } = st;
+    // (Each layer's media problem, read once: the players are shared with the render thread.)
+    let media_errors = st.core.lock().media.errors.clone();
+    let State { comp, selected, also_selected, layer_textures, .. } = st;
     // Shift or Cmd adds a layer to the selection (edits then go to all of them).
     let adding = ui.input(|i| i.modifiers.shift || i.modifiers.command);
     let sel_is_layer = selected.is_some_and(|s| comp.layers.iter().any(|l| l.id == s));
@@ -127,7 +129,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             }
             let layer = &mut comp.layers[idx];
             let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
-            let err = media.errors.get(&layer.id).cloned();
+            let err = media_errors.get(&layer.id).cloned();
             let is_selected = *selected == Some(layer.id) || also_selected.contains(&layer.id);
             let muted = any_solo && !layer.solo;
             let out = if parent.is_some() {

@@ -65,6 +65,19 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
             "Several outputs on screens that don't refresh together: only the first output open waits for its screen; the others show the newest picture at their own refresh (never torn). Try it when the show slows down with two or more outputs.",
         );
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::ui::field(ui, "Render thread", |ui| {
+        crate::ui::toggle(ui, &mut st.render_thread, "Outputs on their own thread").on_hover_text(
+            "Test feature. The outputs are drawn and shown on a thread of their own, so a busy panel, a menu or a save never makes the picture stutter. The output windows look the same; while their mapping handles, Identify or a menu are on them (or the pointer is over a window), the interface draws them as before.",
+        );
+        if let Some(on) = crate::render_thread::forced() {
+            crate::ui::hint(ui, if on { "on for this run (PHOSPHOR_RENDER_THREAD)" } else { "off for this run (PHOSPHOR_RENDER_THREAD)" });
+        } else if st.render_thread
+            && let Some(note) = &st.render_thread_note
+        {
+            crate::ui::hint(ui, note);
+        }
+    });
     crate::ui::field(ui, "Color depth", |ui| {
         if st.comp.deep_color && !phosphor_engine::deep_colour() {
             crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
@@ -346,13 +359,13 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
 #[cfg(target_os = "macos")]
 pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
-        if !st.syphon.available {
+        if !st.core.lock().syphon.available {
             hint(ui, "Syphon unavailable (framework missing)");
             return;
         }
         let hover = "Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…";
         output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Syphon", hover, phosphor_engine::AppControl::Syphon);
-        let (servers, clients) = (st.syphon.server_count(), st.syphon.clients());
+        let (servers, clients) = (st.core.lock().syphon.server_count(), st.core.lock().syphon.clients());
         let waiting = crate::ui::plural(servers as usize, "{0} source published, no app receiving yet", "{0} sources published, no app receiving yet");
         output_status(ui, match (servers, clients) {
             (0, _) => OutputStatus::Off,

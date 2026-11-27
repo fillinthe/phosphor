@@ -141,7 +141,7 @@ impl PhosphorApp {
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
                 web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
-                self.state.media.positions()
+                self.state.core.lock().media.positions()
             );
         }
         if self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed) > 0 {
@@ -151,7 +151,7 @@ impl PhosphorApp {
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
                 web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
-                self.state.media.positions()
+                self.state.core.lock().media.positions()
             );
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -180,7 +180,7 @@ impl PhosphorApp {
             let vals: Vec<String> = self.state.comp.modulators.iter().map(|m| format!("{}={:.2}", m.name, self.state.mod_inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1))).collect();
             println!("MODULATORS {}", vals.join(" "));
         }
-        if let Some(e) = &self.state.engine {
+        if let Some(e) = &self.state.core.lock().engine {
             println!("GPU timing: {}", e.gpu_timing_status());
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -195,8 +195,8 @@ impl PhosphorApp {
         let causes: Vec<String> = ctx.repaint_causes().iter().map(|c| c.to_string()).collect();
         println!("UI_FPS {:.1} repaint causes: {}", self.ui_frames as f64 / run.cfg.seconds.max(1.0), causes.join(" | "));
         println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
-        println!("LOOPS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.loop_in, l.loop_out, l.playing, (l.rate * 100.0).round() / 100.0, self.state.media.position(l.id).map(|p| (p.0 * 100.0).round() / 100.0))).collect::<Vec<_>>());
-        for (layer, e) in &self.state.media.errors {
+        println!("LOOPS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.loop_in, l.loop_out, l.playing, (l.rate * 100.0).round() / 100.0, self.state.core.lock().media.position(l.id).map(|p| (p.0 * 100.0).round() / 100.0))).collect::<Vec<_>>());
+        for (layer, e) in &self.state.core.lock().media.errors {
             println!("LAYER_ERROR {layer}: {e}");
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -228,7 +228,7 @@ impl PhosphorApp {
         if let Ok(bpm) = std::env::var("PHOSPHOR_BENCH_BPM").map(|v| v.parse::<f64>().unwrap_or(0.0))
             && bpm > 0.0
             && let Some(l) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some())
-            && let Some((pos, _)) = self.state.media.position(l.id)
+            && let Some((pos, _)) = self.state.core.lock().media.position(l.id)
         {
             let clip_phase = (pos * bpm / 60.0).rem_euclid(4.0);
             let clock_phase = self.state.clock.beats(now).rem_euclid(4.0);
@@ -249,7 +249,7 @@ impl PhosphorApp {
             println!("SOUND output {rate} Hz, {played} sample frames played");
         }
         for l in &self.state.comp.layers {
-            if let Some(info) = self.state.media.video_info(l.id) {
+            if let Some(info) = self.state.core.lock().media.video_info(l.id) {
                 println!("VIDEO {} ({:?}): {info}", l.name, l.direction);
             }
         }
@@ -272,7 +272,8 @@ impl PhosphorApp {
             r.stop_and_wait();
             println!("RECORDED {}", r.settings.file_path);
         }
-        if let (Some(path), Some(engine)) = (&run.cfg.snapshot, &self.state.engine)
+        let core = self.state.core.lock();
+        if let (Some(path), Some(engine)) = (&run.cfg.snapshot, &core.engine)
             && let Some((w, h, pixels)) = engine.read_output()
         {
             match image::save_buffer(path, &pixels, w, h, image::ColorType::Rgba8) {
@@ -289,6 +290,7 @@ impl PhosphorApp {
                 }
             }
         }
+        drop(core);
         self.bench = None;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }

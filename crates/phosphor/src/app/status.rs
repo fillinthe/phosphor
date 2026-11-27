@@ -69,22 +69,22 @@ impl PhosphorApp {
                 use crate::ui::activity::{Flow, heading, light};
                 ui.separator();
                 heading(ui, "IN", "What's coming in (lit while it keeps arriving)");
-                if light(ui, "Media", Flow::Count(st.media.flow.movies), "Movies and clips: frames being played").clicked() {
+                if light(ui, "Media", Flow::Count(st.core.lock().media.flow.movies), "Movies and clips: frames being played").clicked() {
                     open_tab = Some(crate::panels::Tab::Media);
                 }
-                let open = st.media.open_inputs();
+                let open = st.core.lock().media.open_inputs();
                 if open.live {
-                    if light(ui, "Live", Flow::Count(st.media.flow.live), "Cameras, screens and network streams: frames arriving").clicked() {
+                    if light(ui, "Live", Flow::Count(st.core.lock().media.flow.live), "Cameras, screens and network streams: frames arriving").clicked() {
                         open_tab = Some(crate::panels::Tab::Inputs);
                     }
                 }
                 if open.ndi {
-                    if light(ui, "NDI", Flow::Count(st.media.flow.ndi), "NDI sources on layers: frames arriving").clicked() {
+                    if light(ui, "NDI", Flow::Count(st.core.lock().media.flow.ndi), "NDI sources on layers: frames arriving").clicked() {
                         open_tab = Some(crate::panels::Tab::Inputs);
                     }
                 }
                 if open.syphon {
-                    if light(ui, if cfg!(windows) { "Spout" } else { "Syphon" }, Flow::Count(st.media.flow.syphon), "Other apps' pictures on layers: frames arriving").clicked() {
+                    if light(ui, if cfg!(windows) { "Spout" } else { "Syphon" }, Flow::Count(st.core.lock().media.flow.syphon), "Other apps' pictures on layers: frames arriving").clicked() {
                         open_tab = Some(crate::panels::Tab::Inputs);
                     }
                 }
@@ -118,7 +118,7 @@ impl PhosphorApp {
                 }
                 #[cfg(target_os = "macos")]
                 if st.comp.share_out() {
-                    let n = st.syphon.clients();
+                    let n = st.core.lock().syphon.clients();
                     outs.push(("Syphon", crate::panels::Tab::Output, Flow::On(n > 0), format!("Syphon out: {n} app(s) taking a picture")));
                 }
                 #[cfg(windows)]

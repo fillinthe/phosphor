@@ -181,13 +181,13 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
     }
     // A movie layer (XY off): drag across the picture to scrub; its position shows along the bottom.
     if let (MonitorSource::Layer(id), false) = (cfg.source, cfg.xy)
-        && let Some((pos, dur)) = st.media.position(id).filter(|(_, d)| *d > 0.0)
+        && let Some((pos, dur)) = st.core.lock().media.position(id).filter(|(_, d)| *d > 0.0)
     {
         let r = ui.interact(frame, egui::Id::new(("monitor_scrub", n)), Sense::click_and_drag());
         if (r.dragged() || r.clicked())
             && let Some(p) = r.interact_pointer_pos()
         {
-            st.media.scrub(id, ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0) as f64 * dur);
+            st.core.lock().media.scrub(id, ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0) as f64 * dur);
         }
         let x = frame.left() + frame.width() * (pos / dur).clamp(0.0, 1.0) as f32;
         let bar = egui::Rect::from_min_max(egui::pos2(frame.left(), frame.bottom() - 3.0), egui::pos2(x, frame.bottom()));

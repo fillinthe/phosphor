@@ -38,6 +38,10 @@ struct Server {
     obj: Retained<AnyObject>,
 }
 
+// SAFETY: a SyphonMetalServer isn't tied to a thread (apps publish from their render threads); retain / release are
+// atomic, and Phosphor uses each server from one thread at a time (behind the render core's lock).
+unsafe impl Send for Server {}
+
 impl Server {
     fn new(name: &str, device: &ProtocolObject<dyn MTLDevice>) -> Option<Self> {
         let class = AnyClass::get(c"SyphonMetalServer")?;
@@ -201,6 +205,10 @@ pub struct SyphonClient {
     /// the source's surface stays the same, and the same wrapper keeps the engine's view and bind groups.
     last: std::cell::RefCell<Option<(usize, wgpu::Texture)>>,
 }
+
+// SAFETY: a SyphonMetalClient isn't tied to a thread (its frame calls are made from render threads); retain / release
+// are atomic, and Phosphor uses each client from one thread at a time (behind the render core's lock).
+unsafe impl Send for SyphonClient {}
 
 impl SyphonClient {
     /// Connects to the source labeled `label` (see `ServerInfo::label`).

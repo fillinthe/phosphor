@@ -228,7 +228,9 @@ impl State {
         let map: HashMap<String, String> = found.into_iter().collect();
         self.comp.map_paths(|p| map.get(p).cloned().unwrap_or_else(|| p.to_string()));
         // Files that changed path need reloading on their layers.
-        self.media = Default::default();
+        // (The old players go once the lock is let go: closing them can take a moment.)
+        let old = std::mem::take(&mut self.core.lock().media);
+        drop(old);
         self.notice = Some(format!("Found {} of {} missing files.", map.len(), total));
     }
 }

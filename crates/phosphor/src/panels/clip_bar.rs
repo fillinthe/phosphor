@@ -47,9 +47,12 @@ pub(crate) fn card_bar(ui: &mut egui::Ui, layer: &mut LayerState, width: f32) {
 
 /// Once a frame: every movie layer's position for the cards, and the seek one asked for.
 pub(crate) fn publish(ctx: &egui::Context, st: &mut State) {
-    let positions: HashMap<u64, (f64, f64)> = st.comp.layers.iter().filter(|l| matches!(l.source, SourceSpec::Movie { .. })).filter_map(|l| Some((l.id, st.media.position(l.id)?))).collect();
+    let positions: HashMap<u64, (f64, f64)> = {
+        let core = st.core.lock();
+        st.comp.layers.iter().filter(|l| matches!(l.source, SourceSpec::Movie { .. })).filter_map(|l| Some((l.id, core.media.position(l.id)?))).collect()
+    };
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(POSITIONS), Arc::new(positions)));
     if let Some((layer, t)) = ctx.data_mut(|d| d.remove_temp::<(u64, f64)>(egui::Id::new(SEEK_REQUEST))) {
-        st.media.scrub(layer, t);
+        st.core.lock().media.scrub(layer, t);
     }
 }
