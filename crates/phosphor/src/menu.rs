@@ -42,6 +42,8 @@ pub enum Action {
     ZoomOut,
     ZoomReset,
     ToggleOutput,
+    /// Every output fades to black (and back on the next press): the panic button, always reachable.
+    Blackout,
     Identify,
     Syphon,
     WebControl,
@@ -210,6 +212,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "Output",
         &[
+            I(A::Blackout, "Blackout On / Off", Some((false, Key::B))),
             I(A::ToggleOutput, "Show / Hide Output Windows", Some((false, Key::Enter))),
             D("Send Output To"),
             I(A::Identify, "Identify Outputs", None),
@@ -254,6 +257,18 @@ pub fn shortcut_text(s: Shortcut) -> String {
     }
 }
 
+/// The shortcut of a menu action as words ("⌘B", "Ctrl+B"), or "" when it has none.
+pub fn shortcut_of(a: Action) -> String {
+    MENUS
+        .iter()
+        .flat_map(|(_, entries)| entries.iter())
+        .find_map(|e| match e {
+            Entry::Item(x, _, sc) if *x == a => Some(shortcut_text(*sc)),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// Shortcuts typed into the window (the macOS menu bar handles its own and swallows the keys).
 pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
     let typing = ctx.memory(|m| m.focused().is_some());
@@ -292,6 +307,7 @@ pub mod native {
     fn code(key: egui::Key) -> Option<Code> {
         use eframe::egui::Key as K;
         Some(match key {
+            K::B => Code::KeyB,
             K::N => Code::KeyN,
             K::O => Code::KeyO,
             K::S => Code::KeyS,

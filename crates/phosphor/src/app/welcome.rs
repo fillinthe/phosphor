@@ -20,13 +20,10 @@ impl PhosphorApp {
                     crate::ui::hint(ui, *about);
                 });
             }
-            crate::ui::hint(ui, "Undo (⌘Z) brings back the project you had.");
+            crate::ui::hint(ui, "It replaces the project open now (you're asked first when that has unsaved changes).");
         });
         if let Some(k) = pick {
-            let (name, _, make) = phosphor_engine::TEMPLATES[k];
-            self.state.load_composition(make());
-            self.state.project_path = None;
-            self.state.notice = Some(format!("New project from \"{name}\". Undo (⌘Z) brings the previous one back."));
+            self.guard(ctx, super::guard::Guarded::Template(k));
             open = false;
         }
         self.state.templates_open = open;

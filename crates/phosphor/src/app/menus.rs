@@ -27,12 +27,8 @@ impl PhosphorApp {
         let st = &mut self.state;
         let selected_layer = st.selected.filter(|id| *id != phosphor_engine::MASTER_ID && st.comp.layers.iter().any(|l| l.id == *id));
         match a {
-            A::NewProject => {
-                st.load_composition(Composition::starter());
-                st.project_path = None;
-                st.cloud_project = None;
-                st.notice = Some("New project. Undo (⌘Z) brings the previous one back.".into());
-            }
+            // (Asks first when the project has unsaved edits or is on the outputs: Undo can't bring it back.)
+            A::NewProject => self.guard(ctx, super::guard::Guarded::NewProject),
             A::Open => {
                 #[cfg(not(target_arch = "wasm32"))]
                 st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project or packed show", &["phosphor", crate::pack::EXT])));
@@ -166,7 +162,15 @@ impl PhosphorApp {
             A::ZoomIn => ctx.set_zoom_factor((ctx.zoom_factor() * 1.1).min(3.0)),
             A::ZoomOut => ctx.set_zoom_factor((ctx.zoom_factor() / 1.1).max(0.5)),
             A::ZoomReset => ctx.set_zoom_factor(1.0),
+            // Closing the outputs while they show asks first (`guard`); opening them is at once.
+            A::ToggleOutput if st.output_open() => self.guard(ctx, super::guard::Guarded::OutputsOff),
             A::ToggleOutput => st.toggle_output(),
+            A::Blackout => {
+                let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
+                if !st.comp.control_locked(&target) {
+                    st.comp.blackout_on = !st.comp.blackout_on;
+                }
+            }
             A::Identify => st.identify_outputs(now),
             A::Syphon => *st.comp.share_out_mut() = !st.comp.share_out(),
             A::Ndi => st.comp.ndi.enabled = !st.comp.ndi.enabled,
@@ -241,10 +245,15 @@ impl PhosphorApp {
         let show = crate::show::bundled().map(|b| b.manifest.name.clone());
         #[cfg(target_arch = "wasm32")]
         let show: Option<String> = None;
-        let title = match (show, project) {
-            (Some(s), _) => format!("{s} — Phosphor VJ show"),
-            (None, Some(p)) => format!("{p} — Phosphor VJ"),
-            (None, None) => "Phosphor VJ".into(),
+        // Edits not saved yet: "— Edited" after the name, as Mac documents say it (settled edits only, so a drag
+        // doesn't make the title flicker).
+        let edited = self.state.history.generation() != self.state.saved_generation;
+        let title = match (show, project, edited) {
+            (Some(s), _, _) => format!("{s} — Phosphor VJ show"),
+            (None, Some(p), true) => format!("{p} — Edited — Phosphor VJ"),
+            (None, Some(p), false) => format!("{p} — Phosphor VJ"),
+            (None, None, true) => "Untitled — Edited — Phosphor VJ".into(),
+            (None, None, false) => "Phosphor VJ".into(),
         };
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -312,7 +321,7 @@ impl PhosphorApp {
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
                 let r = crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off (they go back to the screens they filled last time) · right-click: pick a screen");
                 if r.clicked() {
-                    self.state.toggle_output();
+                    self.state.request_output_toggle();
                 }
                 r.right_menu(|ui| {
                     crate::ui::heading(ui, "Fullscreen on");

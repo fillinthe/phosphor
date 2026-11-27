@@ -6,6 +6,39 @@ use crate::ui::RightMenu;
 /// Seconds the way back to a window stays on an output that has just covered Phosphor's own window.
 const WAY_BACK_SECS: f64 = 8.0;
 
+/// Seconds a bare key in an output window waits for its second press.
+const TWICE_SECS: f64 = 0.8;
+
+/// A bare key typed in an output window (F = fill the screen / back to a window, E = mapping handles, Esc = back
+/// to a window / close) acts only when pressed twice in a row within `TWICE_SECS`: the output is on the
+/// projector, and one stray key (the window took the focus after a click) used to drop it off its screen or put
+/// the mapping handles in front of the audience. True on the second press; the first arms it.
+pub(crate) fn pressed_twice(armed: &mut Option<(egui::Key, f64)>, key: egui::Key, now: f64) -> bool {
+    match *armed {
+        Some((k, at)) if k == key && now - at <= TWICE_SECS => {
+            *armed = None;
+            true
+        }
+        _ => {
+            *armed = Some((key, now));
+            false
+        }
+    }
+}
+
+/// What the main window says after a first press (the second one does it).
+fn press_again(key: egui::Key, name: &str, fullscreen: bool, editing: bool) -> String {
+    let what = match key {
+        egui::Key::F if fullscreen => "to bring it back to a window",
+        egui::Key::F => "to fill its screen",
+        egui::Key::E if editing => "to hide the mapping handles",
+        egui::Key::E => "to show the mapping handles on it",
+        _ if fullscreen => "to bring it back to a window",
+        _ => "to close it",
+    };
+    format!("Output \"{name}\": press {} again {what}", if key == egui::Key::Escape { "Esc" } else { key.name() })
+}
+
 impl PhosphorApp {
     /// An output filling a display (F, double-click, the right-click menu) is remembered in the project as that
     /// output's screen, so it goes back there when its window reopens or the project is opened again.
@@ -37,6 +70,7 @@ impl PhosphorApp {
         }
         let own = ctx.input(|i| i.viewport().outer_rect).and_then(|r| crate::screens::display_of(&self.state.displays, r.center().x, r.center().y));
         let (now, escape) = ctx.input(|i| (i.time, i.key_pressed(egui::Key::Escape)));
+        let mut said = None;
         for (id, out) in map.iter_mut() {
             let over = out.open && out.fullscreen && out.place.is_none() && own.is_some() && out.display == own;
             if over && !out.over_controls {
@@ -45,9 +79,18 @@ impl PhosphorApp {
                 ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of(("phosphor_output", *id)), egui::ViewportCommand::Focus);
             }
             out.over_controls = over;
+            // (Twice, as in the output itself.)
             if over && escape {
-                out.uncover = true;
+                if pressed_twice(&mut out.armed, egui::Key::Escape, now) {
+                    out.uncover = true;
+                } else {
+                    said = Some(press_again(egui::Key::Escape, &out.name, true, false));
+                }
             }
+        }
+        drop(map);
+        if said.is_some() {
+            self.state.notice = said;
         }
     }
 
@@ -140,6 +183,9 @@ impl PhosphorApp {
                     out.mapping_changed = false;
                 }
                 steps.append(&mut out.undo_steps);
+                if let Some(said) = out.said.take() {
+                    self.state.notice = Some(said);
+                }
             }
         }
         for step in steps {
@@ -223,8 +269,20 @@ impl PhosphorApp {
                 // "Fullscreen" = this window covering one display exactly (not macOS full screen,
                 // which would black out the other displays).
                 let fullscreen = out.fullscreen;
-                if ctx.input(|i| i.key_pressed(egui::Key::E)) {
-                    out.edit_mapping = !out.edit_mapping;
+                // Bare keys act on the second press (`pressed_twice`): this window is on the projector.
+                let now = ctx.input(|i| i.time);
+                let typed: Vec<egui::Key> = ctx.input(|i| [egui::Key::F, egui::Key::E, egui::Key::Escape].into_iter().filter(|k| i.key_pressed(*k) && i.modifiers.is_none()).collect());
+                let (mut toggle, mut escape) = (false, false);
+                for key in typed {
+                    if !pressed_twice(&mut out.armed, key, now) {
+                        out.said = Some(press_again(key, &out.name, fullscreen, out.edit_mapping));
+                        continue;
+                    }
+                    match key {
+                        egui::Key::E => out.edit_mapping = !out.edit_mapping,
+                        egui::Key::F => toggle = true,
+                        _ => escape = true,
+                    }
                 }
                 // Undo / Redo typed here (the main window's shortcuts don't see this window's keys; on the Mac the
                 // menu bar takes them first, so they never arrive twice). Ctrl+Y = Redo too.
@@ -278,7 +336,6 @@ impl PhosphorApp {
                 }
                 // Still covering its screen? macOS puts a window back under the menu bar now and then, which slid the
                 // picture (and every slice mapped on it) down by the menu bar's height. Looked at once a second.
-                let now = ctx.input(|i| i.time);
                 if fullscreen && out.place.is_none() && now - out.cover_checked >= 1.0 {
                     out.cover_checked = now;
                     if let Some(d) = out.display.and_then(|id| crate::screens::displays().into_iter().find(|d| d.id == id))
@@ -294,8 +351,6 @@ impl PhosphorApp {
                 if ctx.input(|i| i.viewport().close_requested()) {
                     out.open = false;
                 }
-                let toggle = ctx.input(|i| i.key_pressed(egui::Key::F));
-                let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
                 // Back to a normal window on the same display.
                 let uncover = |out: &mut OutputShared| {
                     crate::screens::cover_window(&title, None);
@@ -343,7 +398,7 @@ impl PhosphorApp {
                     if ctx.input(|i| i.pointer.is_moving()) {
                         out.way_back_until = ctx.input(|i| i.time) + 3.0;
                     }
-                    let words = "This output covers Phosphor's own window · Esc or double-click = back to a window";
+                    let words = "This output covers Phosphor's own window · Esc twice or double-click = back to a window";
                     let font = egui::FontId::proportional(18.0);
                     let at = rect.center_bottom() + egui::vec2(0.0, -28.0);
                     let size = ui.painter().layout_no_wrap(words.into(), font.clone(), Color32::WHITE).size();
@@ -387,7 +442,7 @@ impl PhosphorApp {
                         ui.painter().text(
                             rect.left_bottom() + egui::vec2(12.0, -12.0),
                             egui::Align2::LEFT_BOTTOM,
-                            "Drag to move · double-click or F = fullscreen · E = mapping handles · Esc = close",
+                            "Drag to move · double-click or F twice = fullscreen · E twice = mapping handles · Esc twice = close",
                             egui::FontId::proportional(12.0),
                             Color32::from_white_alpha(110),
                         );
@@ -453,5 +508,23 @@ impl State {
         } else {
             self.notice = Some(if step < 0 { "Nothing to undo".into() } else { "Nothing to redo".into() });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pressed_twice;
+    use eframe::egui::Key;
+
+    /// One stray key does nothing; the same key again soon does; a different key or a slow second press starts over.
+    #[test]
+    fn bare_keys_need_a_second_press() {
+        let mut armed = None;
+        assert!(!pressed_twice(&mut armed, Key::Escape, 10.0), "one Esc leaves the projector alone");
+        assert!(pressed_twice(&mut armed, Key::Escape, 10.4));
+        assert!(!pressed_twice(&mut armed, Key::F, 11.0));
+        assert!(!pressed_twice(&mut armed, Key::E, 11.2), "another key starts over");
+        assert!(!pressed_twice(&mut armed, Key::E, 13.0), "too slow: starts over");
+        assert!(pressed_twice(&mut armed, Key::E, 13.5));
     }
 }

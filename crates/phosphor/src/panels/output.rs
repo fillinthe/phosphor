@@ -68,9 +68,9 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::field(ui, "All output windows", |ui| {
         let text = if st.output_open() { "Close" } else { "Open" };
         if steady_button(ui, text, &["Close", "Open"]).clicked() {
-            st.toggle_output();
+            st.request_output_toggle();
         }
-        help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+        help(ui, "In the output window (keys pressed twice, so a stray key can't drop the show): F = fullscreen, E = mapping handles, Esc = back to a window. Drag it to a projector first.");
     });
     ui.separator();
 

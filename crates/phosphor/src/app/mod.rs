@@ -46,6 +46,7 @@ pub(crate) use cues::format_tc;
 mod controls;
 mod files;
 mod frame;
+mod guard;
 #[cfg(not(target_arch = "wasm32"))]
 mod import;
 mod init;
@@ -192,6 +193,10 @@ pub struct OutputShared {
     pub cover_checked: f64,
     /// When that was last written to the log (once a minute at most).
     pub cover_logged: f64,
+    /// A bare key (F, E, Esc) pressed once in this window and when: it acts on the second press (`pressed_twice`).
+    pub armed: Option<(egui::Key, f64)>,
+    /// Words for the main window's notice ("Press F again…"), taken by the app each frame (never shown on the output).
+    pub said: Option<String>,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next
@@ -510,6 +515,11 @@ pub struct State {
     /// When autosave last looked, and a hash of what was last written (only a changed project is saved).
     autosave_at: f64,
     saved_hash: u64,
+    /// `history.generation()` as of the last save or open: the project is "edited" (window title, the question
+    /// before New) while they differ. `saving` = (hash, generation) of saves still being written.
+    saved_generation: u64,
+    #[cfg(not(target_arch = "wasm32"))]
+    saving: Vec<(u64, u64)>,
     /// Saves are written on a thread of their own (a slow drive never stops the show).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) project_saver: crate::project_save::ProjectSaver,
@@ -642,6 +652,11 @@ impl State {
                 let hash = hash_text(&json);
                 let job = crate::project_save::Job { path: p.clone(), json, auto, secs: crate::backups::now_secs() };
                 self.project_saver.save(job, hash);
+                self.saving.retain(|(h, _)| *h != hash);
+                self.saving.push((hash, self.history.generation()));
+                if self.saving.len() > 8 {
+                    self.saving.remove(0);
+                }
             }
             None => self.save_project_as(),
         }
@@ -673,6 +688,9 @@ impl State {
             let current = self.project_path.as_deref() == Some(done.path.as_str());
             if current && !matches!(done.outcome, Outcome::Failed(_)) {
                 self.saved_hash = done.hash;
+                if let Some(k) = self.saving.iter().position(|(h, _)| *h == done.hash) {
+                    self.saved_generation = self.saving.remove(k).1;
+                }
             }
             let said = match done.outcome {
                 Outcome::Saved { backup: None } => format!("Saved {name}"),
@@ -727,6 +745,10 @@ impl State {
             // Level with the copy; a copy that is ahead of a drive that's back counts as unsaved, so Save (and
             // autosave) writes it to the drive.
             self.saved_hash = if there && ahead { 0 } else { hash_text(&self.comp.to_json()) };
+            if there && ahead {
+                // Not on the drive yet: edited until it's saved there.
+                self.saved_generation = u64::MAX;
+            }
             self.notice = Some(if there {
                 format!("\"{name}\": opened this computer's copy, saved while its drive was away. Save puts it on the drive")
             } else {
@@ -781,6 +803,7 @@ impl State {
         self.pending_triggers.clear();
 
         self.history.start_over(&self.comp);
+        self.saved_generation = self.history.generation();
         self.cue_run.project_opened();
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -788,6 +811,11 @@ impl State {
         }
         self.project_opened = true;
         self.outputs_on_open();
+    }
+
+    /// The project has edits since it was opened or last saved (an edit still settling counts too).
+    pub fn edited(&self) -> bool {
+        self.history.generation() != self.saved_generation || self.history.edit_pending()
     }
 
     /// Projects set to "open outputs on their screens" do so when loaded (and at launch).
@@ -1114,6 +1142,16 @@ impl State {
         }
     }
 
+    /// Output windows on / off from a button: opening happens at once; closing goes through Output › Show / Hide
+    /// Output Windows (next frame), which asks first while they're showing (`app::guard`).
+    pub fn request_output_toggle(&mut self) {
+        if self.output_open() {
+            self.menu_requests.push(crate::menu::Action::ToggleOutput);
+        } else {
+            self.toggle_output();
+        }
+    }
+
     pub fn output_open(&self) -> bool {
         self.output.lock().unwrap().values().any(|o| o.open)
     }
@@ -1201,6 +1239,9 @@ pub struct PhosphorApp {
     /// This run is a bench/test (stays true after the bench finishes and `bench` is cleared): nothing it does may be
     /// saved over the user's project, settings or crash-recovery snapshot.
     bench_session: bool,
+    /// A show-ending action waiting for its "are you sure?" (`guard`), and a quit that has had its yes.
+    guarded: Option<guard::Guarded>,
+    quit_confirmed: bool,
     gather_windows: bool,
     remote_published: f64,
     #[cfg(not(target_arch = "wasm32"))]
@@ -1433,6 +1474,7 @@ impl PhosphorApp {
             }
         }
         let mut cloud_layouts = None;
+        let mut from_account = None;
         let events = st.account.tick(ctx);
         // (A save from the File menu has no Account window open: what went wrong is said in the status note.)
         if let Some(e) = st.account.fresh_error() {
@@ -1440,18 +1482,14 @@ impl PhosphorApp {
         }
         for e in events {
             match e {
+                // (Opened once any unsaved edits or a showing output have had their question: `guard`.)
                 crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {
-                    Ok(comp) => {
-                        st.load_composition(comp);
-                        st.project_path = None;
-                        st.account_ui.name = name.clone();
-                        st.notice = Some(format!("Opened {name} from your account. Undo (⌘Z) brings the previous project back."));
-                        st.cloud_project = Some((id, name));
-                    }
+                    Ok(comp) => from_account = Some(guard::Guarded::FromAccount(id, name, Box::new(comp))),
                     Err(err) => st.notice = Some(format!("Couldn't open {name}: {err}")),
                 },
                 crate::account::Event::Saved(id, name) => {
                     st.notice = Some(format!("Saved {name} to your account"));
+                    st.saved_generation = st.history.generation();
                     // Its file on this computer knows its account copy from now on.
                     #[cfg(not(target_arch = "wasm32"))]
                     if let Some(p) = &st.project_path {
@@ -1473,6 +1511,9 @@ impl PhosphorApp {
         }
         if let Some(text) = cloud_layouts {
             self.apply_account_layouts(&text);
+        }
+        if let Some(g) = from_account {
+            self.guard(ctx, g);
         }
     }
 

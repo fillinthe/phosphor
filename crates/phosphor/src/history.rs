@@ -16,6 +16,9 @@ pub struct History {
     changed_at: Option<f64>,
     /// When the project was last compared with `committed`.
     checked_at: f64,
+    /// Goes up with every step made, undone or redone and every project opened: the project is "edited" while it
+    /// differs from the number it had when it was last saved (`generation`).
+    generation: u64,
 }
 
 /// Where two saved projects differ, as paths ("layers.0.opacity: 1.0 -> 0.5"), at most a handful.
@@ -249,6 +252,7 @@ impl History {
         }
         self.redo.clear();
         self.changed_at = None;
+        self.generation += 1;
     }
 
     /// A different project opened: nothing to undo or redo in it yet (Undo never brings the previous project back).
@@ -257,6 +261,7 @@ impl History {
         self.redo.clear();
         self.committed = Some(comp.clone());
         self.changed_at = None;
+        self.generation += 1;
     }
 
     /// Steps back; returns the project to load.
@@ -274,6 +279,7 @@ impl History {
         self.redo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
+        self.generation += 1;
         Some(target)
     }
 
@@ -288,6 +294,7 @@ impl History {
         self.undo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
+        self.generation += 1;
         Some(target)
     }
 
@@ -308,6 +315,16 @@ impl History {
 
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
+    }
+
+    /// Which edit the project is at (see the field). Cheap: read it every frame.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// An edit is waiting to settle into a step (a slider just let go).
+    pub fn edit_pending(&self) -> bool {
+        self.changed_at.is_some()
     }
 
     /// How many steps back there are (the bench prints it: a project left alone must not grow any).
@@ -545,5 +562,30 @@ mod tests {
         assert!(h.undo(&back).is_none());
         let fwd = h.redo(&back).unwrap();
         assert_eq!(fwd.master_fade, 0.3);
+    }
+
+    /// The "edited" mark follows real edits only: a step, an Undo and a Redo move it, a project playing by itself
+    /// doesn't, and opening a project starts it afresh.
+    #[test]
+    fn generation_moves_with_edits_only() {
+        let mut h = History::default();
+        let mut comp = Composition::default();
+        h.track(&comp, 0.0, false);
+        let opened = h.generation();
+        comp.bpm = 140.0; // tempo following: not an edit
+        h.track(&comp, 1.0, false);
+        h.track(&comp, 2.0, false);
+        assert_eq!(h.generation(), opened);
+        comp.master_fade = 0.5;
+        h.track(&comp, 3.0, false);
+        assert!(h.edit_pending(), "settling");
+        h.track(&comp, 4.0, false);
+        let edited = h.generation();
+        assert_ne!(edited, opened);
+        let back = h.undo(&comp).unwrap();
+        assert_ne!(h.generation(), edited, "Undo is a change too");
+        h.redo(&back).unwrap();
+        h.start_over(&Composition::default());
+        assert!(!h.edit_pending());
     }
 }

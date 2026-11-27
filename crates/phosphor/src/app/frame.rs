@@ -65,7 +65,9 @@ impl PhosphorApp {
             d.insert_temp(egui::Id::new(panels::LEARNING), self.state.control.learning.clone());
         });
         self.control_requests(&ctx);
+        self.guard_close(&ctx);
         self.menu_actions(&ctx, now);
+        self.guard_answers(&ctx);
         self.fade_in_effects();
         self.shortcuts(&ctx);
         let busy = ctx.input(|i| i.pointer.any_down()) || self.output_pointer_down();

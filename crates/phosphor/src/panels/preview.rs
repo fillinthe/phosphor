@@ -52,9 +52,9 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             }
             let (stop, play) = (label(icon::STOP, "Output"), label(icon::PLAY, "Output"));
             let text = if st.output_open() { stop.clone() } else { play.clone() };
-            let r = steady_button(ui, text, &[&stop, &play]).on_hover_text("Open the output window (it goes back to the screen it filled last time) · right-click: pick a screen · F = fullscreen, E = edit mapping");
+            let r = steady_button(ui, text, &[&stop, &play]).on_hover_text("Open the output window (it goes back to the screen it filled last time) · right-click: pick a screen · in it: F twice = fullscreen, E twice = edit mapping");
             if r.clicked() {
-                st.toggle_output();
+                st.request_output_toggle();
             }
             r.right_menu(|ui| {
                 crate::ui::heading(ui, "Fullscreen on");
@@ -99,7 +99,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     resp.right_menu(|ui| {
         let open = st.output_open();
         if crate::ui::command(ui, label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {
-            st.toggle_output();
+            st.request_output_toggle();
             ui.close();
         }
         ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send output to"), |ui| {

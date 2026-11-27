@@ -295,6 +295,9 @@ impl PhosphorApp {
                 autosave: stored(KEY_AUTOSAVE).is_some_and(|v| v == "1"),
                 autosave_at: 0.0,
                 saved_hash: 0,
+                saved_generation: 0,
+                #[cfg(not(target_arch = "wasm32"))]
+                saving: Vec::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 project_saver: Default::default(),
                 account: Default::default(),
@@ -413,6 +416,8 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             heartbeat: Default::default(),
             bench_session: bench.is_some(),
+            guarded: None,
+            quit_confirmed: false,
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false, tabs_shown: 0 }),
             gather_windows: false,
             remote_published: 0.0,
