@@ -97,14 +97,17 @@ extern "C" fn on_signal(signal: libc::c_int) {
             let n = frame_line(&mut line, now.saturating_sub(last));
             write(fd, &line[..n]);
         }
+        // Which thread it was goes in before the stack is read: worth knowing even when reading the stack fails, and
+        // reading it can itself crash (a second SIGSEGV ends the process at once: HANDLING is already set).
+        write(fd, format!("  {}: ", thread_words(on_main_thread())).as_bytes());
         // SAFETY: alarm only sets a timer; if reading the stack hangs, SIGALRM ends the process.
         unsafe { libc::alarm(STACK_SECS) };
-        let steps = stack_line(&std::backtrace::Backtrace::force_capture().to_string());
-        // Always the thread line: which thread it was is worth knowing even when the stack past the handler can't be
-        // read. 64-bit ARM Linux can't: its signal trampoline lives in the kernel's vDSO, which the unwinder doesn't
-        // read, so the walk ends at the handler (the Linux ARM CI run of 2026-11-27 wrote only the first line).
+        // 64-bit ARM Linux: the stack isn't read. Its signal trampoline lives in the kernel's vDSO, which the unwinder
+        // doesn't read, and on the Linux ARM CI runs of 2026-11-27 and 11-28 reading it ended the process before
+        // anything after the first line was written.
+        let steps = if cfg!(all(target_os = "linux", target_arch = "aarch64")) { String::new() } else { stack_line(&std::backtrace::Backtrace::force_capture().to_string()) };
         let steps = if steps.is_empty() { NO_STACK } else { steps.as_str() };
-        write(fd, format!("  {}: {steps}\n", thread_words(on_main_thread())).as_bytes());
+        write(fd, format!("{steps}\n").as_bytes());
         // SAFETY: as above.
         unsafe { libc::alarm(0) };
     }
