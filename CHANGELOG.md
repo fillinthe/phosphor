@@ -19,6 +19,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - A click in Media picks a clip; a double-click or a drag plays it (the brightness menu brings back one-click play).
 - Clips can store an opacity that is set on the layer when the clip plays.
 - Stop all also cancels clips waiting for the next beat or bar.
+- A layer’s loop length or cut no longer carries over to the next movie (and gets saved as that movie’s cut). Thanks
+  to rdysell for the fix.
+- New Designer comp stays open and new layers go into it; a comp’s name in the clip grid opens it. Thanks to rdysell.
 - Mixer: long layer names stay on one line. The step sequencer's speed list no longer closes its menu.
 - Clip grid: only the playing column lights up, the playing clip is clearly framed, and names read on any picture.
 - Easier to read: stronger text contrast, Undo / Redo say what they undid, Windows and Linux show Ctrl instead of ⌘.
