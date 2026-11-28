@@ -186,6 +186,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     let (grid, mut out) = Grid::new(ui, st);
     let mut add_layer = false;
+    let mut comp_act: Option<(u64, CompRowAct)> = None;
     {
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, controls_locked, .. } = st;
         let ctx = ui.ctx().clone();
@@ -197,10 +198,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             // Layers hid a comp's clips with nothing here to open it again.
             let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
             let many = comp.comps.len() > 1;
+            let open = comp.open_comp();
             for cid in comp_ids {
             if let Some(c) = cid.and_then(|id| comp.comp(id)).filter(|c| many || !c.is_plain()) {
-                ui.label(RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong().color(crate::theme::Hue::Output.color()))
-                    .on_hover_text("A comp: its layers' clip rows (rename it and its settings: the Layers panel)");
+                let rows = comp.comp_layers(cid).count();
+                if let Some(a) = comp_row(ui, c, open == Some(c.id), rows, many, *controls_locked) {
+                    comp_act = Some((c.id, a));
+                }
             }
             for idx in (0..n).rev() {
                 if comp.comp_of(&comp.layers[idx]) != cid {
@@ -242,7 +246,64 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     if add_layer {
         st.add_layer();
     }
+    match comp_act {
+        // Selected, as on its band in Layers / Stack: the open comp follows the selection.
+        Some((id, CompRowAct::Select)) => st.selected = Some(id),
+        Some((id, CompRowAct::AddLayer)) => add_layer_in(st, id),
+        Some((id, CompRowAct::Only)) => {
+            st.selected = Some(id);
+            super::stack::apply_comp_band_act(st, id, super::stack::CompBandAct::Only);
+        }
+        None => {}
+    }
     apply_row_out(ui, st, out, now);
+}
+
+/// What a comp's name row in the clip grid asked for.
+enum CompRowAct {
+    /// Select it: it opens (new layers go there) and the Inspector shows its size, outputs and effects.
+    Select,
+    /// A new layer in it.
+    AddLayer,
+    /// It on, every other comp off.
+    Only,
+}
+
+/// A comp's name over its clip rows: click it to open and select the comp (the open one in the accent colour);
+/// "+ Layer" adds a layer to it whichever comp is open (an empty comp has no rows to click); "Only" as on its band.
+/// Locked (player mode): only the name, nothing that adds to or switches off the show. Comps are renamed and set up
+/// in Layers / Stack and the Inspector.
+fn comp_row(ui: &mut egui::Ui, c: &phosphor_engine::Comp, is_open: bool, rows: usize, many: bool, locked: bool) -> Option<CompRowAct> {
+    let mut act = None;
+    crate::ui::toolbar(ui, |ui| {
+        let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong();
+        let name = name.color(if is_open { accent() } else { crate::theme::Hue::Output.color() });
+        let tip = if is_open { "The open comp: new layers go here · click to select it (size, outputs, effects in the Inspector)" } else { "Click to open this comp: new layers go here, and the Inspector shows it" };
+        if crate::ui::command(ui, name).on_hover_text(tip).clicked() {
+            act = Some(CompRowAct::Select);
+        }
+        if !locked {
+            if crate::ui::small_command(ui, label(icon::PLUS, "Layer")).on_hover_text("A new layer in this comp").clicked() {
+                act = Some(CompRowAct::AddLayer);
+            }
+            if many && crate::ui::small_command(ui, "Only").on_hover_text("Show this comp and switch the others off").clicked() {
+                act = Some(CompRowAct::Only);
+            }
+        }
+        let state = match (is_open, c.enabled) {
+            (true, true) => "open",
+            (true, false) => "open · off",
+            (false, false) => "off",
+            (false, true) => "",
+        };
+        if !state.is_empty() {
+            hint(ui, state);
+        }
+    });
+    if rows == 0 && !locked {
+        help(ui, "No layers in this comp yet: + Layer adds one here");
+    }
+    act
 }
 
 /// Width of the layer strip at the start of each clip row.

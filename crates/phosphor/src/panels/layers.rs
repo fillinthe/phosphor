@@ -38,8 +38,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         if crate::ui::command(ui, label(icon::FRAME_CORNERS, "Comp")).on_hover_text("A group of layers with a canvas of its own: its own size, mixed into the master or sent to outputs of its own").clicked() {
             let n = st.comp.comps.len().max(1) + 1;
-            let id = st.comp.add_comp(&format!("Comp {n}"));
-            st.selected = Some(id);
+            add_comp_selected(&mut st.comp, &mut st.selected, &format!("Comp {n}"));
         }
         ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text(format!("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; {} = Surprise)", crate::menu::shortcut_of(crate::menu::Action::Quick(crate::app::Quick::Surprise))));
         help(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");

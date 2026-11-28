@@ -244,8 +244,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
     }
     if own_size {
         let n = st.comp.comps.len().max(1) + 1;
-        let id = st.comp.add_comp(&format!("Comp {n}"));
-        st.selected = Some(id);
+        add_comp_selected(&mut st.comp, &mut st.selected, &format!("Comp {n}"));
     }
     #[cfg(not(target_arch = "wasm32"))]
     if from_folder {
