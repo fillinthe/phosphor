@@ -5,6 +5,7 @@
 mod choice;
 mod composition;
 mod comps;
+mod cuts;
 mod designer;
 mod control;
 mod control_prefs;

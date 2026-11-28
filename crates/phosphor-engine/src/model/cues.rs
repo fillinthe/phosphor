@@ -215,6 +215,8 @@ impl Composition {
     pub fn go_to_cue(&mut self, index: usize, now: f32) -> Option<CueFade> {
         let cue = self.cues.cues.get(index)?.clone();
         let secs = cue.fade.max(0.0);
+        // A layer switched to another movie takes that file's cut (`settle_cuts`), not the last one's.
+        let before = self.before_launch();
         let mut fade = CueFade {
             cue: index,
             cue_id: cue.id,
@@ -278,6 +280,7 @@ impl Composition {
             let mesh = s.mesh.as_ref().map_or(Vec::new(), |m| m.points.clone());
             fade.slices.push((s.id, from, s.corners, mesh));
         }
+        self.settle_cuts(&before);
         self.step_cue(&fade, now);
         Some(fade)
     }
