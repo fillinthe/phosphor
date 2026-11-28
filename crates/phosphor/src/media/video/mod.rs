@@ -210,11 +210,15 @@ pub struct VideoPlayer {
 struct TimingLog {
     name: String,
     started: std::time::Instant,
+    /// Nothing to say (a movie whose drive is away, tried again every few seconds).
+    quiet: bool,
 }
 
 impl Drop for TimingLog {
     fn drop(&mut self) {
-        log::info!("{}: opened in {:.0} ms", self.name, self.started.elapsed().as_secs_f64() * 1000.0);
+        if !self.quiet {
+            log::info!("{}: opened in {:.0} ms", self.name, self.started.elapsed().as_secs_f64() * 1000.0);
+        }
     }
 }
 
@@ -239,6 +243,9 @@ struct Shared {
     shown: AtomicU64,
     /// Playing backwards made the picture wait (a group took long to decode): the file is slow in reverse.
     reverse_slow: AtomicBool,
+    /// The file's drive went away and this Mac has no copy: the decoder waits for the drive (`Decoder::find_again`)
+    /// and the player holds its picture and its place.
+    waiting: AtomicBool,
     pool: Mutex<Vec<VideoFrame>>,
     codec: Mutex<String>,
 }
@@ -273,6 +280,7 @@ impl Shared {
             skipped: AtomicU64::new(0),
             shown: AtomicU64::new(0),
             reverse_slow: AtomicBool::new(false),
+            waiting: AtomicBool::new(false),
             pool: Mutex::new(Vec::new()),
             codec: Mutex::new(codec),
         }
@@ -303,26 +311,48 @@ impl Shared {
 /// Opens a media file for FFmpeg: a plain file, or an image sequence's pattern ("…/frame_%04d.png") with its first
 /// frame number and frame rate (FFmpeg alone only looks for frames 0–4). Every file open goes through here.
 pub fn open_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
-    open_input_with(path, true)
+    open_input_at(path, true).map(|(input, _)| input)
 }
 
 /// `open_input` for a quick look (how long a movie is) that doesn't ask for a copy of a clip from another drive.
 pub fn probe_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
-    open_input_with(path, false)
+    open_input_at(path, false).map(|(input, _)| input)
 }
 
-fn open_input_with(path: &str, cache: bool) -> Result<ff::format::context::Input, ff::Error> {
+/// `open_input`, and the file it opened: for a clip from another drive this Mac's copy when there is one (`cache`:
+/// a copy is asked for when there isn't), and the same file on its drive mounted again under a new name ("_FOOTAGE
+/// 1") when it isn't where its path says.
+pub(crate) fn open_input_at(path: &str, cache: bool) -> Result<(ff::format::context::Input, String), ff::Error> {
     if !crate::media::sequence::is_sequence(path) {
-        // A clip from another drive: this Mac's copy when there is one (and a copy asked for when there isn't).
-        let path = if cache { crate::media::clip_cache::resolve(path) } else { path.to_string() };
-        let mut input = ff::format::input(&path)?;
-        mark_hap_r(&mut input);
-        return Ok(input);
+        let at = if cache { crate::media::clip_cache::resolve(path) } else { path.to_string() };
+        return match open_file(&at) {
+            Ok(input) => Ok((input, at)),
+            Err(e) => match crate::media::drive::moved(&at) {
+                Some(moved) => open_file(&moved).map(|input| (input, moved)),
+                None => Err(e),
+            },
+        };
     }
     let mut options = ff::Dictionary::new();
     options.set("start_number", &crate::media::sequence::first_number(path).unwrap_or(0).to_string());
     options.set("framerate", crate::media::sequence::RATE);
-    ff::format::input_with_dictionary(&path, options)
+    ff::format::input_with_dictionary(&path, options).map(|input| (input, path.to_string()))
+}
+
+/// Opens one movie file just as it is (no copy looked for: the caller chose the file).
+pub(crate) fn open_file(path: &str) -> Result<ff::format::context::Input, ff::Error> {
+    let mut input = ff::format::input(&path)?;
+    mark_hap_r(&mut input);
+    Ok(input)
+}
+
+/// The end of the message for a movie that couldn't open because its drive isn't plugged in and this Mac has no
+/// copy (`drive_away`): `MediaManager` opens it again when the drive is back.
+const DRIVE_AWAY: &str = "its drive isn't plugged in (it opens when the drive is back)";
+
+/// Did a movie fail to open only because its drive is away (it opens when the drive comes back)?
+pub fn drive_away(error: &str) -> bool {
+    error.ends_with(DRIVE_AWAY)
 }
 
 /// Hap R's codec tag.
@@ -356,10 +386,15 @@ impl VideoPlayer {
         }
         let started = std::time::Instant::now();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
-        let _timing = TimingLog { name: name.clone(), started };
+        let mut timing = TimingLog { name: name.clone(), started, quiet: false };
         let dec = match Decoder::open(path) {
             Ok(dec) => dec,
             Err(e) if e.contains("no video stream") => return Self::open_audio_only(path, &name),
+            // (Not "can't open": nothing is wrong with the file, and it opens by itself once the drive is back.)
+            Err(_) if crate::media::drive::on_other_drive(path) && crate::media::drive::readable(path).is_none() => {
+                timing.quiet = true;
+                return Err(format!("{name}: {DRIVE_AWAY}"));
+            }
             Err(e) => return Err(format!("{name}: {e}")),
         };
         let mut p = Self::start(name, dec, false)?;
@@ -395,6 +430,7 @@ impl VideoPlayer {
             .name(format!("video: {name}"))
             .spawn(move || {
                 let mut dec = dec;
+                dec.shared = Some(sh.clone());
                 if let Err(e) = dec.run(&sh, &tx) {
                     let _ = tx.send(Msg::Error(format!("{tname}: {e}")));
                 }
@@ -553,8 +589,9 @@ impl VideoPlayer {
             .map_or(0.0, |last| (now - last).clamp(0.0, 0.25));
         self.last_now = Some(now);
         // (Not while the playhead is being dragged: held at the very end, a playing movie ran on into its next loop
-        // between two jumps and the first frame flashed up under the "end" label. Owner, 2026-11-16.)
-        let held = self.scrub.held.is_some_and(|at| at.elapsed() < SCRUB_HOLD);
+        // between two jumps and the first frame flashed up under the "end" label. Owner, 2026-11-16. Nor while its
+        // drive is away: it carries on from where it was when the drive is back.)
+        let held = self.scrub.held.is_some_and(|at| at.elapsed() < SCRUB_HOLD) || self.waiting_for_drive();
         if self.playing && !held {
             self.clock += dt * self.rate;
         }
@@ -641,7 +678,8 @@ impl VideoPlayer {
     /// Rendering offline: this movie hasn't got its picture for the current moment yet (still opening, or
     /// playing and out of decoded frames).
     pub fn behind(&self) -> bool {
-        if self.live || self.audio_only || self.error.is_some() {
+        // (A movie waiting for its drive isn't waited for: the render goes on without it.)
+        if self.live || self.audio_only || self.error.is_some() || self.waiting_for_drive() {
             return false;
         }
         self.opened_at.is_some() || (self.playing && self.end.is_none() && self.pending.is_none())
@@ -691,7 +729,7 @@ impl VideoPlayer {
         let stopped = self.end.is_some() && !self.looping;
         let f = sound::Follow {
             pos: self.shown + ahead,
-            playing: self.playing && self.mode.direction == PlayDirection::Forward && !stopped,
+            playing: self.playing && self.mode.direction == PlayDirection::Forward && !stopped && !self.waiting_for_drive(),
             rate: self.rate,
             looping: self.looping,
             range: self.mode.range,
@@ -729,6 +767,12 @@ impl VideoPlayer {
 
     pub fn live_stopped(&self) -> bool {
         self.live && (self.end.is_some() || self.error.is_some())
+    }
+
+    /// Its drive was unplugged and this Mac has no copy: it holds its picture and its place, and plays on by itself
+    /// when the drive is back (the layer says so meanwhile).
+    pub fn waiting_for_drive(&self) -> bool {
+        self.shared.waiting.load(Ordering::Relaxed)
     }
 
     /// Not looping and played to the end (holding its last frame).

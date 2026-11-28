@@ -3,6 +3,11 @@
 
 use super::*;
 
+use crate::media::drive;
+
+mod unplug;
+use unplug::CLOSED;
+
 /// Decoder state owned by the background thread.
 pub(super) struct Decoder {
     /// Hap played on the GPU: the current frame's blocks (None = FFmpeg decodes pixels).
@@ -68,6 +73,31 @@ pub(super) struct Decoder {
     /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
     /// sources, recorded streams) are slowed to their timestamps; cameras already are.
     live_start: Option<(f64, std::time::Instant)>,
+    /// The file being read: `path` itself, this Mac's copy of it, or it on its drive mounted under a new name.
+    opened: String,
+    /// `opened` is on another drive: it can go away mid-play (`read_packet`).
+    remote: bool,
+    /// The player's shared state (set when the thread starts): waiting for a drive says so there, and closing the
+    /// player ends the wait.
+    pub(super) shared: Option<Arc<Shared>>,
+    /// Since the last jump: whether a packet was given to the decoder, and the decoding time of the last one (None
+    /// when the file doesn't say). Where to carry on in another copy of the file (`carry_on_in`).
+    read_since_jump: bool,
+    last_dts: Option<i64>,
+    /// Where the last jump went: in the stream's time base (made again in another copy when nothing was read since),
+    /// and in seconds (`start_over_in`).
+    jump_ts: i64,
+    jump_t: f64,
+    /// Carrying on in another copy: its packets up to this decoding time were given to the decoder already and are
+    /// skipped; and whether the first one read was at or before it (otherwise some were missed: `reseek`).
+    skip_through: Option<i64>,
+    skip_landed: bool,
+    /// `clip_cache::copies_made` when last looked at: a clip's copy is looked for when a copy finishes, not per packet.
+    copies_seen: Option<u64>,
+    /// When the file was last found again after its drive went (one found that fails at once waits a moment).
+    found_at: Option<std::time::Instant>,
+    /// Times carrying on in another copy had to jump instead (tests: moving to a copy decodes nothing again).
+    reseeks: u32,
 }
 
 /// How many of the frames just shown to keep (only ones cheap to keep; `Tail`), `cap` = one reverse group: ping-pong
@@ -92,8 +122,11 @@ fn answers_to(names: &str, wanted: &str) -> bool {
 
 impl Decoder {
     pub(super) fn open(path: &str) -> Result<Self, String> {
-        let input = super::open_input(path).map_err(|e| format!("can't open ({e})"))?;
-        Self::from_input(path, input, false)
+        let (input, opened) = super::open_input_at(path, true).map_err(|e| format!("can't open ({e})"))?;
+        let mut dec = Self::from_input(path, input, false)?;
+        dec.remote = drive::on_other_drive(&opened) && !crate::media::sequence::is_sequence(path);
+        dec.opened = opened;
+        Ok(dec)
     }
 
     pub(super) fn open_live(format: &str, url: &str, options: &[(&str, &str)]) -> Result<Self, String> {
@@ -208,6 +241,18 @@ impl Decoder {
             generation: 0,
             seek_target: None,
             seek_past_end: false,
+            opened: path.to_string(),
+            remote: false,
+            shared: None,
+            read_since_jump: false,
+            last_dts: None,
+            jump_ts: start_ts,
+            jump_t: 0.0,
+            skip_through: None,
+            skip_landed: false,
+            copies_seen: None,
+            found_at: None,
+            reseeks: 0,
         })
     }
 
@@ -265,6 +310,7 @@ impl Decoder {
             let busy = CpuClock::start();
             let more = match self.next_frame() {
                 Ok(more) => more,
+                Err(e) if e == CLOSED => return Ok(()),
                 Err(e) if self.hw && self.origin.is_none() => {
                     self.fallback_to_software(&e, sh)?;
                     continue;
@@ -287,6 +333,13 @@ impl Decoder {
                     // of the next loop come after it (stamped earlier, the player took them all at once and showed
                     // the start of the movie).
                     self.out_clock = Some(asked);
+                    continue;
+                }
+                // Nothing at all came since the last jump, from a file on another drive: its drive going (still on its
+                // way out when the read ended) is told from a damaged file before the file is called undecodable.
+                if self.frames_in_loop == 0 && self.remote && drive::went(&self.opened, true) {
+                    let (input, at) = self.find_again()?;
+                    self.start_over_in(input, at)?;
                     continue;
                 }
                 if self.frames_in_loop == 0 && self.hw && self.origin.is_none() {
@@ -638,7 +691,6 @@ impl Decoder {
         // then took a frame from early in the movie for its last one. A decoder that never says "end" is let go
         // after a few dozen tries.)
         let mut drain_tries = 0;
-        let mut read_errors = 0;
         loop {
             match self.dec.receive_frame(&mut self.frame) {
                 Ok(()) => {
@@ -665,9 +717,8 @@ impl Decoder {
                 continue;
             }
             loop {
-                let mut pkt = ff::Packet::empty();
-                match pkt.read(&mut self.input) {
-                    Ok(()) if pkt.stream() == self.stream => {
+                match self.read_packet()? {
+                    Some(pkt) => {
                         if let Err(e) = self.dec.send_packet(&pkt) {
                             if self.hw && self.origin.is_none() {
                                 return Err(format!("decode failed ({e})"));
@@ -677,16 +728,7 @@ impl Decoder {
                         }
                         break;
                     }
-                    Ok(()) => {}
-                    Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
-                    // (A read that fails for another reason than the end is tried again a few times: a hiccup on
-                    // a busy disk is not the end of the movie.)
-                    Err(e) if !matches!(e, ff::Error::Eof) && read_errors < 8 => {
-                        read_errors += 1;
-                        log::debug!("{}: read error ({e})", self.path);
-                        std::thread::sleep(std::time::Duration::from_millis(10));
-                    }
-                    Err(_) => {
+                    None => {
                         let _ = self.dec.send_eof();
                         self.eof_sent = true;
                         break;
@@ -700,33 +742,26 @@ impl Decoder {
     /// seeks, loops and reverse work unchanged). A Hap flavour the GPU path can't take falls back to FFmpeg.
     fn next_hap_frame(&mut self) -> Result<bool, String> {
         loop {
-            let mut pkt = ff::Packet::empty();
-            match pkt.read(&mut self.input) {
-                Ok(()) if pkt.stream() == self.stream => {
-                    let Some(buf) = self.hap.as_mut() else { return Ok(false) };
-                    let Some(data) = pkt.data() else { continue };
-                    match super::hap::decode(data, buf, &mut self.hap_alpha) {
-                        Ok((format, _)) => self.hap_format = format,
-                        Err(e) => {
-                            log::info!("{}: {e}; decoding on the CPU instead", self.path);
-                            self.hap = None;
-                            self.rewind()?;
-                            return self.next_frame();
-                        }
-                    }
-                    // SAFETY: plain fields of the frame we own; `timing` reads them like a decoded frame's.
-                    unsafe {
-                        let f = self.frame.as_mut_ptr();
-                        (*f).pts = pkt.pts().unwrap_or(NOPTS);
-                        (*f).best_effort_timestamp = (*f).pts;
-                        (*f).duration = pkt.duration();
-                    }
-                    return Ok(true);
+            let Some(pkt) = self.read_packet()? else { return Ok(false) };
+            let Some(buf) = self.hap.as_mut() else { return Ok(false) };
+            let Some(data) = pkt.data() else { continue };
+            match super::hap::decode(data, buf, &mut self.hap_alpha) {
+                Ok((format, _)) => self.hap_format = format,
+                Err(e) => {
+                    log::info!("{}: {e}; decoding on the CPU instead", self.path);
+                    self.hap = None;
+                    self.rewind()?;
+                    return self.next_frame();
                 }
-                Ok(()) => {}
-                Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
-                Err(_) => return Ok(false),
             }
+            // SAFETY: plain fields of the frame we own; `timing` reads them like a decoded frame's.
+            unsafe {
+                let f = self.frame.as_mut_ptr();
+                (*f).pts = pkt.pts().unwrap_or(NOPTS);
+                (*f).best_effort_timestamp = (*f).pts;
+                (*f).duration = pkt.duration();
+            }
+            return Ok(true);
         }
     }
 
@@ -804,13 +839,14 @@ impl Decoder {
         // SAFETY: seeking the demuxer we own, on this thread.
         let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
         if !ok {
-            self.input = super::open_input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+            self.reopen()?;
         }
         self.dec.flush();
         self.eof_sent = false;
         self.last_rel = -1.0;
         self.frames_in_loop = 0;
         self.seek_target = Some(t);
+        self.jumped(ts, t);
         Ok(())
     }
 
@@ -824,14 +860,42 @@ impl Decoder {
             ) >= 0
         };
         if !ok {
-            self.input =
-                super::open_input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+            self.reopen()?;
         }
         self.dec.flush();
         self.eof_sent = false;
         self.last_rel = -1.0;
         self.loop_len = self.loop_len.max(1e-3);
         self.frames_in_loop = 0;
+        self.jumped(self.start_ts, 0.0);
+        Ok(())
+    }
+
+    /// A jump was made (to `ts` in the stream's time base, `t` seconds): nothing has been read since.
+    fn jumped(&mut self, ts: i64, t: f64) {
+        (self.jump_ts, self.jump_t) = (ts, t);
+        self.read_since_jump = false;
+        self.last_dts = None;
+        self.skip_through = None;
+    }
+
+    /// Opens the movie again from its start (a jump the file couldn't make): wherever it can be read now, waiting
+    /// for its drive if it went.
+    fn reopen(&mut self) -> Result<(), String> {
+        match super::open_input_at(&self.path, true) {
+            Ok((input, at)) => {
+                self.input = input;
+                self.remote = self.remote && drive::on_other_drive(&at);
+                self.opened = at;
+            }
+            Err(_) if self.remote => {
+                let (input, at) = self.find_again()?;
+                self.input = input;
+                self.remote = drive::on_other_drive(&at);
+                self.opened = at;
+            }
+            Err(e) => return Err(format!("can't reopen ({e})")),
+        }
         Ok(())
     }
 

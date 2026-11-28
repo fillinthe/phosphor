@@ -516,6 +516,14 @@ struct Track {
     origin: f64,
     dec: ff::decoder::Audio,
     frame: ff::frame::Audio,
+    /// The file being read (`path`, this Mac's copy of it, or it on its drive mounted under a new name), and whether
+    /// it's on another drive (it can go away while it plays).
+    opened: String,
+    remote: bool,
+    /// Its drive went: silent until the file is found again (`find_again`).
+    lost: bool,
+    /// `clip_cache::copies_made` when last looked at (`move_to_copy`).
+    copies_seen: Option<u64>,
 }
 
 /// How many loudness peaks a second `peaks` gives.
@@ -554,7 +562,7 @@ pub fn peaks(path: &str) -> Option<Vec<f32>> {
 
 impl Track {
     fn open(path: &str) -> Option<Self> {
-        let input = super::open_input(path).ok()?;
+        let (input, opened) = super::open_input_at(path, true).ok()?;
         let st = input.streams().best(ff::media::Type::Audio)?;
         let stream = st.index();
         let tb = f64::from(st.time_base());
@@ -565,7 +573,64 @@ impl Track {
             .unwrap_or(0.0);
         let ctx = ff::codec::Context::from_parameters(st.parameters()).ok()?;
         let dec = ctx.decoder().audio().ok()?;
-        Some(Self { path: path.to_string(), input, stream, tb: if tb > 0.0 { tb } else { 1.0 / 48_000.0 }, origin, dec, frame: ff::frame::Audio::empty() })
+        let remote = crate::media::drive::on_other_drive(&opened);
+        Some(Self {
+            path: path.to_string(),
+            input,
+            stream,
+            tb: if tb > 0.0 { tb } else { 1.0 / 48_000.0 },
+            origin,
+            dec,
+            frame: ff::frame::Audio::empty(),
+            opened,
+            remote,
+            lost: false,
+            copies_seen: None,
+        })
+    }
+
+    /// Its drive went: opens the file again where it can be read now (`drive::readable`). False while it can't be.
+    fn find_again(&mut self) -> bool {
+        let Some(found) = crate::media::drive::readable(&self.path) else { return false };
+        let back = self.switch_to(&found.path);
+        self.lost = !back;
+        if back {
+            log::info!("{}: sound playing on from {}", self.path.rsplit('/').next().unwrap_or(&self.path), if found.copy { "this Mac's copy" } else { "its drive" });
+        }
+        back
+    }
+
+    /// Reads on from `at` (another copy of this file) if it has the same sound. Where to read from is up to the caller.
+    fn switch_to(&mut self, at: &str) -> bool {
+        let Ok(input) = super::open_file(at) else { return false };
+        let codec = |i: &ff::format::context::Input| i.stream(self.stream).map(|s| s.parameters().id());
+        if codec(&input).is_none() || codec(&input) != codec(&self.input) {
+            return false;
+        }
+        self.input = input;
+        self.remote = crate::media::drive::on_other_drive(at);
+        self.opened = at.to_string();
+        self.dec.flush();
+        true
+    }
+
+    /// A copy of this clip finished on this Mac while its sound played from the drive: carry on from the copy at `t`
+    /// (seconds), so the drive can go without the sound stopping. True when it moved.
+    fn move_to_copy(&mut self, t: f64) -> bool {
+        if !self.remote {
+            return false;
+        }
+        let made = crate::media::clip_cache::copies_made();
+        if self.copies_seen == Some(made) {
+            return false;
+        }
+        self.copies_seen = Some(made);
+        let Some(copy) = crate::media::clip_cache::copy_of(&self.path) else { return false };
+        let moved = self.switch_to(&copy) && self.seek(t).is_ok();
+        if moved {
+            log::info!("{}: sound playing from this Mac's copy now", self.path.rsplit('/').next().unwrap_or(&self.path));
+        }
+        moved
     }
 
     fn run(mut self, clip: &Clip) {
@@ -597,6 +662,21 @@ impl Track {
                 std::thread::sleep(Duration::from_millis(15));
                 continue;
             }
+            // Its drive went: silent until the file is found again, then back where the picture is.
+            if self.lost {
+                clip.clear();
+                next_t = None;
+                if !self.find_again() {
+                    std::thread::sleep(Duration::from_millis(250));
+                    continue;
+                }
+            }
+            // (A copy finished on this Mac: the sound reads on from it, the samples already heard left out.)
+            if let Some(t) = next_t
+                && self.move_to_copy(t)
+            {
+                trim_to = Some(t);
+            }
             let queued = clip.queued() as f64 / out_rate_f;
             let heard = next_t.map(|t| t - queued * f.rate);
             let drifted = heard.is_some_and(|h| (h - f.pos).abs() > DRIFT);
@@ -605,6 +685,10 @@ impl Track {
                 clip.clear();
                 let target = f.pos;
                 if self.seek(target).is_err() {
+                    // (Its drive went: looked for again above. Any other file that can't jump has no more sound.)
+                    if self.lost {
+                        continue;
+                    }
                     return;
                 }
                 next_t = Some(target);
@@ -628,6 +712,7 @@ impl Track {
             }
             match self.next_frame() {
                 Some(()) => at_end = false,
+                None if self.lost => continue,
                 None => {
                     // End of the track: loop with the picture, or wait for it.
                     if f.looping && !at_end {
@@ -692,6 +777,12 @@ impl Track {
                     Ok(()) => {}
                     Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
                     Err(e) => {
+                        // Its drive went (not the end of the track): the sound waits for the file (`run`).
+                        if self.remote && crate::media::drive::went(&self.opened, !matches!(e, ff::Error::Eof)) {
+                            log::info!("{}: its drive went away: the sound waits for it", self.path.rsplit('/').next().unwrap_or(&self.path));
+                            self.lost = true;
+                            return None;
+                        }
                         log::debug!("{}: packet read ended: {e}", self.path);
                         let _ = self.dec.send_eof();
                         // Drain what's left; then the next receive says Eof.
@@ -710,7 +801,17 @@ impl Track {
         // SAFETY: seeking the demuxer this thread owns.
         let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
         if !ok {
-            self.input = super::open_input(&self.path).map_err(|e| e.to_string())?;
+            match super::open_input_at(&self.path, true) {
+                Ok((input, at)) => {
+                    self.input = input;
+                    self.remote = crate::media::drive::on_other_drive(&at);
+                    self.opened = at;
+                }
+                Err(e) => {
+                    self.lost = self.remote;
+                    return Err(e.to_string());
+                }
+            }
         }
         self.dec.flush();
         Ok(())

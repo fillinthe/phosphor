@@ -339,9 +339,9 @@ pub fn save_picture(project: &str, w: u32, h: u32, rgba: Vec<u8>) {
 }
 
 /// Where a file on an external drive is now, when it isn't where its path says: macOS mounts a drive under another
-/// name when the old name is still taken ("_FOOTAGE" comes back as "_FOOTAGE 1"), and the path saved in Recent
-/// then points at nothing though the drive is plugged in. Looks through the drives for one whose name starts the
-/// same and holds the rest of the path. None when the path is fine or nothing fits.
+/// name when the old name is still taken ("_FOOTAGE" comes back as "_FOOTAGE 1"), and the path saved in Recent (or
+/// a clip's, `media::drive`) then points at nothing though the drive is plugged in. Looks through the drives for one
+/// whose name starts the same and holds the rest of the path. None when the path is fine or nothing fits.
 pub fn relocated(path: &str) -> Option<String> {
     relocated_in(std::path::Path::new("/Volumes"), path)
 }
@@ -353,7 +353,7 @@ fn remounted(drive: &str, name: &str) -> bool {
     name.strip_prefix(drive).and_then(|rest| rest.strip_prefix(' ')).is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
 }
 
-fn relocated_in(volumes: &std::path::Path, path: &str) -> Option<String> {
+pub(crate) fn relocated_in(volumes: &std::path::Path, path: &str) -> Option<String> {
     let p = std::path::Path::new(path);
     if p.exists() {
         return None;

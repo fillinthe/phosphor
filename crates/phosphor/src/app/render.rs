@@ -712,6 +712,8 @@ impl PhosphorApp {
             #[cfg(target_arch = "wasm32")]
             None => {}
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let movies_line = (self.bench.is_some() && !snapshots.is_empty()).then(|| media.bench_line());
         drop(held);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((project, w, h, rgba)) = picture_to_save {
@@ -721,6 +723,10 @@ impl PhosphorApp {
             for snapshot in snapshots {
                 println!("{}", snapshot.to_json());
                 run.samples.push(snapshot);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(line) = movies_line {
+                println!("{line}");
             }
         }
     }

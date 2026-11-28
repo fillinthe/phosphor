@@ -27,6 +27,33 @@ mod media {
         pub fn resolve(path: &str) -> String {
             path.to_string()
         }
+        pub fn copy_of(_: &str) -> Option<String> {
+            None
+        }
+        pub fn copies_made() -> u64 {
+            0
+        }
+        pub fn want(_: &str) {}
+    }
+
+    /// Files probed stay where they are: no drive comes or goes.
+    pub mod drive {
+        pub struct Found {
+            pub path: String,
+            pub copy: bool,
+        }
+        pub fn on_other_drive(_: &str) -> bool {
+            false
+        }
+        pub fn went(_: &str, _: bool) -> bool {
+            false
+        }
+        pub fn readable(_: &str) -> Option<Found> {
+            None
+        }
+        pub fn moved(_: &str) -> Option<String> {
+            None
+        }
     }
 
     /// Laser files aren't probed here.

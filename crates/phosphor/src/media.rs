@@ -23,6 +23,8 @@ pub mod clip_cache;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cuts;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod drive;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod durations;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
@@ -220,6 +222,13 @@ pub struct MediaManager {
     /// Live pages (`live::PAGE`): layers whose stream is being looked up, and when each may try again.
     #[cfg(not(target_arch = "wasm32"))]
     pages: HashMap<u64, PageState>,
+    /// Layers whose movie couldn't open because its drive isn't plugged in (`video::drive_away`): when to open it
+    /// again (it starts by itself when the drive is back).
+    #[cfg(not(target_arch = "wasm32"))]
+    drive_retry: HashMap<u64, f64>,
+    /// Layers whose movie is waiting for its drive (`VideoPlayer::waiting_for_drive`): the layer says so meanwhile.
+    #[cfg(not(target_arch = "wasm32"))]
+    drive_waits: std::collections::HashSet<u64>,
     /// Frames that have arrived, by kind: the status line's activity lights watch these change.
     pub flow: Flow,
 }
@@ -254,6 +263,16 @@ struct PageState {
 /// A live page that stops (stream addresses expire after some hours, networks drop) is looked up again this often.
 #[cfg(not(target_arch = "wasm32"))]
 const PAGE_RETRY_SECS: f64 = 10.0;
+
+/// A movie whose drive isn't plugged in is tried again this often (on the opening thread: never this one).
+#[cfg(not(target_arch = "wasm32"))]
+const DRIVE_RETRY_SECS: f64 = 2.0;
+
+/// What a layer says while its movie waits for its drive.
+#[cfg(not(target_arch = "wasm32"))]
+fn waiting_note(source: &SourceSpec) -> String {
+    format!("{}: its drive was unplugged (it plays on when the drive is back)", source.label())
+}
 
 /// Per (layer, outgoing): recent zero-copy frames (kept alive while the GPU may read them) and the GPU
 /// wrappers made for each decoder buffer (reused when the decoder cycles back to it: no per-frame setup).
@@ -348,10 +367,13 @@ impl MediaManager {
 
     pub fn sync(&mut self, comp: &Composition, engine: &mut Engine) {
         self.take_dropped();
+        // (Clips on the layers changed: the copies of clips from other drives go to the new ones first.)
+        let mut changed = self.loaded.len() != comp.layers.len();
         for layer in &comp.layers {
             if self.loaded.get(&layer.id) == Some(&layer.source) {
                 continue;
             }
+            changed = true;
             #[cfg(not(target_arch = "wasm32"))]
             if matches!(layer.source, SourceSpec::Text(_)) && self.text_busy.contains(&layer.id) {
                 continue;
@@ -377,6 +399,11 @@ impl MediaManager {
                 self.outgoing.remove(&layer.id);
             }
             self.errors.remove(&layer.id);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                self.drive_retry.remove(&layer.id);
+                self.drive_waits.remove(&layer.id);
+            }
             match &layer.source {
                 SourceSpec::Image { path: Some(path), .. } => {
                     #[cfg(not(target_arch = "wasm32"))]
@@ -498,6 +525,19 @@ impl MediaManager {
         self.syphon_waiting.retain(|id, _| live.contains(id));
         #[cfg(not(target_arch = "wasm32"))]
         self.outgoing.retain(|id, _| comp.layers.iter().any(|l| l.id == *id && l.transition.is_some()));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.drive_retry.retain(|id, _| live.contains(id));
+            self.drive_waits.retain(|id| live.contains(id));
+            if changed {
+                crate::media::clip_cache::set_current(comp.layers.iter().filter_map(|l| match &l.source {
+                    SourceSpec::Movie { path: Some(p), .. } => Some(p.clone()),
+                    _ => None,
+                }));
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = changed;
     }
 
     /// Pulls the newest due frame from every movie into the engine. `now` is the frame clock in seconds.
@@ -548,6 +588,33 @@ impl MediaManager {
         self.preload.open_with(layer, source.clone(), move || live::open_page(&name, &url));
     }
 
+    /// Movies that couldn't open because their drive isn't plugged in are opened again every `DRIVE_RETRY_SECS`
+    /// (on the opening thread), so they start by themselves when the drive is back.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retry_drives(&mut self, comp: &Composition, now: f64) {
+        let due: Vec<u64> = self.drive_retry.iter().filter(|(_, at)| now >= **at).map(|(id, _)| *id).collect();
+        for id in due {
+            self.drive_retry.remove(&id);
+            let Some(layer) = comp.layers.iter().find(|l| l.id == id) else { continue };
+            if let SourceSpec::Movie { path: Some(path), .. } = &layer.source
+                && !self.players.contains_key(&id)
+            {
+                self.preload.open_for(id, layer.source.clone(), path.clone());
+            }
+        }
+    }
+
+    /// Bench (one line a second): movie frames shown so far, where each movie layer is (seconds), and the layers
+    /// waiting for their drive.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn bench_line(&self) -> String {
+        let mut places: Vec<(u64, f64)> = self.positions().into_iter().map(|(id, t)| (id, (t * 100.0).round() / 100.0)).collect();
+        places.sort_by_key(|p| p.0);
+        let mut waiting: Vec<u64> = self.drive_waits.iter().copied().collect();
+        waiting.sort_unstable();
+        format!("MOVIES frames={} pos={places:?} waiting={waiting:?}", self.flow.movies)
+    }
+
     /// Live pages that stopped or never opened try again every `PAGE_RETRY_SECS` while their layer is on.
     #[cfg(not(target_arch = "wasm32"))]
     fn keep_pages_live(&mut self, comp: &Composition, now: f64) {
@@ -590,12 +657,21 @@ impl MediaManager {
                 continue;
             }
             match result {
-                Ok(player) => self.add_player(id, player),
+                Ok(player) => {
+                    // (Opened at last: a drive that came back.)
+                    self.errors.remove(&id);
+                    self.add_player(id, player);
+                }
                 Err(e) => {
+                    if video::drive_away(&e) {
+                        self.drive_retry.insert(id, now + DRIVE_RETRY_SECS);
+                    }
                     self.errors.insert(id, e);
                 }
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.retry_drives(comp, now);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((_, rx)) = &self.decoded {
             for (id, spec, result) in rx.try_iter() {
@@ -649,6 +725,17 @@ impl MediaManager {
             }
             if let Some(err) = player.error() {
                 self.errors.entry(layer.id).or_insert_with(|| err.to_string());
+            }
+            // Its drive was unplugged (no copy here): the layer says so until it plays on.
+            let waiting = player.waiting_for_drive();
+            if waiting != self.drive_waits.contains(&layer.id) {
+                if waiting {
+                    self.drive_waits.insert(layer.id);
+                    self.errors.insert(layer.id, waiting_note(&layer.source));
+                } else {
+                    self.drive_waits.remove(&layer.id);
+                    self.errors.remove(&layer.id);
+                }
             }
         }
         #[cfg(target_os = "macos")]

@@ -30,7 +30,8 @@ impl PhosphorApp {
         // The cache: its size and clean-up as chosen, then the clean-up of what went unused (on its own thread).
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if let Some(gb) = stored(KEY_CACHE_GB).and_then(|v| v.parse().ok()) {
+            // (PHOSPHOR_CACHE_GB: a bench's own cap, e.g. 1 so a clip over 256 MB is never copied.)
+            if let Some(gb) = stored(KEY_CACHE_GB).or_else(|| std::env::var("PHOSPHOR_CACHE_GB").ok()).and_then(|v| v.parse().ok()) {
                 crate::media::clip_cache::set_cap_gb(gb);
             }
             if let Some(days) = stored(KEY_CACHE_DAYS).and_then(|v| v.parse().ok()) {

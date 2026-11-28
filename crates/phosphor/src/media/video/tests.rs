@@ -405,3 +405,84 @@ fn dropping_a_player_never_waits_for_its_thread() {
     println!("DROP now {dropped:?}, joining as before {waited:?}");
     assert!(dropped.iter().all(|d| *d < std::time::Duration::from_millis(20)), "{dropped:?}");
 }
+
+/// A test folder standing in for an external drive (`drive::pretend`), with a copy of `src` in it.
+fn on_a_drive(test: &str, src: &str) -> (std::path::PathBuf, String) {
+    let drive = std::env::temp_dir().join(format!("phosphor-unplug-{test}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&drive);
+    std::fs::create_dir_all(&drive).unwrap();
+    crate::media::drive::pretend::add(&drive);
+    let clip = drive.join(std::path::Path::new(src).file_name().unwrap());
+    std::fs::copy(src, &clip).unwrap();
+    (drive, clip.to_string_lossy().into_owned())
+}
+
+/// Unplugs the "drive" under a playing file: it leaves its folder and its reads come to nothing at once (the way
+/// a pulled drive's do), whatever the decoder had open. (Unix: Windows won't remove a file that's open.)
+#[cfg(unix)]
+fn unplug(clip: &str) {
+    let open = std::fs::OpenOptions::new().write(true).open(clip).unwrap();
+    std::fs::remove_file(clip).unwrap();
+    open.set_len(0).unwrap();
+}
+
+/// Polls `p` on a clock running from `*t` until `done` (or 8 s of real time); the media times of frames shown.
+fn poll_until(p: &mut VideoPlayer, t: &mut f64, done: impl Fn(&VideoPlayer) -> bool) -> Vec<f64> {
+    let mut shown = Vec::new();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+    while !done(p) && std::time::Instant::now() < deadline {
+        if let Some(f) = p.poll_frame(*t) {
+            shown.push(p.position());
+            p.recycle(f);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        *t += 0.005;
+    }
+    shown
+}
+
+/// A movie whose drive is unplugged (no copy on this computer) holds its picture and its place and says it's
+/// waiting, never "undecodable"; when the drive is back it plays on from the same place by itself.
+#[cfg(unix)]
+#[test]
+fn a_movie_waits_for_its_drive_and_plays_on_from_where_it_was() {
+    let Some(src) = clip() else { return };
+    let (drive, clip) = on_a_drive("wait", src);
+    let mut p = VideoPlayer::open(&clip).unwrap();
+    let mut t = 0.0;
+    let before = poll_until(&mut p, &mut t, |p| p.position() >= 1.0);
+    assert!(before.len() > 10, "plays from the drive first: {before:?}");
+    unplug(&clip);
+    poll_until(&mut p, &mut t, VideoPlayer::waiting_for_drive);
+    assert!(p.waiting_for_drive(), "says it's waiting for its drive");
+    assert_eq!(p.error(), None, "a drive that went is not a broken file");
+    // Meanwhile (two seconds): the place holds, no frames come and the clock doesn't run on.
+    let held = p.position();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let meanwhile = poll_until(&mut p, &mut t, |_| std::time::Instant::now() >= until);
+    assert!(p.position() == held && p.waiting_for_drive(), "held at {held}, now {}", p.position());
+    assert!(meanwhile.iter().all(|m| (*m - held).abs() < 0.2), "{meanwhile:?}");
+    // Plugged back in.
+    std::fs::copy(src, &clip).unwrap();
+    let after = poll_until(&mut p, &mut t, |p| !p.waiting_for_drive() && p.position() > held + 0.5);
+    assert!(!p.waiting_for_drive() && p.error().is_none(), "plays on when the drive is back ({:?})", p.error());
+    let first = after.first().copied().unwrap_or(f64::NAN);
+    assert!(first >= held - 0.05 && first < held + 0.4, "carries on from where it was ({held}), not the start: {after:?}");
+    drop(p);
+    let _ = std::fs::remove_dir_all(&drive);
+}
+
+/// A movie on a drive that isn't plugged in can't open, and says it's only the drive (it opens when it's back); a
+/// damaged file on a plugged-in drive is a damaged file.
+#[test]
+fn a_missing_drive_is_told_from_a_damaged_file() {
+    let Some(src) = clip() else { return };
+    let (drive, clip) = on_a_drive("missing", src);
+    std::fs::remove_file(&clip).unwrap();
+    let away = VideoPlayer::open(&clip).err().expect("nothing to open");
+    assert!(super::drive_away(&away), "{away}");
+    std::fs::write(&clip, b"not a movie at all").unwrap();
+    let damaged = VideoPlayer::open(&clip).err().expect("not a movie");
+    assert!(!super::drive_away(&damaged), "{damaged}");
+    let _ = std::fs::remove_dir_all(&drive);
+}
