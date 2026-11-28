@@ -365,7 +365,12 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
         }
         let hover = "Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…";
         output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Syphon", hover, phosphor_engine::AppControl::Syphon);
-        let (servers, clients) = (st.core.lock().syphon.server_count(), st.core.lock().syphon.clients());
+        // One lock for both: two `lock()`s in one statement keep the first held while the second waits for it (the
+        // Output panel froze the app for good in the 0.5.27 release build's panel check).
+        let (servers, clients) = {
+            let core = st.core.lock();
+            (core.syphon.server_count(), core.syphon.clients())
+        };
         let waiting = crate::ui::plural(servers as usize, "{0} source published, no app receiving yet", "{0} sources published, no app receiving yet");
         output_status(ui, match (servers, clients) {
             (0, _) => OutputStatus::Off,

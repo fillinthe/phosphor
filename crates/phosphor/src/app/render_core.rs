@@ -109,4 +109,28 @@ mod tests {
         .join();
         assert_eq!(core.lock().frames, 0);
     }
+
+    /// Two `core.lock()`s in one statement hold the first guard while the second waits for it: the main thread stops
+    /// for good (the Output panel's Syphon row did, in the 0.5.27 release build). One statement locks the core once.
+    #[test]
+    fn no_statement_locks_the_core_twice() {
+        fn scan(dir: &std::path::Path, bad: &mut Vec<String>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    scan(&p, bad);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let text = std::fs::read_to_string(&p).unwrap();
+                    for part in text.split([';', '{', '}']) {
+                        if part.matches("core.lock()").count() > 1 {
+                            bad.push(format!("{}: {}", p.display(), part.trim()));
+                        }
+                    }
+                }
+            }
+        }
+        let mut bad = Vec::new();
+        scan(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut bad);
+        assert!(bad.is_empty(), "the core locked twice in one statement:\n{}", bad.join("\n"));
+    }
 }
