@@ -972,6 +972,11 @@ fn osc_by_name_and_wildcard() {
 fn midi_timecode_goes_out() {
     use midir::os::unix::VirtualInput;
     use std::sync::{Arc, Mutex};
+    // It counts quarter frames against the clock: GitHub's shared virtual Macs run it too slowly (28 in 0.6 s on
+    // 2026-11-28, where a real Mac gets 60), so it runs on real Macs only.
+    if std::env::var_os("GITHUB_ACTIONS").is_some() {
+        return;
+    }
     let Ok(input) = midir::MidiInput::new("phosphor-test-mtc") else { return };
     let mtc: Arc<Mutex<(crate::clock::Mtc, Vec<u8>)>> = Arc::default();
     let m = mtc.clone();

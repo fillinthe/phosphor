@@ -113,12 +113,24 @@ fn software_candidates(codec: Codec) -> &'static [Encoder] {
     }
 }
 
-/// The Mac's encoders: always there, never tested.
+/// The Mac's encoders. H.264 and HEVC are always there; VideoToolbox's ProRes isn't on every Mac (GitHub's virtual
+/// Macs refuse it: "Error while opening encoder", and the recording ended with nothing in it), so it is test-encoded
+/// once, the first time ProRes is asked for, and FFmpeg's own ProRes encoder is used where it doesn't work.
 fn mac_encoder(codec: Codec) -> Encoder {
     match codec {
         Codec::H264 => VT_H264,
         Codec::Hevc => VT_HEVC,
-        Codec::ProRes => VT_PRORES,
+        Codec::ProRes => {
+            static VT_PRORES_WORKS: OnceLock<bool> = OnceLock::new();
+            let works_here = *VT_PRORES_WORKS.get_or_init(|| {
+                let ok = crate::stream::ffmpeg_path().is_none_or(|ffmpeg| works(&ffmpeg, &VT_PRORES, &[]));
+                if !ok {
+                    log::info!("ProRes encoder: VideoToolbox can't make ProRes here, using {} ({})", PRORES_KS.name, PRORES_KS.by);
+                }
+                ok
+            });
+            if works_here { VT_PRORES } else { PRORES_KS }
+        }
     }
 }
 
