@@ -209,7 +209,9 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
             crate::ui::toggle(ui, &mut mm.sync, "Sync to tempo");
             if mm.sync {
                 let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
-                crate::ui::dropdown(ui, "sync_rate", 100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
+                // (`pick_list`, never a bare drop-down: this editor lives in a slider's Modulate menu, and a drop-down's
+                // list opened inside a menu replaced the menu, so the whole thing vanished. Bug 2026-11-28, "sync to beat".)
+                crate::ui::pick_list(ui, "sync_rate", format!("every {current}"), 100.0, |ui| {
                     for (v, name) in SYNC_CHOICES {
                         crate::ui::pick_value(ui, &mut mm.rate, *v, *name);
                     }
@@ -271,4 +273,15 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     let v = phosphor_engine::control::source_value(mm, &inputs);
     ui.add(crate::ui::meter(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
     scrub
+}
+
+#[cfg(test)]
+mod tests {
+    /// The signal editor is drawn inside menus (a slider's Modulate menu): its pick-one lists must be `pick_list`s.
+    /// A bare `ui::dropdown` there opened a pop-up that replaced the menu, and the menu closed under the user's cursor.
+    #[test]
+    fn the_signal_editor_has_no_bare_dropdown() {
+        let code: String = include_str!("modulation.rs").split("#[cfg(test)]").next().unwrap().lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+        assert!(!code.contains("ui::dropdown("), "use ui::pick_list in modulation.rs: it is drawn inside menus");
+    }
 }

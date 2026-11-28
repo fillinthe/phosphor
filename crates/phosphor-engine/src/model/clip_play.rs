@@ -169,6 +169,8 @@ impl LayerState {
                     // Speed, loop and effects come back too when the flash ends (its clip's effects come with its id).
                     own: Some(self.clip_settings_with(true)),
                     muted: false,
+                    // (A flashing clip that sets the opacity gives the old one back when it's let go.)
+                    opacity: clip.opacity.map(|_| self.opacity),
                     thumb: String::new(),
                     effects: Vec::new(),
                     dials: Vec::new(),
@@ -191,6 +193,9 @@ impl LayerState {
                     self.start_transition(now, secs);
                     if let Some(own) = &back.own {
                         self.apply_clip_settings(own);
+                    }
+                    if let Some(o) = back.opacity {
+                        self.opacity = o;
                     }
                     self.source = back.source;
                     self.generator_values = back.generator_values;
@@ -292,6 +297,43 @@ mod tests {
         l.press_clip(2, 4.0, 0.0);
         l.release_clip(2, 5.0, 0.0);
         assert_eq!(l.source, SourceSpec::None, "piano stops on release");
+    }
+
+    #[test]
+    fn a_clip_can_set_the_layers_opacity() {
+        let mut l = layer_with(3);
+        l.opacity = 0.8;
+        // Off by default: playing a clip leaves the opacity alone.
+        l.trigger_clip(0, 0.0, 0.0);
+        assert_eq!(l.opacity, 0.8);
+        l.clips[2].opacity = Some(0.25);
+        l.trigger_clip(2, 1.0, 0.0);
+        assert_eq!(l.opacity, 0.25);
+        // Back to a clip that stores none: it stays where it is.
+        l.trigger_clip(0, 2.0, 0.0);
+        assert_eq!(l.opacity, 0.25);
+        // Out of range is held to 0..1.
+        l.clips[4].opacity = Some(3.0);
+        l.trigger_clip(4, 3.0, 0.0);
+        assert_eq!(l.opacity, 1.0);
+        // A flash clip gives the old opacity back with the old clip.
+        l.opacity = 0.6;
+        l.clips[2].trigger = TriggerMode::Flash;
+        l.press_clip(2, 4.0, 0.0);
+        assert_eq!(l.opacity, 0.25);
+        l.release_clip(2, 5.0, 0.0);
+        assert_eq!(l.opacity, 0.6);
+    }
+
+    #[test]
+    fn older_saves_have_no_clip_opacity_and_a_none_is_not_saved() {
+        let old = r#"{"id":5,"name":"x","source":{"Generator":"plasma"},"generator_values":[],"mods":[],"trigger":"Normal","own":null,"muted":false,"thumb":""}"#;
+        let c: Clip = serde_json::from_str(old).expect("an older clip opens");
+        assert_eq!(c.opacity, None);
+        assert!(!serde_json::to_string(&c).unwrap().contains("opacity"), "off = not written");
+        let with = Clip { opacity: Some(0.5), ..c };
+        let back: Clip = serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
+        assert_eq!(back.opacity, Some(0.5));
     }
 
     #[test]
