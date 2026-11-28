@@ -182,6 +182,15 @@ fn put(out: &mut [u8], parts: &[&[u8]]) -> usize {
 /// The stack as one line, innermost first: function names only (no file paths: reports carry no folder names), the
 /// handler's own steps left out. `text` is a `std::backtrace::Backtrace` printed.
 fn stack_line(text: &str) -> String {
+    stack_line_from(text, cfg!(target_os = "macos"))
+}
+
+/// `stack_line`. `named_wrong` = the system's step that called the handler may come under another name: on macOS
+/// the lookup only sees the names a system library exports, and `_sigtramp` isn't one, so it's given the nearest one
+/// before it (`__os_lock_spin_lock` on macOS 27; checked 2026-11-28 with a main thread stopped in a plain wait). Every
+/// 0.5.26 freeze report read "__os_lock_spin_lock < …" and looked like a spin lock that was never there: the step
+/// right after the handler is that one, whatever it's called, and is left out.
+fn stack_line_from(text: &str, named_wrong: bool) -> String {
     let names: Vec<&str> = text
         .lines()
         .filter_map(|l| {
@@ -190,8 +199,14 @@ fn stack_line(text: &str) -> String {
         })
         .collect();
     // Everything up to the handler (and the system's step that called it) is this module reading the stack.
-    let ours = |n: &str| n.contains("crash_signals::on_signal") || n.contains("_sigtramp") || n.contains("__restore_rt");
-    let start = names.iter().rposition(|n| ours(n)).map_or(0, |i| i + 1);
+    let handler = |n: &str| n.contains("crash_signals::on_signal");
+    let trampoline = |n: &str| n.contains("_sigtramp") || n.contains("__restore_rt");
+    let start = match names.iter().rposition(|n| handler(n)) {
+        Some(i) if named_wrong || names.get(i + 1).is_some_and(|n| trampoline(n)) => i + 2,
+        Some(i) => i + 1,
+        None => names.iter().rposition(|n| trampoline(n)).map_or(0, |i| i + 1),
+    }
+    .min(names.len());
     names[start..].iter().take(STEPS).map(|n| without_hash(n)).collect::<Vec<_>>().join(" < ")
 }
 
@@ -226,6 +241,30 @@ mod tests {
         assert_eq!(stack_line(text), "avcodec_send_packet < phosphor::media::video::decode < std::thread::start");
         assert!(!stack_line(text).contains("someone"));
         assert_eq!(stack_line("disabled backtrace"), "");
+    }
+
+    #[test]
+    fn the_signal_trampoline_is_left_out_under_any_name() {
+        // What a macOS 27 build really prints for SIGTERM landing in a wait for a window's picture: `_sigtramp`
+        // comes out as the nearest name its library exports.
+        let text = "   0: std::backtrace::Backtrace::create
+   1: phosphor::crash_signals::on_signal::h0123456789abcdef
+   2: __os_lock_spin_lock
+   3: <unknown>
+   4: wgpu_hal::metal::surface::<impl wgpu_hal::Surface for wgpu_hal::metal::Surface>::acquire_texture
+";
+        assert_eq!(stack_line_from(text, true), "<unknown> < wgpu_hal::metal::surface::<impl wgpu_hal::Surface for wgpu_hal::metal::Surface>::acquire_texture");
+        // Where the trampoline isn't known to be misnamed, only its own names are left out.
+        assert_eq!(stack_line_from(text, false), "__os_lock_spin_lock < <unknown> < wgpu_hal::metal::surface::<impl wgpu_hal::Surface for wgpu_hal::metal::Surface>::acquire_texture");
+        let linux = "   0: std::backtrace::Backtrace::create
+   1: phosphor::crash_signals::on_signal
+   2: __restore_rt
+   3: phosphor::app::draw
+";
+        assert_eq!(stack_line_from(linux, false), "phosphor::app::draw");
+        // A handler with nothing after it gives an empty line, not a panic.
+        assert_eq!(stack_line_from("   0: phosphor::crash_signals::on_signal
+", true), "");
     }
 
     /// The other half of the test below: when asked to, crashes for real with the handlers in.
