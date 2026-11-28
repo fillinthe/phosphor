@@ -4,6 +4,30 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.27 (2026-11-28)
+
+- **Mac: Phosphor no longer freezes waiting for the screen.** When macOS stopped handing a window its next picture,
+  Phosphor waited for ever and had to be force-quit. It now gives up after a second and keeps the show running.
+- **Unplugging a drive no longer stops your clips.** Clips playing from an external drive are copied to this computer
+  first and switch to the copy as soon as it's made, so they keep playing if the drive goes. A clip with no copy yet
+  holds its picture and place, says its drive was unplugged, and plays on by itself when the drive is back.
+- **Recording, streaming and rendering work again** (0.5.26 couldn't make a file), and now also on Windows and Linux,
+  using the graphics card's encoder where it has one. ProRes records on every Mac.
+- **Show safety:** quitting, closing the outputs while they show, opening another project or starting a new one ask
+  first when something would be lost. Delete / Backspace only delete a layer with the pointer over the layers. Deleting
+  a Control Surface page asks first, and there is now a Delete page button in Edit.
+- A click in Media picks a clip; a double-click or a drag plays it (the brightness menu brings back one-click play).
+- Clips can store an opacity that is set on the layer when the clip plays.
+- Stop all also cancels clips waiting for the next beat or bar.
+- Mixer: long layer names stay on one line. The step sequencer's speed list no longer closes its menu.
+- Clip grid: only the playing column lights up, the playing clip is clearly framed, and names read on any picture.
+- Easier to read: stronger text contrast, Undo / Redo say what they undid, Windows and Linux show Ctrl instead of ⌘.
+- Smoother: hidden layers cost far less, big shows use much less memory, saves and shader builds no longer pause the
+  interface, and outputs can be drawn on a thread of their own (Output › Render thread, off by default).
+- Linux and Windows: outputs fill their screens, two of the same capture card both work, audio interfaces with any
+  sample format work, Windows crashes are logged, and the Raspberry Pi updater downloads its own build.
+- Crash reports say more about what went wrong.
+
 ## 0.5.26 (2026-11-26)
 
 - Mac: a full-screen output stays put. macOS sometimes moved it back under the menu bar, so the picture (and every
