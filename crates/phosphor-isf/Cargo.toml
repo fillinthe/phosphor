@@ -8,3 +8,13 @@ description = "ISF (Interactive Shader Format) importer: GLSL -> WGSL for Phosph
 [dependencies]
 naga = { version = "30", features = ["glsl-in", "wgsl-out", "wgsl-in"] }
 serde_json = "1"
+
+# examples/isf_render.rs: draws shaders through the engine, on the Mac (Metal). No backend elsewhere on purpose:
+# CI tests this crate with phosphor-engine, and a backend here would switch on the engine's GPU tests there too.
+[dev-dependencies]
+phosphor-engine = { path = "../phosphor-engine" }
+pollster = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
