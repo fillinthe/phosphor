@@ -1128,10 +1128,18 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
             remove = Some(i);
         }
     });
+    // Asked first ("Are you sure?"): a page goes with all its widgets.
     if let Some(i) = remove {
+        let name = sf.pages.get(i).cloned().unwrap_or_default();
+        crate::ui::ask_confirm(ui.ctx(), (DELETE_PAGE_ASK, i), &format!("Delete page \"{name}\"?"), "The page and all its widgets are deleted.", "Delete page");
+    }
+    if let Some(i) = (0..sf.pages.len()).find(|&i| crate::ui::confirmed(ui.ctx(), (DELETE_PAGE_ASK, i))) {
         remove_page(ui.ctx(), sf, i);
     }
 }
+
+/// The confirm pop-up's id for deleting page N.
+const DELETE_PAGE_ASK: &str = "surface_delete_page";
 
 /// The trash button beside "+ Page": deletes the page showing (`current` of `pages`; the last page can't go). It is
 /// there in plain sight because the right-click menu was the only way, and nothing on the tabs said so.
