@@ -133,10 +133,34 @@ fn tail_of(text: &str, max: usize) -> &str {
 }
 
 /// A log line for a crash report sent by itself: only what kind of thing happened, no file paths or names (they're
-/// cut at the first path, quote or arrow).
-fn without_names(line: &str) -> &str {
+/// cut at the first path, quote or arrow). A GPU error line keeps what failed: wgpu writes `label = ''` before the
+/// cause, and cutting there left only "In Device::create_texture, label =" (report 2026-11-27 on an M2 Max); its
+/// quoted labels are blanked to '…' instead and the rest stays.
+fn without_names(line: &str) -> String {
+    if line.contains("GPU error") {
+        let mut out = String::with_capacity(line.len());
+        let mut quote: Option<char> = None;
+        for c in line.chars() {
+            match quote {
+                Some(q) if c == q => {
+                    out.push('…');
+                    out.push(c);
+                    quote = None;
+                }
+                Some(_) => {}
+                None if c == '\'' || c == '"' => {
+                    out.push(c);
+                    quote = Some(c);
+                }
+                None => out.push(c),
+            }
+        }
+        // (An unclosed quote: what followed it is left out, as before.)
+        let cut = out.find(['/', '\u{2190}', '\u{2192}']).unwrap_or(out.len());
+        return out[..cut].trim_end().to_string();
+    }
     let cut = line.find(['/', '"', '\'', '«', '“', '\u{2190}', '\u{2192}']).unwrap_or(line.len());
-    line[..cut].trim_end()
+    line[..cut].trim_end().to_string()
 }
 
 /// Text for a crash report sent by itself with the user's name taken out of paths: the home folder becomes "~", and
@@ -664,5 +688,10 @@ mod tests {
         assert_eq!(super::without_user("/var/u/sam/a and /var/u/samuel", Some("/var/u/sam")), "~/a and /var/u/samuel");
         // Crash reports keep the kind of event, not names or paths.
         assert_eq!(super::without_names("12:00:01 clip played: layer \"Rings\" \u{2190} /Volumes/WD/a.mov"), "12:00:01 clip played: layer");
+        // A GPU error keeps its cause; its label (could be a clip's name) doesn't go out.
+        assert_eq!(
+            super::without_names("14:58:26 skipped a GPU error: Validation Error Caused by: In Device::create_texture, label = 'Rings.mov' Dimension X value 16384 exceeds the limit of 8192"),
+            "14:58:26 skipped a GPU error: Validation Error Caused by: In Device::create_texture, label = '…' Dimension X value 16384 exceeds the limit of 8192"
+        );
     }
 }
