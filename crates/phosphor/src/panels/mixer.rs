@@ -33,7 +33,7 @@ fn strip_with_menu(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui:
         ui.set_width(78.0);
         ui.vertical_centered(|ui| {
             clicked = thumbnail(ui, thumb, egui::vec2(72.0, 72.0 / aspect), lit).clicked();
-            ui.label(name);
+            strip_name(ui, name);
             body(ui);
         });
     });
@@ -41,8 +41,12 @@ fn strip_with_menu(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui:
     clicked || bg.is_some_and(|b| b.clicked())
 }
 
-fn short(name: &str) -> String {
-    if name.chars().count() > 13 { format!("{}…", name.chars().take(12).collect::<String>()) } else { name.to_string() }
+/// A strip's name: always ONE line, cut with an ellipsis to the strip's width, the whole name on hover. (It used to be cut
+/// at 12 letters, which let wide letters or a wider Windows font wrap to a second row: the lane grew and pushed the faders
+/// and the fx count down.)
+fn strip_name(ui: &mut egui::Ui, name: RichText) {
+    let full = name.text().to_string();
+    ui.add(egui::Label::new(name).truncate()).on_hover_text(full);
 }
 
 /// "3 fx" under a strip's fader (lit when running, gray when bypassed; nothing with no effects).
@@ -81,7 +85,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 let layer = &mut layers[i];
                 let muted = any_solo && !layer.solo;
                 // (Full size, not small: the names were hard to see; owner, 2026-11-14.)
-                let name = RichText::new(short(&layer.name)).strong();
+                let name = RichText::new(&layer.name).strong();
                 let lit = layer.enabled && !muted;
                 let mut picked = None;
                 let id = layer.id;
@@ -119,7 +123,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     && layers.get(i + 1).and_then(|l| l.parent) != Some(gid)
                     && let Some(g) = groups.iter_mut().find(|g| g.id == gid)
                 {
-                    let name = RichText::new(format!("{} {}", icon::STACK, short(&g.name))).small().strong().color(accent());
+                    let name = RichText::new(format!("{} {}", icon::STACK, g.name)).small().strong().color(accent());
                     if strip(ui, g.id, *selected == Some(g.id), tex(g.id), aspect, g.enabled, name, |ui| {
                         fader(ui, &mut g.opacity, &mut g.opacity_mod, ControlTarget::LayerOpacity(g.id), height);
                         on_toggle(ui, &mut g.enabled, ControlTarget::LayerEnabled(g.id));
@@ -132,7 +136,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
             }
             if comps.len() > 1 {
                 for c in comps.iter_mut() {
-                    let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, short(&c.name))).small().strong().color(accent());
+                    let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).small().strong().color(accent());
                     if strip(ui, c.id, *selected == Some(c.id), tex(c.id), aspect, c.enabled, name, |ui| {
                         fader(ui, &mut c.opacity, &mut c.opacity_mod, ControlTarget::LayerOpacity(c.id), height);
                         on_toggle(ui, &mut c.enabled, ControlTarget::LayerEnabled(c.id));
@@ -208,5 +212,38 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(b) = side {
         st.fade_to_side(b, now);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Height and width of a strip name laid out in a strip's 78-point column.
+    fn laid_out(name: &str) -> egui::Vec2 {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx);
+        let mut size = egui::Vec2::ZERO;
+        ctx.run_ui(Default::default(), |ui| {
+            ui.vertical_centered(|ui| {
+                ui.set_width(78.0);
+                let before = ui.cursor().min;
+                strip_name(ui, RichText::new(name).strong());
+                size = egui::vec2(ui.min_rect().width(), ui.cursor().min.y - before.y);
+            });
+        })
+        .textures_delta
+        .clear();
+        size
+    }
+
+    #[test]
+    fn a_long_layer_name_stays_on_one_line() {
+        let one = laid_out("Kick").y;
+        for name in ["A very long layer name that goes on and on", "WWWWWWWWWWWWWWWWWWWW", "Mapa de proyección del escenario principal", "Überlängenvorschlag für Fußgängerzonenbeleuchtung"] {
+            let s = laid_out(name);
+            assert!((s.y - one).abs() < 0.5, "{name:?} took {} high, one line is {one}", s.y);
+            assert!(s.x <= 78.5, "{name:?} is {} wide", s.x);
+        }
     }
 }
