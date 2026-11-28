@@ -401,4 +401,29 @@ mod tests {
         // A broken aspect fills the window instead of drawing nothing.
         assert_eq!(letterbox(640.0, 360.0, 0.0), [0.0, 0.0, 640.0, 360.0]);
     }
+
+    /// A window's surface set up the way egui and this thread both set theirs up (`configure_retrying`) gives up
+    /// waiting for a picture after a second; set up by wgpu alone it waits for as long as macOS keeps its pictures
+    /// (0.5.26 freezes: the main thread inside `acquire_texture` for minutes). No screen needed: a bare Metal layer.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_window_waits_at_most_a_second_for_its_picture() {
+        use objc2::{msg_send, rc::Retained, runtime::{AnyClass, AnyObject}};
+        let Some(class) = AnyClass::get(c"CAMetalLayer") else { return };
+        // SAFETY: a new CAMetalLayer, kept alive (`layer`) for as long as the surface made from it.
+        let layer: Retained<AnyObject> = unsafe { msg_send![class, new] };
+        let instance = wgpu::Instance::default();
+        // SAFETY: the layer outlives the surface (both dropped at the end, the surface first).
+        let Ok(surface) = (unsafe { instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(Retained::as_ptr(&layer) as *mut std::ffi::c_void)) }) else { return };
+        let Ok(adapter) = pollster_wait(instance.request_adapter(&wgpu::RequestAdapterOptions { compatible_surface: Some(&surface), ..Default::default() })) else { return };
+        let Ok((device, _queue)) = pollster_wait(adapter.request_device(&wgpu::DeviceDescriptor::default())) else { return };
+        let Some(config) = surface.get_default_config(&adapter, 64, 64) else { return };
+        // SAFETY: a getter on the layer above.
+        let gives_up = || -> bool { unsafe { msg_send![&*layer, allowsNextDrawableTimeout] } };
+        surface.configure(&device, &config);
+        assert!(!gives_up(), "wgpu alone turns Metal's one-second limit off (if this changes, bound_picture_wait may go)");
+        assert!(eframe::egui_wgpu::winit::configure_retrying(&device, &surface, &config).is_none());
+        assert!(gives_up(), "configured the way Phosphor does it, the wait for a picture ends after a second");
+        drop(surface);
+    }
 }
