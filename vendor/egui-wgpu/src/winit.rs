@@ -58,6 +58,17 @@ impl SharedSurface {
         self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// The lock if nobody holds it. egui runs on the main thread and never waits for the app's thread here: the app
+    /// holds the lock while it waits for a picture from the screen, and the main thread waiting behind that would be
+    /// the interface frozen for as long as the screen takes.
+    fn try_hold(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
+        match self.lock.try_lock() {
+            Ok(guard) => Some(guard),
+            Err(std::sync::TryLockError::Poisoned(p)) => Some(p.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => None,
+        }
+    }
+
     fn set_size(&self, width: u32, height: u32) {
         self.size.store((u64::from(width) << 32) | u64::from(height), std::sync::atomic::Ordering::Release);
     }
@@ -88,6 +99,15 @@ impl SharedSurface {
     /// The app configured the surface (call while holding the lock from [`SharedSurface::take`]).
     pub fn app_configured(&self) {
         self.configured_by.store(BY_APP, std::sync::atomic::Ordering::Release);
+        // A picture presented "with the transaction" (egui's live-resize mode, `on_window_resize_state_change`) is
+        // only shown once that thread's Core Animation transaction is committed, which the app's thread (no run loop)
+        // never does: its pictures would pile up unseen until the screen has none left to give. The app's frames go
+        // out on their own. (egui doesn't turn the mode on again while the app presents the window.)
+        #[cfg(all(target_os = "macos", feature = "macos-window-resize-jitter-fix"))]
+        // SAFETY: `as_hal::<Metal>()` is None unless this surface is a Metal one.
+        if let Some(hal) = unsafe { self.surface.as_hal::<wgpu::hal::api::Metal>() } {
+            hal.render_layer().lock().setPresentsWithTransaction(false);
+        }
     }
 }
 
@@ -126,8 +146,73 @@ pub fn configure_retrying(device: &wgpu::Device, surface: &wgpu::Surface<'static
         tries += 1;
         let raced = matches!(&error, Some(wgpu::Error::Validation { description, .. }) if description.contains("come idle"));
         if !raced || tries >= 5 {
+            if error.is_none() {
+                bound_picture_wait(surface);
+            }
             return error;
         }
+    }
+}
+
+/// PHOSPHOR PATCH (macOS): asking a window for a picture gives up after a second instead of waiting for ever.
+/// wgpu-hal turns Metal's limit off each time it configures a surface (`setAllowsNextDrawableTimeout(false)` in
+/// `metal/surface.rs`), so `get_current_texture` waited for as long as macOS kept the window's pictures: reports
+/// 2026-11-27 on 0.5.26 (M1 Pro / M2 / M3 / Intel, macOS 15.7 to 27.2) ended from outside with the main thread inside
+/// `Surface::acquire_texture`, one session with a 257 s frame whose own drawing took 2.4 ms. With the limit back the
+/// wait ends after a second with `Timeout`, and the window is left out a while (`NoPicture`). Called after every
+/// configure that worked (egui's and the app's both go through [`configure_retrying`]).
+pub fn bound_picture_wait(surface: &wgpu::Surface<'static>) {
+    #[cfg(all(target_os = "macos", feature = "macos-window-resize-jitter-fix"))]
+    // SAFETY: `as_hal::<Metal>()` is None unless this surface is a Metal one.
+    if let Some(hal) = unsafe { surface.as_hal::<wgpu::hal::api::Metal>() } {
+        hal.render_layer().lock().setAllowsNextDrawableTimeout(true);
+    }
+    #[cfg(not(all(target_os = "macos", feature = "macos-window-resize-jitter-fix")))]
+    let _ = surface;
+}
+
+/// PHOSPHOR PATCH: a wait for a window's picture this long means the screen didn't give one (Metal gives up after
+/// 1 s, see [`bound_picture_wait`]).
+const NO_PICTURE: std::time::Duration = std::time::Duration::from_millis(900);
+
+/// PHOSPHOR PATCH: a wait for a window's picture this long is written in the log (at most once every 10 s), so a
+/// report shows when the screen, not Phosphor, is what's slow.
+const SLOW_PICTURE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// PHOSPHOR PATCH: one window's pictures left out after the screen didn't give one: its interface still runs and its
+/// textures still upload, only no picture is asked for until `until`; 2 s after the first miss, doubling to 30 s while
+/// the misses go on, and cleared by the first picture that comes. (0.5.25 had this in eframe for direct paints only,
+/// timed from the whole paint: a wait that never ended never got there.)
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct NoPicture {
+    until: Option<web_time::Instant>,
+    wait: std::time::Duration,
+}
+
+impl NoPicture {
+    const FIRST: std::time::Duration = std::time::Duration::from_secs(2);
+    const LONGEST: std::time::Duration = std::time::Duration::from_secs(30);
+
+    /// How long until a picture may be asked for again; None = ask now.
+    fn left(&self, now: web_time::Instant) -> Option<std::time::Duration> {
+        self.until.and_then(|u| u.checked_duration_since(now)).filter(|d| !d.is_zero())
+    }
+
+    /// A picture was asked for at `now` and the wait took `waited`; `came` = the screen gave one. True when this
+    /// starts a stretch of misses (the moment to log it).
+    fn asked(&mut self, now: web_time::Instant, waited: std::time::Duration, came: bool) -> bool {
+        if came && waited < NO_PICTURE {
+            *self = Self::default();
+            return false;
+        }
+        if waited < NO_PICTURE {
+            // Refused quickly (covered, out of date…): not the screen keeping its pictures; wgpu's answer handles it.
+            return false;
+        }
+        let first = self.until.is_none();
+        self.wait = if first { Self::FIRST } else { (self.wait * 2).min(Self::LONGEST) };
+        self.until = Some(now + self.wait);
+        first
     }
 }
 
@@ -147,6 +232,10 @@ struct SurfaceState {
     // PHOSPHOR PATCH: whose surface this is, and the present mode last asked for it (`PRESENT_MODE_FOR`).
     viewport_id: ViewportId,
     present_mode_asked: Option<wgpu::PresentMode>,
+    // PHOSPHOR PATCH: pictures left out after the screen didn't give one (`NoPicture`), and when a slow wait was
+    // last logged.
+    no_picture: NoPicture,
+    slow_logged: Option<web_time::Instant>,
 }
 
 /// PHOSPHOR PATCH: the present mode `PRESENT_MODE_FOR` asks for this window (None = the configured one).
@@ -234,11 +323,13 @@ impl Painter {
     ) {
         let shared = Arc::clone(&surface_state.surface);
         shared.set_size(surface_state.width, surface_state.height);
-        if shared.app_presents() {
+        // Not while the app presents it, nor while the app's thread holds it (it may be waiting for a picture):
+        // configured at the next paint instead.
+        let held = if shared.app_presents() { None } else { shared.try_hold() };
+        let Some(_held) = held else {
             surface_state.needs_reconfigure = true;
             return;
-        }
-        let _held = shared.hold();
+        };
         Self::configure_held(surface_state, render_state, config);
     }
 
@@ -475,6 +566,8 @@ impl Painter {
                 configure_tried: None,
                 viewport_id,
                 present_mode_asked: None,
+                no_picture: NoPicture::default(),
+                slow_logged: None,
             },
         );
         let Some(width) = NonZeroU32::new(width) else {
@@ -613,10 +706,12 @@ impl Painter {
                     self.render_state.as_ref(),
                     shared.surface.as_hal::<wgpu::hal::api::Metal>(),
                 ) {
+                    // PHOSPHOR PATCH: never for a window the app presents from its own thread (see
+                    // `SharedSurface::app_configured`).
                     hal_surface
                         .render_layer()
                         .lock()
-                        .setPresentsWithTransaction(resizing);
+                        .setPresentsWithTransaction(resizing && !shared.app_presents());
 
                     Self::configure_surface(state, render_state, &self.config.surface);
                 }
@@ -765,21 +860,29 @@ impl Painter {
             )
         };
 
-        // PHOSPHOR PATCH: a window the app presents itself (`SharedSurface`): the uploads above still go (every window
-        // shares the textures), and nothing is drawn to its surface here.
+        // PHOSPHOR PATCH: a window the app presents itself (`SharedSurface`).
         let shared = Arc::clone(&surface_state.surface);
         if shared.app_presents() {
-            render_state.queue.submit(core::iter::chain(user_cmd_bufs, [encoder.finish()]));
+            Self::without_picture(render_state, encoder, user_cmd_bufs, textures_delta);
             render_queue_guard.commands_submitted = true;
-            let mut renderer = render_state.renderer.write();
-            #[expect(clippy::iter_over_hash_type)] // Order doesn't matter here
-            for id in textures_delta.free.drain() {
-                renderer.free_texture(&id);
-            }
+            return vsync_sec;
+        }
+        // PHOSPHOR PATCH: the screen didn't give this window a picture lately (`NoPicture`): none asked for until then.
+        if let Some(left) = surface_state.no_picture.left(web_time::Instant::now()) {
+            Self::without_picture(render_state, encoder, user_cmd_bufs, textures_delta);
+            render_queue_guard.commands_submitted = true;
+            self.context.request_repaint_after_for(left, viewport_id);
             return vsync_sec;
         }
         // Held until the frame is presented; the app configured the surface last: configured again here first.
-        let _held = shared.hold();
+        // PHOSPHOR PATCH: never waited for: the app's thread holds it while it waits for a picture of its own (up to a
+        // second), and the main thread waiting behind it would freeze the interface. Tried again in a moment.
+        let Some(_held) = shared.try_hold() else {
+            Self::without_picture(render_state, encoder, user_cmd_bufs, textures_delta);
+            render_queue_guard.commands_submitted = true;
+            self.context.request_repaint_after_for(std::time::Duration::from_millis(5), viewport_id);
+            return vsync_sec;
+        };
         if shared.configured_by.load(std::sync::atomic::Ordering::Acquire) == BY_APP {
             surface_state.needs_reconfigure = true;
         }
@@ -812,7 +915,21 @@ impl Painter {
             // This is what vsync-waiting happens on my Mac.
             let start = web_time::Instant::now();
             let output_frame = shared.surface.get_current_texture();
-            vsync_sec += start.elapsed().as_secs_f32();
+            let waited = start.elapsed();
+            vsync_sec += waited.as_secs_f32();
+            // PHOSPHOR PATCH: a wait the screen made long is logged, and one that got no picture leaves this window's
+            // pictures out a while (`NoPicture`).
+            let came = matches!(output_frame, wgpu::CurrentSurfaceTexture::Success(_) | wgpu::CurrentSurfaceTexture::Suboptimal(_));
+            let now = web_time::Instant::now();
+            if surface_state.no_picture.asked(now, waited, came) {
+                log::warn!(
+                    "a window's picture didn't come ({} ms): its drawing is left out while that lasts",
+                    waited.as_millis()
+                );
+            } else if waited >= SLOW_PICTURE && surface_state.slow_logged.is_none_or(|t| now.duration_since(t).as_secs() >= 10) {
+                surface_state.slow_logged = Some(now);
+                log::warn!("a window waited {} ms for its picture from the screen", waited.as_millis());
+            }
             output_frame
         };
 
@@ -990,6 +1107,22 @@ impl Painter {
         vsync_sec
     }
 
+    /// PHOSPHOR PATCH: a paint with no picture for its window this time: the uploads still go (every window shares
+    /// the textures), and nothing is drawn to its surface.
+    fn without_picture(
+        render_state: &RenderState,
+        encoder: wgpu::CommandEncoder,
+        user_cmd_bufs: Vec<wgpu::CommandBuffer>,
+        textures_delta: &mut epaint::textures::TexturesDelta,
+    ) {
+        render_state.queue.submit(core::iter::chain(user_cmd_bufs, [encoder.finish()]));
+        let mut renderer = render_state.renderer.write();
+        #[expect(clippy::iter_over_hash_type)] // Order doesn't matter here
+        for id in textures_delta.free.drain() {
+            renderer.free_texture(&id);
+        }
+    }
+
     /// Call this at the beginning of each frame to receive the requested screenshots.
     pub fn handle_screenshots(&self, events: &mut Vec<Event>) {
         for (viewport_id, user_data, screenshot) in self.capture_rx.try_iter() {
@@ -1015,5 +1148,40 @@ impl Painter {
     #[expect(clippy::needless_pass_by_ref_mut, clippy::unused_self)]
     pub fn destroy(&mut self) {
         // TODO(emilk): something here?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_picture_that_never_came_leaves_the_window_out_longer_each_time_until_one_comes() {
+        let t0 = web_time::Instant::now();
+        let mut n = NoPicture::default();
+        assert_eq!(n.left(t0), None, "a new window asks for its picture");
+        // Pictures that come, and quick refusals (covered, out of date), change nothing.
+        assert!(!n.asked(t0, Duration::from_millis(16), true));
+        assert!(!n.asked(t0, Duration::from_millis(1), false));
+        assert_eq!(n, NoPicture::default());
+        // The screen kept its pictures for the whole second: left out 2 s, logged once.
+        assert!(n.asked(t0, Duration::from_millis(1000), false));
+        assert_eq!(n.left(t0), Some(Duration::from_secs(2)));
+        assert_eq!(n.left(t0 + Duration::from_secs(2)), None, "asked again when the time is up");
+        // Still nothing: 4 s, 8 s, 16 s, then never more than 30 s; not logged again.
+        let mut t = t0 + Duration::from_secs(2);
+        for want in [4, 8, 16, 30, 30] {
+            assert!(!n.asked(t, Duration::from_millis(1000), false));
+            assert_eq!(n.left(t), Some(Duration::from_secs(want)));
+            t += Duration::from_secs(want);
+        }
+        // A picture that came only at the limit is no better than none.
+        assert!(!n.asked(t, Duration::from_millis(950), true));
+        assert!(n.left(t).is_some());
+        // The first one that comes in time puts the window back at once.
+        assert!(!n.asked(t, Duration::from_millis(16), true));
+        assert_eq!(n, NoPicture::default());
+        assert_eq!(n.left(t), None);
     }
 }

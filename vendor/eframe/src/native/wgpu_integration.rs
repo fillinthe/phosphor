@@ -670,7 +670,7 @@ impl WgpuWinitRunning<'_> {
             egui_winit::update_viewport_info(info, &integration.egui_ctx, window, false);
 
             // PHOSPHOR PATCH: no picture asked for a window macOS won't give one (see `skip_direct_paint`).
-            let is_visible = viewport.info.visible().unwrap_or(true) && !winit_integration::skip_direct_paint(viewport_id, viewport.info.occluded);
+            let is_visible = viewport.info.visible().unwrap_or(true) && !winit_integration::skip_direct_paint(viewport.info.occluded);
 
             {
                 profiling::scope!("set_window");
@@ -809,7 +809,6 @@ impl WgpuWinitRunning<'_> {
                     true
                 }
             });
-            let paint_started = Instant::now();
             let vsync_secs = painter.paint_and_update_textures(
                 viewport_id,
                 pixels_per_point,
@@ -819,8 +818,6 @@ impl WgpuWinitRunning<'_> {
                 screenshot_commands,
                 window,
             );
-            // PHOSPHOR PATCH (see `skip_direct_paint`).
-            winit_integration::painted(viewport_id, paint_started.elapsed());
 
             for action in viewport.actions_requested.drain(..) {
                 match action {
@@ -964,6 +961,13 @@ impl WgpuWinitRunning<'_> {
                     )
                 {
                     if shared.resized_viewport != viewport_id {
+                        // PHOSPHOR PATCH: the window resized before this one is done resizing. Only one is tracked,
+                        // so it was left presenting "with the transaction" (and at the resize latency) for good
+                        // whenever another window resized before its own next event came: opening an output, or
+                        // screens coming and going, resize several windows at once.
+                        if let Some(before) = shared.resized_viewport {
+                            shared.painter.on_window_resize_state_change(before, false);
+                        }
                         shared.resized_viewport = viewport_id;
                         shared.painter.on_window_resize_state_change(id, true);
                     }
