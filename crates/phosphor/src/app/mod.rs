@@ -228,6 +228,17 @@ pub enum Trigger {
     Source { layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String },
 }
 
+impl Trigger {
+    /// Does this launch put something on layer `id` (`MASTER_ID`: any layer)? A stop cancels the ones that do.
+    fn lands_on(&self, id: u64) -> bool {
+        let all = id == phosphor_engine::MASTER_ID;
+        match self {
+            Trigger::Clip { layer, .. } | Trigger::Source { layer, .. } => all || *layer == id,
+            Trigger::Column(_) => all,
+        }
+    }
+}
+
 /// Everything panels can read and edit. Kept separate from the dock layout so both can be
 /// borrowed mutably at once.
 pub struct State {
@@ -1067,6 +1078,8 @@ impl State {
     pub fn stop_clips(&mut self, id: u64, now: f64) {
         let secs = self.comp.launch_secs();
         let all = id == phosphor_engine::MASTER_ID;
+        // Launches still waiting for the beat or bar are cancelled too: they would put the clips straight back.
+        self.pending_triggers.retain(|t| !t.lands_on(id));
         let in_comp: Vec<u64> = self.comp.layers.iter().filter(|l| self.comp.in_open_comp(l)).map(|l| l.id).collect();
         for l in self.comp.layers.iter_mut().filter(|l| if all { in_comp.contains(&l.id) } else { l.id == id }) {
             l.stop(now as f32, secs);
@@ -1677,4 +1690,23 @@ pub(crate) fn hash_text(text: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod stop_tests {
+    use super::*;
+
+    /// "Stop all" (and a layer's stop) cancels launches queued for the next beat, instead of letting them start the
+    /// clips again a moment after.
+    #[test]
+    fn a_stop_cancels_launches_waiting_for_the_beat() {
+        let source = || phosphor_engine::SourceSpec::Generator("plasma".into());
+        let queue = || vec![Trigger::Clip { layer: 1, slot: 0 }, Trigger::Clip { layer: 2, slot: 3 }, Trigger::Column(4), Trigger::Source { layer: 2, source: source(), values: vec![], name: String::new() }];
+        let mut all = queue();
+        all.retain(|t| !t.lands_on(phosphor_engine::MASTER_ID));
+        assert!(all.is_empty(), "Stop all leaves nothing queued");
+        let mut one = queue();
+        one.retain(|t| !t.lands_on(2));
+        assert_eq!(one, vec![Trigger::Clip { layer: 1, slot: 0 }, Trigger::Column(4)], "one layer's stop keeps the other layers' launches (and the column)");
+    }
 }

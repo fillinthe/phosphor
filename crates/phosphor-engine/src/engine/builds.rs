@@ -546,6 +546,33 @@ mod tests {
         assert!(middle(&mut engine, &comp)[2] > 250, "blue");
     }
 
+    /// Stopping a layer playing a shader (cut, or with the launch fade) leaves the layer showing nothing.
+    #[test]
+    fn a_stopped_shader_clip_shows_nothing() {
+        let Some(mut engine) = test_engine() else { return };
+        let id = "customgen:stop_test";
+        let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+        comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator(id.into()), ..Default::default() });
+        engine.compile_custom_async(id, RED).expect("header");
+        until(&mut engine, &comp, |e| !e.custom_compiling(id));
+        let _ = engine.take_custom_compiled();
+        let at = |engine: &mut Engine, comp: &Composition, t: f32| {
+            engine.render(comp, t, &ModInputs::default());
+            let (w, h, px) = engine.read_output().expect("output");
+            let i = ((h / 2 * w + w / 2) * 4) as usize;
+            px[i]
+        };
+        assert!(at(&mut engine, &comp, 1.0) > 250, "red");
+        comp.layers[0].stop(2.0, 0.0);
+        assert_eq!(at(&mut engine, &comp, 2.1), 0, "cut: nothing");
+        // With a fade: still some red part-way, none after it.
+        comp.layers[0].source = SourceSpec::Generator(id.into());
+        comp.layers[0].stop(3.0, 1.0);
+        assert!(at(&mut engine, &comp, 3.5) > 0, "fading");
+        comp.expire_transitions(4.5);
+        assert_eq!(at(&mut engine, &comp, 4.5), 0, "faded out");
+    }
+
     #[test]
     fn compiling_again_keeps_no_new_names() {
         let a = shaders::intern("phosphor_intern_test");
