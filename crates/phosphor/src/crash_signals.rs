@@ -49,6 +49,10 @@ const SIGNALS: [(i32, &str, bool); 7] = [
     (libc::SIGTERM, "ended by SIGTERM (told to end from outside, not by quitting)", false),
 ];
 
+/// What the stack's line says when nothing of it could be read.
+#[cfg(unix)]
+const NO_STACK: &str = "(stack not readable)";
+
 /// How many of the stack's steps go into the log.
 const STEPS: usize = 14;
 #[cfg(unix)]
@@ -96,9 +100,11 @@ extern "C" fn on_signal(signal: libc::c_int) {
         // SAFETY: alarm only sets a timer; if reading the stack hangs, SIGALRM ends the process.
         unsafe { libc::alarm(STACK_SECS) };
         let steps = stack_line(&std::backtrace::Backtrace::force_capture().to_string());
-        if !steps.is_empty() {
-            write(fd, format!("  {}: {steps}\n", thread_words(on_main_thread())).as_bytes());
-        }
+        // Always the thread line: which thread it was is worth knowing even when the stack past the handler can't be
+        // read. 64-bit ARM Linux can't: its signal trampoline lives in the kernel's vDSO, which the unwinder doesn't
+        // read, so the walk ends at the handler (the Linux ARM CI run of 2026-11-27 wrote only the first line).
+        let steps = if steps.is_empty() { NO_STACK } else { steps.as_str() };
+        write(fd, format!("  {}: {steps}\n", thread_words(on_main_thread())).as_bytes());
         // SAFETY: as above.
         unsafe { libc::alarm(0) };
     }
@@ -264,6 +270,10 @@ mod tests {
             assert!(first.starts_with('[') && first.contains(words), "log: {text}");
             // Where it was, for a crash and for an end from outside alike (the test's own thread, not the main one).
             assert!(text.contains("\n  another thread at: "), "log: {text}");
+            // The stack itself, where the unwinder can walk past a signal handler (not on 64-bit ARM Linux: see on_signal).
+            if cfg!(not(all(target_os = "linux", target_arch = "aarch64"))) {
+                assert!(!text.contains(NO_STACK), "the stack was readable here: {text}");
+            }
             assert_eq!(text.contains("\n  last frame: "), frame, "log: {text}");
         }
     }

@@ -111,19 +111,22 @@ pub fn picture(look: &Look, size: u32) -> image::RgbaImage {
     let text: String = lines
         .iter()
         .enumerate()
-        .map(|(i, l)| format!("<text x=\"36\" y=\"{:.1}\" text-anchor=\"middle\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"14\" font-weight=\"bold\" fill=\"{fg}\">{}</text>", 36.0 + (i as f32 - (n - 1.0) / 2.0) * 16.0 + 5.0, esc(l)))
+        .map(|(i, l)| format!("<text x=\"36\" y=\"{:.1}\" text-anchor=\"middle\" font-family=\"Helvetica, Arial, Ubuntu, sans-serif\" font-size=\"14\" font-weight=\"bold\" fill=\"{fg}\">{}</text>", 36.0 + (i as f32 - (n - 1.0) / 2.0) * 16.0 + 5.0, esc(l)))
         .collect();
     let svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"72\" height=\"72\"><rect width=\"72\" height=\"72\" fill=\"{bg}\"/>{text}</svg>");
     render(&svg, size).unwrap_or_else(|| image::RgbaImage::new(size, size))
 }
 
-/// An SVG at `size` square, with the system's fonts (loaded once).
+/// An SVG at `size` square, with the system's fonts and the interface's own as the last resort (loaded once).
 fn render(svg: &str, size: u32) -> Option<image::RgbaImage> {
     use resvg::{tiny_skia, usvg};
     static FONTS: std::sync::OnceLock<Arc<usvg::fontdb::Database>> = std::sync::OnceLock::new();
     let fonts = FONTS.get_or_init(|| {
         let mut db = usvg::fontdb::Database::new();
         db.load_system_fonts();
+        // The font the interface itself is drawn in (bundled with egui): a machine with no Helvetica or Arial (Linux
+        // boards and CI runners often have no fonts at all) still gets the key names, not blank keys.
+        db.load_font_data(epaint_default_fonts::UBUNTU_LIGHT.to_vec());
         Arc::new(db)
     });
     let opt = usvg::Options { fontdb: fonts.clone(), ..Default::default() };

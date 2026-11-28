@@ -24,6 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The macos-15 image's default Xcode is 16.4 (SDK 15.5), too old for apple-metal (a dependency of screencapturekit),
+      # whose Swift code uses the macOS 26 Metal APIs (MTLTensor*, MTLSamplerReductionMode). The image also carries
+      # Xcode 26.x side by side (github.com/actions/runner-images, macos-15-arm64-Readme.md): pick the newest. This only
+      # changes the SDK we build with; the minimum macOS the app runs on is set by scripts/min-macos, not by the SDK.
+      - name: Xcode with the macOS 26 SDK
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcrun --show-sdk-version
+
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
 
