@@ -19,7 +19,7 @@ impl State {
         };
         // Already scanned: apply right away.
         if let Some(Ok(r)) = self.rhythm.results.get(&path).cloned() {
-            self.apply_rhythm(target, &r);
+            self.apply_rhythm(&path, target, &r);
             return;
         }
         if !self.rhythm.is_pending(&path) {
@@ -58,7 +58,7 @@ impl State {
         }
         if let Some(path) = movie_path(source) {
             if let Some(Ok(r)) = self.rhythm.results.get(&path).cloned() {
-                self.apply_rhythm(MatchTarget::Layer(layer), &r);
+                self.apply_rhythm(&path, MatchTarget::Layer(layer), &r);
             } else if !self.rhythm.is_pending(&path) {
                 self.rhythm.request(&path, MatchTarget::Layer(layer));
             }
@@ -67,42 +67,30 @@ impl State {
 
     /// Call every frame: finished scans set their clip or layer.
     pub(crate) fn poll_rhythm(&mut self) {
-        for (_, target, r) in self.rhythm.poll() {
+        for (path, target, r) in self.rhythm.poll() {
             match r {
-                Ok(r) => self.apply_rhythm(target, &r),
+                Ok(r) => self.apply_rhythm(&path, target, &r),
                 Err(e) => self.notice = Some(crate::ui::notice::failure(format!("Match the beat: {e}"))),
             }
         }
     }
 
-    fn apply_rhythm(&mut self, target: MatchTarget, r: &crate::media::rhythm::Rhythm) {
+    /// A scan of movie `path` came back: its clip, or its layer (or, while the layer plays another movie, the file's
+    /// memory: `Composition::match_layer_beat`).
+    fn apply_rhythm(&mut self, path: &str, target: MatchTarget, r: &crate::media::rhythm::Rhythm) {
         if !r.steady() {
             self.notice = Some(format!("No steady visual beat in this clip ({:.0}% steady): left as it was", r.confidence * 100.0));
             return;
         }
-        match target {
-            MatchTarget::Layer(id) => {
-                let bpm = self.comp.bpm;
-                if let Some(l) = self.comp.layer_mut(id) {
-                    let (loop_in, beats) = settings_for(r, l.loop_out, bpm);
-                    l.loop_in = loop_in;
-                    l.sync_beats = beats;
-                    l.loop_beats = 0.0;
-                    l.looping = true;
-                }
-            }
-            MatchTarget::Clip(id, slot) => {
-                let bpm = self.comp.bpm;
-                if let Some(l) = self.comp.layer_mut(id) {
-                    let base = l.clip_settings();
-                    let k = l.clip_slot_mut(slot);
-                    let own = k.own.get_or_insert(base);
-                    let (loop_in, beats) = settings_for(r, own.loop_out, bpm);
-                    own.loop_in = loop_in;
-                    own.sync_beats = beats;
-                    own.loop_beats = 0.0;
-                }
-            }
+        let bpm = self.comp.bpm;
+        let set = |loop_out: f32| settings_for(r, loop_out, bpm);
+        let done = match target {
+            MatchTarget::Layer(id) => self.comp.match_layer_beat(id, path, set),
+            MatchTarget::Clip(id, slot) => self.comp.match_clip_beat(id, slot, path, set),
+        };
+        if !done {
+            self.notice = Some("Match the beat: that movie isn't on its layer any more, so it was left as it was".into());
+            return;
         }
         let per = crate::media::rhythm::beats_per_hit(r, self.comp.bpm);
         let how = if per == 1.0 { "a hit every beat".to_string() } else if per > 1.0 { format!("a hit every {per:.0} beats") } else { "two hits a beat".to_string() };
@@ -112,8 +100,5 @@ impl State {
 
 /// The file behind a movie source.
 pub fn movie_path(source: &SourceSpec) -> Option<String> {
-    match source {
-        SourceSpec::Movie { path: Some(p), .. } => Some(p.clone()),
-        _ => None,
-    }
+    phosphor_engine::movie_file(source).map(str::to_owned)
 }

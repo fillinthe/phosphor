@@ -1,6 +1,6 @@
 //! Comps in the UI (`phosphor_engine::Comp`): the Inspector for a selected comp and "Move to comp" for a layer. Comps
 //! show as bands in Layers / Clips (and strips in the Mixer), not as tabs; new layers go to the selected one's comp
-//! (`follow_selection_comp`).
+//! (`follow_selection_comp`), so whatever opens a comp selects it (`add_comp_selected`, a comp's name or Only).
 
 use phosphor_engine::{Comp, Composition};
 
@@ -97,6 +97,24 @@ pub(crate) fn follow_selection_comp(comp: &mut Composition, selected: Option<u64
     }
 }
 
+/// Adds comp `name` (`Composition::add_comp` opens it) and selects it, as `State::add_layer` selects a new layer: the
+/// open comp is the selection's, so a comp opened without selecting it went back to the selected layer's comp the next
+/// frame (the Designer's New Designer comp flipped straight back, and new layers landed in the old comp).
+pub(crate) fn add_comp_selected(comp: &mut Composition, selected: &mut Option<u64>, name: &str) -> u64 {
+    let id = comp.add_comp(name);
+    *selected = Some(id);
+    id
+}
+
+/// A new layer on top of comp `id` (the clip grid's "+ Layer" on its name row), whichever comp was open. The new layer
+/// is selected, so the comp stays open.
+pub(crate) fn add_layer_in(st: &mut State, id: u64) {
+    if st.comp.comp(id).is_some() {
+        st.comp.open_comp = Some(id);
+        st.add_layer();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use phosphor_engine::Composition;
@@ -116,5 +134,43 @@ mod tests {
         assert_eq!(c.comp_of(c.layer(n).unwrap()), Some(main), "the new layer lands with the selected one");
         super::follow_selection_comp(&mut c, Some(side));
         assert_eq!(c.open_comp, Some(side), "selecting the comp itself");
+    }
+
+    /// The Designer's New Designer comp while a layer of another comp is selected: the new comp stays open over the next
+    /// frames and new layers go into it (it went straight back to the selected layer's comp). With no comps yet ("Main"
+    /// is made too) and with comps already there.
+    #[test]
+    fn a_new_designer_comp_stays_open() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let mut selected = Some(a);
+        super::follow_selection_comp(&mut c, selected);
+        for round in 0..2 {
+            let d = super::add_comp_selected(&mut c, &mut selected, "Designer");
+            c.start_network(d);
+            for _ in 0..3 {
+                super::follow_selection_comp(&mut c, selected);
+            }
+            assert_eq!(c.open_comp(), Some(d), "round {round}");
+            let n = c.add_layer().id;
+            assert_eq!(c.comp_of(c.layer(n).unwrap()), Some(d), "the new layer is in the Designer comp");
+            // Back to the first layer: its comp opens again.
+            selected = Some(a);
+            super::follow_selection_comp(&mut c, selected);
+            assert_eq!(c.open_comp(), Some(c.comps[0].id));
+        }
+    }
+
+    /// The selected layer moved to another comp: the open comp goes with it.
+    #[test]
+    fn a_selected_layer_moved_to_another_comp_takes_the_open_comp_along() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let side = c.add_comp("Side");
+        super::follow_selection_comp(&mut c, Some(a));
+        assert_ne!(c.open_comp(), Some(side));
+        c.move_to_comp(a, side);
+        super::follow_selection_comp(&mut c, Some(a));
+        assert_eq!(c.open_comp(), Some(side));
     }
 }

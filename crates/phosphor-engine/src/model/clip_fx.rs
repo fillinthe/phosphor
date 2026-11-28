@@ -57,6 +57,11 @@ pub fn file_of(source: &SourceSpec) -> Option<&str> {
     }
 }
 
+/// The movie file a source plays, if it's one (a cut, its In / Out / loop length, is a movie's).
+pub fn movie_file(source: &SourceSpec) -> Option<&str> {
+    file_of(source).filter(|_| matches!(source, SourceSpec::Movie { .. }))
+}
+
 /// Whose effects belong on a layer now (borrowed, so the per-frame check doesn't allocate).
 #[derive(Clone, Copy, PartialEq)]
 enum Now<'a> {

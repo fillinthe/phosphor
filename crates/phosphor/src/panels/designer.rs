@@ -60,11 +60,11 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toolbar(ui, |ui| {
             let name = cid.and_then(|c| st.comp.comp(c)).map_or("this comp".to_string(), |c| c.name.clone());
             if crate::ui::action_button(ui, crate::ui::Act::Go, label(icon::GRAPH, &format!("Build {name} as a network"))).clicked() {
-                let c = cid.unwrap_or_else(|| st.comp.add_comp("Designer"));
+                let c = cid.unwrap_or_else(|| super::add_comp_selected(&mut st.comp, &mut st.selected, "Designer"));
                 st.comp.start_network(c);
             }
             if crate::ui::command(ui, label(icon::PLUS, "New Designer comp")).on_hover_text("A new comp, built as a network").clicked() {
-                let c = st.comp.add_comp("Designer");
+                let c = super::add_comp_selected(&mut st.comp, &mut st.selected, "Designer");
                 st.comp.start_network(c);
             }
         });

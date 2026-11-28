@@ -540,9 +540,11 @@ impl Composition {
     /// same whichever comp is on screen.
     pub fn trigger_column(&mut self, col: usize, now: f32) {
         let secs = self.launch_secs();
+        let before = self.before_launch();
         for l in &mut self.layers {
             l.trigger_clip(col, now, secs);
         }
+        self.settle_cuts(&before);
         self.lasers.trigger_column(col);
     }
 
@@ -553,15 +555,18 @@ impl Composition {
 
     pub fn trigger_clip(&mut self, layer: u64, slot: usize, now: f32) {
         let secs = self.launch_secs();
+        let before = self.before_launch();
         if let Some(l) = self.layer_mut(layer) {
             l.trigger_clip(slot, now, secs);
         }
+        self.settle_cuts(&before);
     }
 
     /// A clip button went down (its trigger mode decides: play, toggle off, flash…). A row with voices plays
     /// normal clips on the layer `voice_for` picks.
     pub fn press_clip(&mut self, layer: u64, slot: usize, now: f32) {
         let secs = self.launch_secs();
+        let before = self.before_launch();
         let shared = self.layer(layer).and_then(|l| {
             let c = l.clips.get(slot).filter(|c| !c.is_empty() && c.trigger == TriggerMode::Normal)?;
             (l.voices != VoiceMode::Own).then(|| c.clone())
@@ -574,6 +579,7 @@ impl Composition {
         } else if let Some(l) = self.layer_mut(layer) {
             l.press_clip(slot, now, secs);
         }
+        self.settle_cuts(&before);
     }
 
     /// The layer a clip from `layer`'s row plays on (its voice mode; the pool is the layers in the same group and
@@ -647,6 +653,7 @@ impl Composition {
     /// Puts a new source on a layer using the launch fade.
     pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
         let secs = self.launch_secs();
+        let before = self.before_launch();
         let memory = self.media_memory(&source);
         if let Some(l) = self.layer_mut(layer) {
             if let Some((Some(settings), ..)) = &memory {
@@ -662,6 +669,7 @@ impl Composition {
             let _ = name;
             l.playing = true;
         }
+        self.settle_cuts(&before);
     }
 
     /// Each movie playing on a layer remembers its settings in the media bin (call a few times a second).
