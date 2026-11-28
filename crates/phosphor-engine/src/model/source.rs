@@ -262,6 +262,10 @@ pub struct Clip {
     pub own: Option<ClipSettings>,
     /// This clip plays without sound (wherever it's triggered).
     pub muted: bool,
+    /// The layer's opacity when this clip plays (0..1); None (the default, and every older save) = the clip leaves
+    /// the layer's opacity as it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
     /// A picture chosen for its cell in the grid (a PNG path); empty = from the source.
     pub thumb: String,
     /// The clip's own effects: they come with it wherever it plays, before the layer's effects.

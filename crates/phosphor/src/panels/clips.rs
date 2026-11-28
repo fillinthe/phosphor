@@ -93,7 +93,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
             }
         });
         let current = layer.clip_settings();
-        let lid = layer.id;
+        let (lid, layer_opacity) = (layer.id, layer.opacity);
         let k = layer.clip_slot_mut(c);
         crate::ui::field(ui, "When pressed", |ui| {
             choice_combo(ui, ("clip_trigger", lid, c), &mut k.trigger, 150.0, false);
@@ -102,6 +102,14 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
             crate::ui::toggle(ui, &mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
         }
         super::clip_keep::keep_with_clip(ui, &mut k.own, current, &k.name);
+        // The layer's opacity when this clip plays (off: the clip leaves it alone; on starts at the layer's now).
+        let mut sets = k.opacity.is_some();
+        if crate::ui::toggle(ui, &mut sets, "Sets the layer's opacity").on_hover_text("When this clip plays, the layer's opacity jumps to this level (off: the clip leaves the opacity as it is)").changed() {
+            k.opacity = sets.then_some(layer_opacity);
+        }
+        if let Some(o) = k.opacity.as_mut() {
+            Level::percent(o, "Opacity").default(1.0).show(ui);
+        }
         // Projects from before clips had their own effects: such a clip swaps the layer's whole chain.
         if let Some(o) = k.own.as_mut().filter(|o| o.with_effects) {
             let mut with = true;

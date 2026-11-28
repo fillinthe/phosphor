@@ -542,6 +542,10 @@ impl LayerState {
         if let Some(own) = &clip.own {
             self.apply_clip_settings(own);
         }
+        // A clip that stores an opacity sets the layer's (off unless it does).
+        if let Some(o) = clip.opacity {
+            self.opacity = o.clamp(0.0, 1.0);
+        }
         self.source = clip.source;
         self.generator_values = clip.generator_values;
         self.generator_mods = clip.mods;
