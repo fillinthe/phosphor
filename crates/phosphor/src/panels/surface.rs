@@ -1081,7 +1081,8 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     true
 }
 
-/// Page tabs above the surface: click to switch; in Edit, add pages and right-click one to rename or delete it.
+/// Page tabs above the surface: click to switch; in Edit, add pages, delete the one showing (the trash button) and
+/// right-click one to rename, open or delete it.
 fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: bool) {
     if sf.pages.is_empty() {
         sf.pages.push("Main".into());
@@ -1094,11 +1095,14 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
         let current = sf.current_page();
         for i in 0..sf.pages.len() {
             let r = crate::ui::pick_item(ui, current == i, &sf.pages[i]);
-            map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::SurfacePage));
+            let target = ControlTarget::App(phosphor_engine::AppControl::SurfacePage);
             if r.clicked() {
                 sf.page = i;
             }
             if edit {
+                // ONE menu for the tab: the page's own items, then Learn / Map. (`map_menu` plus a second right-click menu
+                // shared the tab's menu id, so the page menu, with Delete in it, drew under the Learn one.)
+                mapped_badge(ui, &r, &target);
                 r.right_field_menu(|ui| {
                     ui.label(RichText::new("Page name").small());
                     ui.text_edit_singleline(&mut sf.pages[i]);
@@ -1110,16 +1114,29 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
                         remove = Some(i);
                         ui.close();
                     }
+                    ui.separator();
+                    learn_items(ui, &target);
                 });
+            } else {
+                map_menu(ui, &r, target);
             }
         }
         if edit && crate::ui::small_command(ui, label(icon::PLUS, "Page")).on_hover_text("Add a page (right-click a page to rename or delete it)").clicked() {
             sf.add_page();
         }
+        if edit && let Some(i) = delete_page_button(ui, sf.pages.len(), current) {
+            remove = Some(i);
+        }
     });
     if let Some(i) = remove {
         remove_page(ui.ctx(), sf, i);
     }
+}
+
+/// The trash button beside "+ Page": deletes the page showing (`current` of `pages`; the last page can't go). It is
+/// there in plain sight because the right-click menu was the only way, and nothing on the tabs said so.
+fn delete_page_button(ui: &mut egui::Ui, pages: usize, current: usize) -> Option<usize> {
+    (pages > 1 && crate::ui::small_danger(ui, label(icon::TRASH, "Delete page")).on_hover_text("Delete the page showing, and its widgets").clicked()).then_some(current)
 }
 
 /// Temp-data key: open page N as its own panel (the app has the dock).
@@ -1163,5 +1180,39 @@ pub(crate) fn add_laser_buttons(comp: &mut phosphor_engine::Composition) {
                 w.bindings = vec![phosphor_engine::Binding::new(ControlTarget::LaserLook { projector: p.id, look: *look })];
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod page_tests {
+    use super::*;
+
+    fn click_at(ctx: &egui::Context, pos: egui::Pos2, mut frame: impl FnMut(&mut egui::Ui)) {
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for events in [vec![egui::Event::PointerMoved(pos)], vec![button(true)], vec![button(false)]] {
+            ctx.run_ui(egui::RawInput { events, ..Default::default() }, &mut frame).textures_delta.clear();
+        }
+    }
+
+    /// The Delete page button deletes the page showing (with its widgets) and is not there for the last page: on
+    /// Windows the right-click menu was the only way to delete a page.
+    #[test]
+    fn the_delete_page_button_deletes_the_page_showing() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx);
+        let mut sf = phosphor_engine::ControlSurface::default();
+        sf.pages = vec!["Main".into(), "Two".into(), "Three".into()];
+        sf.page = 1;
+        let mut at = egui::Pos2::ZERO;
+        let mut deleted = None;
+        ctx.run_ui(Default::default(), |ui| at = ui.cursor().min).textures_delta.clear();
+        click_at(&ctx, at + egui::vec2(6.0, 6.0), |ui| deleted = delete_page_button(ui, sf.pages.len(), sf.current_page()).or(deleted));
+        assert_eq!(deleted, Some(1));
+        remove_page(&ctx, &mut sf, 1);
+        assert_eq!(sf.pages, vec!["Main".to_string(), "Three".to_string()]);
+        // One page left: nothing to press, the same click deletes nothing.
+        let mut last = None;
+        click_at(&ctx, at + egui::vec2(6.0, 6.0), |ui| last = delete_page_button(ui, 1, 0).or(last));
+        assert_eq!(last, None);
     }
 }
